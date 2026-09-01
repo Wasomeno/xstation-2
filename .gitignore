@@ -1,0 +1,5 @@
+.agents/
+.serena/
+skills-lock.json
+__pycache__/
+.DS_Store

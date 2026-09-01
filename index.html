@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>XSTATION - Your Gateway To Intelligent Products</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      @font-face {
+        font-family: "Apfel Grotezk";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("videos/gateway-hero/assets/fonts/ApfelGrotezk-Regular.woff2") format("woff2");
+      }
+
+      @font-face {
+        font-family: "Apfel Grotezk";
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+        src: url("videos/gateway-hero/assets/fonts/ApfelGrotezk-Fett.woff2") format("woff2");
+      }
+
+      :root {
+        --bg: #000000;
+        --ivory: #f3efe6;
+        --gold: #d4a056;
+        --steel: #9aabc0;
+        --dim: #8a93a3;
+        --surface: #050505;
+        --line: color-mix(in srgb, var(--ivory) 10%, transparent);
+        --gold-light: color-mix(in srgb, var(--gold) 55%, transparent);
+        --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        min-height: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        background: var(--bg);
+        color: var(--ivory);
+        font-family: var(--sans);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      #pin-slot {
+        position: relative;
+        height: calc(max(100svh, 720px) + 160svh);
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100svh;
+        min-height: 720px;
+        overflow: hidden;
+        background: transparent;
+        z-index: 12;
+        pointer-events: none;
+      }
+
+      #hero {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      #field-stage {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        overflow: hidden;
+        isolation: isolate;
+        pointer-events: none;
+        transform: translateZ(0);
+      }
+
+      #field {
+        position: absolute;
+        inset: 0;
+        perspective: 1100px;
+        perspective-origin: 50% 48%;
+        transform-style: preserve-3d;
+        pointer-events: none;
+      }
+
+      .slab {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        margin: 0;
+        pointer-events: none;
+        will-change: transform;
+        background: currentColor;
+        color: var(--ivory);
+        box-shadow:
+          0 0 16px currentColor,
+          0 0 40px color-mix(in srgb, currentColor 75%, transparent),
+          0 0 72px color-mix(in srgb, currentColor 40%, transparent);
+      }
+
+      .slab.is-gold {
+        color: var(--gold);
+        box-shadow:
+          0 0 20px var(--gold),
+          0 0 48px color-mix(in srgb, var(--gold) 80%, transparent),
+          0 0 88px color-mix(in srgb, var(--gold) 45%, transparent);
+      }
+
+      .slab.is-steel {
+        color: var(--steel);
+      }
+
+      .slab.is-dim {
+        color: var(--dim);
+      }
+
+      #veil {
+        position: absolute;
+        inset: 0;
+        z-index: 16;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse 42% 30% at 50% 50%,
+          rgba(0, 0, 0, 0.72) 0%,
+          rgba(0, 0, 0, 0.28) 42%,
+          rgba(0, 0, 0, 0) 72%
+        );
+      }
+
+      #edge-fade {
+        position: absolute;
+        inset: 0;
+        z-index: 16;
+        pointer-events: none;
+        background: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.78) 0%,
+          rgba(0, 0, 0, 0) 16%,
+          rgba(0, 0, 0, 0) 84%,
+          rgba(0, 0, 0, 0.78) 100%
+        );
+      }
+
+      #site-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 28px clamp(20px, 4vw, 56px);
+        font-family: var(--sans);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ivory);
+        pointer-events: auto;
+      }
+
+      #brand {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--ivory);
+      }
+
+      #brand em {
+        font-family: var(--sans);
+        font-style: normal;
+        font-weight: 400;
+        font-size: 18px;
+        letter-spacing: 0.04em;
+        text-transform: none;
+      }
+
+      #title-layer {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+        padding: 18svh 6vw 16svh;
+        gap: 0;
+        box-sizing: border-box;
+        pointer-events: none;
+        z-index: 20;
+      }
+
+      #title {
+        margin: 0;
+        max-width: min(22ch, 92vw);
+        text-align: center;
+        font-family: var(--sans);
+        font-weight: 400;
+        font-size: clamp(36px, 5.2vw, 64px);
+        line-height: 1.12;
+        letter-spacing: -0.03em;
+        color: var(--ivory);
+      }
+
+      #vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 16;
+        background: radial-gradient(
+          ellipse 78% 72% at 50% 48%,
+          rgba(0, 0, 0, 0) 40%,
+          rgba(0, 0, 0, 0.55) 100%
+        );
+      }
+
+      #gate-threshold {
+        position: absolute;
+        left: 50%;
+        top: 48%;
+        width: min(42vw, 22rem);
+        height: min(42vw, 22rem);
+        transform: translate(-50%, -50%);
+        z-index: 18;
+        pointer-events: none;
+        opacity: 0;
+        mix-blend-mode: screen;
+      }
+
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        background: var(--bg);
+        color: var(--ivory);
+        overflow: hidden;
+      }
+
+      #boot-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      #boot-copy {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 8.5svh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      #boot-word {
+        font-family: var(--sans);
+        font-size: 11px;
+        font-weight: 400;
+        letter-spacing: 0.46em;
+        text-indent: 0.46em;
+        text-transform: uppercase;
+        color: var(--ivory);
+        opacity: 0.72;
+      }
+
+      #boot-rail {
+        width: 56px;
+        height: 1px;
+        background: color-mix(in srgb, var(--ivory) 14%, transparent);
+        overflow: hidden;
+      }
+
+      #boot-fill {
+        width: 100%;
+        height: 100%;
+        background: var(--gold);
+        transform: scaleX(0);
+        transform-origin: left center;
+      }
+
+      #boot.is-leaving {
+        pointer-events: none;
+      }
+    </style>
+    <link rel="stylesheet" href="videos/gateway-hero/work.css" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
+  </head>
+  <body>
+    <div id="boot" role="status" aria-live="polite" aria-label="Loading XSTATION">
+      <canvas id="boot-canvas" aria-hidden="true"></canvas>
+      <div id="boot-copy">
+        <span id="boot-word">XSTATION</span>
+        <span id="boot-rail" aria-hidden="true"><span id="boot-fill"></span></span>
+      </div>
+    </div>
+    <div id="field-stage">
+      <div id="field"></div>
+    </div>
+    <header id="site-nav">
+      <a id="brand" href="#root">
+        <em>XSTATION</em>
+      </a>
+      <nav id="site-links" aria-label="Primary">
+        <a href="#work">Work</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+    <div id="pin-slot">
+      <div id="root">
+        <section id="hero">
+          <div id="veil"></div>
+          <div id="edge-fade"></div>
+          <svg id="gate-threshold" viewBox="-1.4 -1.4 2.8 2.8" aria-hidden="true">
+            <polygon
+              id="gate-ivory"
+              fill="none"
+              stroke="#f3efe6"
+              stroke-width="0.028"
+              points="0.628,-0.260 0.260,-0.628 -0.260,-0.628 -0.628,-0.260 -0.628,0.260 -0.260,0.628 0.260,0.628 0.628,0.260"
+            />
+            <polygon
+              id="gate-gold"
+              fill="none"
+              stroke="#d4a056"
+              stroke-width="0.022"
+              points="0.960,0 0.679,-0.679 0,-0.960 -0.679,-0.679 -0.960,0 -0.679,0.679 0,0.960 0.679,0.679"
+            />
+            <rect id="gate-scan" x="-1.2" y="-1.12" width="2.4" height="0.018" fill="#d4a056" opacity="0.55" />
+          </svg>
+          <div id="title-layer">
+            <h1 id="title">Your Gateway To<br />Intelligent Products</h1>
+          </div>
+          <div id="vignette"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="work-root" class="work-pad">
+      <section class="doctrine" id="work" aria-labelledby="doctrine-lead">
+        <div class="doctrine-copy js-enter">
+          <p id="doctrine-lead" class="js-enter-child">
+            XSTATION builds production LLM applications. Support copilots, RAG over a private corpus, agents with a human in the loop, and evals that can stop a run.
+          </p>
+          <p class="js-enter-child">
+            We do not ship a chatbot demo. We ship the product around the model: retrieval, tool calls, traces, citations, and a person where a decision is required.
+          </p>
+        </div>
+        <figure class="doctrine-band">
+          <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" decoding="async" />
+          <figcaption class="doctrine-note">Every stack looks different.</figcaption>
+          <p class="doctrine-mark" aria-hidden="true"><span>Models</span><span>In Production</span></p>
+        </figure>
+      </section>
+
+      <section class="chapter" id="index" aria-labelledby="index-title">
+        <h2 class="index-mark" id="index-title">Copilot</h2>
+        <div class="index-void">
+          <aside class="work-card js-enter">
+            <div class="work-card-top">
+              <p>Kite</p>
+              <a class="work-go" href="#kite" aria-label="Open Kite">
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </a>
+            </div>
+            <figure>
+              <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" decoding="async" />
+            </figure>
+          </aside>
+          <nav class="place-map" aria-label="Products">
+            <a href="#kite" class="is-on">Kite</a>
+            <a href="#meridian">Meridian</a>
+            <a href="#relay">Relay</a>
+            <a href="#quorum">Quorum</a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="space" id="kite" aria-labelledby="kite-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/forge.jpg" alt="Kite" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Kite</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="Kite views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="kite-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="kite-plan">System</button>
+          </div>
+          <div class="pane" id="kite-about">
+            <h2 id="kite-title" class="js-enter-child">Kite<br />Support copilot<br />Human-gated inbox</h2>
+            <p class="lede js-enter-child">The model drafts the reply. A reviewer owns the send. Quiet until a thread actually needs a person.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Support</span>
+              <span><span class="k">Input</span> Tickets</span>
+              <span><span class="k">Output</span> Reviewed replies</span>
+              <span><span class="k">Gate</span> Human in the loop</span>
+              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Kite%20brief">Request brief</a></span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/forge.jpg" aria-label="Kite still 1">
+                <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal.jpg" aria-label="Kite still 2">
+                <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal-still.jpg" aria-label="Kite still 3">
+                <img src="videos/gateway-hero/media/signal-still.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="kite-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">Kite ranks inbound threads, drafts a reply from the knowledge base, and only raises a person when a send is required.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="space is-flip" id="meridian" aria-labelledby="meridian-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/harbor.jpg" alt="Meridian" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Meridian</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="Meridian views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="meridian-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="meridian-plan">System</button>
+          </div>
+          <div class="pane" id="meridian-about">
+            <h2 id="meridian-title" class="js-enter-child">Meridian<br />RAG knowledge<br />Cited answers</h2>
+            <p class="lede js-enter-child">Ask over a private corpus. Every sentence points to a source. If it cannot be retrieved, it does not ship.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Knowledge</span>
+              <span><span class="k">Input</span> Corpus</span>
+              <span><span class="k">Output</span> Cited answers</span>
+              <span><span class="k">Gate</span> Source or silence</span>
+              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Meridian%20brief">Request brief</a></span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Meridian still 1">
+                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Meridian still 2">
+                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="Meridian still 3">
+                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="meridian-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">Meridian retrieves with hybrid search, writes the answer, and shows the path. Sources sit in the margin. Faithfulness is checked before the page is shown.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage" id="relay" aria-labelledby="relay-title">
+        <div class="stage-media">
+          <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+        </div>
+        <aside class="stage-card js-enter">
+          <h2 class="stage-mark js-enter-child" id="relay-title">Relay</h2>
+          <h3 class="js-enter-child">Agents, tools, and a person on one timeline</h3>
+          <p class="js-enter-child">The run is visible. Pause at an approval gate. Continue without rebuilding the graph.</p>
+          <div class="readout js-enter-child">
+            <span><span class="k">Job</span> Agents</span>
+            <span><span class="k">Input</span> Tools</span>
+            <span><span class="k">Output</span> A traced run</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="space" id="quorum" aria-labelledby="quorum-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/prism.jpg" alt="Quorum" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Quorum</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="Quorum views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="quorum-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="quorum-plan">System</button>
+          </div>
+          <div class="pane" id="quorum-about">
+            <h2 id="quorum-title" class="js-enter-child">Quorum<br />Evals and traces<br />Pass or fail</h2>
+            <p class="lede js-enter-child">Replay the run, score it, and refuse it before a customer sees it. Built for people who have to sign off.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Eval</span>
+              <span><span class="k">Input</span> Traces</span>
+              <span><span class="k">Output</span> A verdict</span>
+              <span><span class="k">Gate</span> Refuse the run</span>
+              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Quorum%20brief">Request brief</a></span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/prism.jpg" aria-label="Quorum still 1">
+                <img src="videos/gateway-hero/media/prism.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal.jpg" aria-label="Quorum still 2">
+                <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Quorum still 3">
+                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="quorum-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">Quorum stores traces, scores, and the dataset they were judged against. You can replay a run, mark it, and block it before it ships.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="inquiry" id="contact" aria-labelledby="inquiry-title">
+        <div class="inquiry-copy">
+          <h2 id="inquiry-title">If this is the product you need, write.</h2>
+          <p>We take a small number of LLM builds a year. Name the workflow and we will answer.</p>
+          <a class="inquiry-mail" href="mailto:hello@xstation">hello@xstation</a>
+        </div>
+        <form class="inquiry-form js-enter" id="inquiry-form" action="mailto:hello@xstation" method="post" enctype="text/plain">
+          <label class="js-enter-child">
+            Name
+            <input type="text" name="name" autocomplete="name" required />
+          </label>
+          <label class="js-enter-child">
+            Email
+            <input type="email" name="email" autocomplete="email" required />
+          </label>
+          <label class="js-enter-child">
+            Note
+            <textarea name="note" rows="4"></textarea>
+          </label>
+          <button type="submit">Send</button>
+          <p class="status" id="inquiry-status" role="status"></p>
+        </form>
+      </section>
+
+      <footer class="work-end">
+        <span>XSTATION, 2026</span>
+        <a href="mailto:hello@xstation">hello@xstation</a>
+      </footer>
+    </div>
+
+    <script type="module" src="videos/gateway-hero/loader.js"></script>
+    <script type="module" src="videos/gateway-hero/work.js"></script>
+  </body>
+</html>
