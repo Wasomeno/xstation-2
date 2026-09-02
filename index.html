@@ -188,8 +188,8 @@
         text-transform: none;
         padding: 0.2em 0.45em;
         margin: -0.2em -0.45em;
-        background: color-mix(in srgb, var(--bg) 66%, transparent);
-        box-shadow: 0 0 18px 12px color-mix(in srgb, var(--bg) 56%, transparent);
+        background: rgb(255 255 255 / 0.72);
+        box-shadow: 0 0 18px 12px rgb(255 255 255 / 0.56);
         border-radius: 2px;
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
@@ -197,7 +197,7 @@
 
       @supports not (backdrop-filter: blur(8px)) {
         #brand em {
-          background: color-mix(in srgb, var(--bg) 66%, transparent);
+          background: rgb(255 255 255 / 0.72);
         }
       }
 
