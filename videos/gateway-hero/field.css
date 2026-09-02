@@ -4,7 +4,6 @@
   top: 48%;
   width: 0;
   height: 0;
-  transform-style: preserve-3d;
   pointer-events: none;
 }
 
@@ -19,97 +18,157 @@
   pointer-events: none;
 }
 
-.dock-deck {
-  fill: color-mix(in srgb, var(--ink) 3.2%, transparent);
-}
-
-.dock-rail {
+.dock-ring {
   fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.15;
-  stroke-opacity: 0.34;
-  vector-effect: non-scaling-stroke;
-}
-
-.dock-rail.is-inner {
-  stroke-width: 1;
-  stroke-opacity: 0.2;
-}
-
-.dock-tick {
   stroke: var(--ink);
   stroke-width: 1;
   stroke-opacity: 0.16;
+  stroke-dasharray: 4 8;
   vector-effect: non-scaling-stroke;
+  transition:
+    stroke-opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    stroke-width 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.dock-spoke {
-  stroke: var(--node, var(--ink));
-  stroke-width: 1;
-  stroke-linecap: butt;
-  vector-effect: non-scaling-stroke;
+.dock-ring.is-core {
+  stroke-opacity: 0.28;
+  stroke-dasharray: none;
 }
 
-.dock-berth,
-.dock-capsule,
-.dock-packet {
+.dock-ring.is-mid {
+  stroke-opacity: 0.2;
+}
+
+.dock-ring.is-outer {
+  stroke-opacity: 0.14;
+}
+
+.dock-ring.is-hot {
+  stroke-opacity: 0.72;
+  stroke-width: 1.6;
+  stroke-dasharray: 6 5;
+}
+
+.dock-ring.is-core.is-hot {
+  stroke-opacity: 0.55;
+  stroke-dasharray: none;
+}
+
+.dock-align {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.2;
+  stroke-opacity: 0;
+  stroke-dasharray: 3 5;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dock-align.is-hot {
+  stroke-opacity: 0.5;
+}
+
+.dock-node {
   position: absolute;
   left: 0;
   top: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  margin: 0;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 80%, transparent),
+    0 12px 28px color-mix(in srgb, var(--ink) 8%, transparent);
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    border-color 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dock-node.is-accent {
+  border-color: var(--ink);
+  border-width: 1.5px;
+}
+
+.dock-node:hover,
+.dock-node.is-hot {
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--ink),
+    0 14px 32px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.dock-node-label {
+  display: block;
+  max-width: 10ch;
+  padding: 0 6px;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.slab {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   margin: 0;
   pointer-events: none;
   will-change: transform;
-  transform-style: preserve-3d;
+  background: currentColor;
+  color: var(--ink);
+  box-shadow:
+    0 0 14px color-mix(in srgb, currentColor 22%, transparent),
+    0 0 32px color-mix(in srgb, currentColor 10%, transparent);
 }
 
-.dock-berth {
-  display: grid;
-  place-items: center;
-  --node: var(--ink);
+.slab.is-gold {
+  color: var(--gold, #d4a056);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--gold, #d4a056) 45%, transparent),
+    0 0 36px color-mix(in srgb, var(--gold, #d4a056) 22%, transparent);
 }
 
-.dock-plate {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  background: var(--node);
-  border: 1px solid var(--node);
+.slab.is-steel {
+  color: var(--steel);
 }
 
-.dock-port {
-  width: 9px;
-  height: 9px;
-  background: var(--ivory);
-  border: 1px solid var(--ivory);
+.slab.is-dim {
+  color: var(--dim);
 }
 
-.dock-capsule {
-  width: 18px;
-  height: 6px;
-  background-color: var(--node, var(--ink));
-  transition: background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.dock-packet {
-  width: 6px;
-  height: 6px;
-  background: var(--node, var(--ink));
+.dock-orbs {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  z-index: 5;
+  margin: 0;
+  display: block;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  transform-style: flat;
+  will-change: transform;
 }
 
 @media (max-width: 767px) {
-  .dock-plate {
-    width: 22px;
-    height: 22px;
+  .dock-node {
+    width: 58px;
+    height: 58px;
   }
 
-  .dock-port {
-    width: 7px;
-    height: 7px;
-  }
-
-  .dock-capsule {
-    width: 12px;
-    height: 4px;
+  .dock-node-label {
+    font-size: 9px;
+    max-width: 8ch;
   }
 }

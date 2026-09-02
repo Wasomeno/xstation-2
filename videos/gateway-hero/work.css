@@ -11,6 +11,17 @@ html {
   width: 100%;
   max-width: 100%;
   margin-top: -160svh;
+  pointer-events: none;
+}
+
+#work-root > section,
+#work-root > footer {
+  pointer-events: auto;
+}
+
+.station-hold {
+  min-height: 160svh;
+  pointer-events: none;
 }
 
 html.lenis,
@@ -23,7 +34,7 @@ html.lenis body {
 }
 
 #site-nav {
-  background: var(--bg);
+  background: transparent;
 }
 
 #site-links {
@@ -41,7 +52,7 @@ html.lenis body {
 }
 
 #site-links a:hover {
-  border-bottom-color: var(--ink);
+  border-bottom-color: currentColor;
 }
 
 .work-pad {

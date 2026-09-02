@@ -428,6 +428,12 @@ function bindPass() {
     { autoAlpha: 0, ease: "none", duration: 0.22, immediateRender: false },
     0.12
   );
+  passTl.fromTo(
+    "#hero-copy",
+    { autoAlpha: 0, y: 22 },
+    { autoAlpha: 1, y: 0, ease: "none", duration: 0.22, immediateRender: false },
+    0.32
+  );
   passTl.to(
     {},
     {
@@ -439,6 +445,10 @@ function bindPass() {
     },
     0
   );
+
+  function stationClass(on) {
+    document.documentElement.classList.toggle("is-station", on);
+  }
 
   ScrollTrigger.create({
     id: "hero-pass",
@@ -452,19 +462,41 @@ function bindPass() {
     invalidateOnRefresh: true,
     animation: passTl,
     onUpdate: (self) => {
+      stationClass(self.progress > 0.38);
       if (self.progress <= 0.001) {
         if (field.mode === "pass") field.setMode("idle");
         return;
       }
       if (field.mode === "idle") field.setMode("pass");
     },
-    onLeave: () => field.setMode("whisper"),
+    onLeave: () => {
+      stationClass(true);
+      field.setMode("whisper");
+    },
     onEnterBack: () => field.setMode("pass"),
-    onLeaveBack: () => field.setMode("idle"),
+    onLeaveBack: () => {
+      stationClass(false);
+      field.setMode("idle");
+    },
   });
 
   window.visualViewport?.addEventListener("resize", () => ScrollTrigger.refresh());
   window.addEventListener("orientationchange", () => ScrollTrigger.refresh());
+
+  const at = new URLSearchParams(window.location.search).get("at");
+  if (at === "station") {
+    function jumpStation() {
+      ScrollTrigger.refresh();
+      const st = ScrollTrigger.getById("hero-pass");
+      if (!st) return;
+      const y = st.start + (st.end - st.start) * 0.82;
+      if (scroller) scroller.scrollTo(y, { immediate: true });
+      else window.scrollTo(0, y);
+      ScrollTrigger.update();
+    }
+    if (document.readyState === "complete") setTimeout(jumpStation, 80);
+    else window.addEventListener("load", () => setTimeout(jumpStation, 80));
+  }
 }
 
 function bindEnter() {
@@ -529,32 +561,6 @@ function bindParallax() {
     );
   });
 
-  const band = document.querySelector(".doctrine-band");
-  const node = document.querySelector(".doctrine-node");
-  if (band && node) {
-    gsap.fromTo(
-      node,
-      {
-        x: () => band.offsetWidth * 0.3 - node.offsetWidth / 2,
-        yPercent: -50,
-        left: 0,
-      },
-      {
-        x: () => band.offsetWidth * 0.56 - node.offsetWidth / 2,
-        yPercent: -50,
-        left: 0,
-        ease: "none",
-        force3D: true,
-        scrollTrigger: {
-          trigger: band,
-          start: "top 80%",
-          end: "bottom 35%",
-          scrub: 0.6,
-          invalidateOnRefresh: true,
-        },
-      }
-    );
-  }
 }
 
 function bindFieldPause() {
@@ -587,10 +593,12 @@ function revealField() {
   if (reduce) {
     gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 1, y: 0 });
     gsap.set(lines, { autoAlpha: 1, y: 0 });
+    gsap.set("#hero-copy", { autoAlpha: 0 });
     return;
   }
 
   gsap.set("#title", { autoAlpha: 1 });
+  gsap.set("#hero-copy", { autoAlpha: 0, y: 28 });
   gsap.set(lines, { autoAlpha: 0, y: 36 });
   gsap.set("#site-nav", { autoAlpha: 0, y: -14 });
   gsap.set("#hero-cta", { autoAlpha: 0, y: 18 });
@@ -635,7 +643,7 @@ const isShot = applyShot();
 
 if (gsap && ScrollTrigger && !isShot) {
   gsap.registerPlugin(ScrollTrigger);
-  gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 0 });
+  gsap.set("#site-nav, #title, #hero-cta, #hero-copy", { autoAlpha: 0 });
   const ctx = gsap.context(() => {
     scroller = smooth();
     bindPass();

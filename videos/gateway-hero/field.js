@@ -1,35 +1,53 @@
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
 const NS = "http://www.w3.org/2000/svg";
-const DURATION = 20;
+
+const SLAB_DURATION = 8;
+const DOCK_DURATION = 20;
 const WHISPER_DURATION = 18;
-const BASE_TILT = 58;
-const DOCK_WINDOW = 0.34;
-const BERTH_ANGLES = [0.32, 1.37, 2.41, 3.46, 4.5, 5.55];
-const NODE_COLORS = ["#d63c32", "#e07a16", "#c9a00a", "#2b9a4a", "#2c62d4", "#6d3cc4"];
-const CAPSULE_PHASES = [0.04, 0.37, 0.71];
-const TICK_COUNT = 64;
+const FAR = -1880;
+const NEAR = 620;
+const TRAVEL = NEAR - FAR;
+const PALETTE = ["ivory", "ivory", "ivory", "ivory", "steel", "steel", "gold", "dim"];
+const KEEP_INDICES = [6, 14, 1, 4, 9, 12];
 
-function angDist(a, b) {
-  let d = Math.abs(a - b) % (Math.PI * 2);
-  if (d > Math.PI) d = Math.PI * 2 - d;
-  return d;
+const BASE_TILT = 0;
+const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
+const STATION_NODES = [
+  { label: "Marketing", ring: "mid", angle: Math.PI / 2, accent: true },
+  { label: "Prototypes", ring: "inner", angle: 0.52, accent: false },
+  { label: "Products", ring: "outer", angle: 0.06, accent: false },
+  { label: "Legal", ring: "mid", angle: -Math.PI / 2, accent: true },
+  { label: "Documents", ring: "inner", angle: -2.45, accent: false },
+  { label: "Hiring", ring: "outer", angle: Math.PI, accent: false },
+];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function wrap01(t) {
-  return t - Math.floor(t);
+function alphaAt(p, peak) {
+  if (p < 0.12) return (p / 0.12) * peak;
+  if (p > 0.84) return ((1 - p) / 0.16) * peak;
+  return peak;
 }
 
-function sourceNodeColor(theta) {
-  let best = 0;
-  let bestD = Infinity;
-  for (let i = 0; i < BERTH_ANGLES.length; i++) {
-    let d = theta - BERTH_ANGLES[i];
-    if (d < 0) d += Math.PI * 2;
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return NODE_COLORS[best];
+function makeSlab(w, h, color) {
+  const el = document.createElement("div");
+  el.className = "slab";
+  if (color !== "ivory") el.classList.add("is-" + color);
+  el.style.width = w + "px";
+  el.style.height = h + "px";
+  el.setAttribute("aria-hidden", "true");
+  return el;
 }
 
 function svgEl(name, attrs) {
@@ -42,38 +60,130 @@ function metrics() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const compact = w < 720;
-  const r = Math.min(w * (compact ? 0.52 : 0.42), h * (compact ? 0.42 : 0.5), compact ? 420 : 580);
-  const inner = Math.min(Math.max(w * (compact ? 0.24 : 0.22), compact ? 128 : 250), r * 0.6);
+  const r = Math.min(w * (compact ? 0.48 : 0.4), h * (compact ? 0.4 : 0.48), compact ? 380 : 540);
   return {
     w,
     h,
     compact,
     r,
-    inner,
-    tilt: compact ? 54 : BASE_TILT,
+    rMid: r * 0.68,
+    rIn: r * 0.44,
+    hub: r * 0.23,
+    tilt: BASE_TILT,
   };
 }
 
-function whisperXY(index, w, h) {
-  const half = BERTH_ANGLES.length / 2;
-  const side = index < half ? -1 : 1;
-  const row = index % half;
+function stationPose(m) {
+  if (m.compact) {
+    return { x: 0, y: m.h * 0.2, scale: 0.54 };
+  }
+  return { x: m.w * 0.24, y: m.h * 0.01, scale: 0.78 };
+}
+
+function poseAt(theta, radius) {
   return {
-    x: side * (w / 2 - (w < 720 ? 28 : 52)),
-    y: (row - (half - 1) / 2) * h * 0.28,
+    x: Math.cos(theta) * radius,
+    y: Math.sin(theta) * radius,
   };
 }
 
-function poseAt(theta, r, inner) {
-  const c = Math.cos(theta);
-  const s = Math.sin(theta);
+function createOrbView(host, gsap) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "dock-orbs";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
+  });
+  if (!renderer.getContext()) {
+    canvas.remove();
+    return null;
+  }
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+  camera.position.set(1.35, 1.05, 4.2);
+  camera.lookAt(0, 0, 0);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new RoomEnvironment();
+  const envMap = pmrem.fromScene(envScene, 0.04).texture;
+  scene.environment = envMap;
+  envScene.dispose();
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xc5c8ce, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.35);
+  key.position.set(-2.2, 3.4, 2.8);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xf4f5f7, 0.4);
+  fill.position.set(2.8, 0.6, 1.6);
+  scene.add(fill);
+
+  const geo = new THREE.SphereGeometry(1, 96, 64);
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    roughness: 0.12,
+    metalness: 0.04,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
+    reflectivity: 0.9,
+    envMapIntensity: 1.15,
+  });
+  const orb = new THREE.Mesh(geo, mat);
+  scene.add(orb);
+
+  let lastPx = 0;
+
   return {
-    x: c * r,
-    y: s * r,
-    innerX: c * inner,
-    innerY: s * inner,
-    rot: theta * (180 / Math.PI) + 90,
-    depth: (s + 1) * 0.5,
+    layout(t, inner, gain, compact, pose) {
+      const px = Math.round(Math.max(150, Math.min(inner * 2.08, compact ? 210 : 300)));
+      if (px !== lastPx) {
+        lastPx = px;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(px, px, false);
+        canvas.style.width = px + "px";
+        canvas.style.height = px + "px";
+        camera.aspect = 1;
+        camera.updateProjectionMatrix();
+      }
+
+      orb.rotation.y = t * Math.PI * 2 * 0.18;
+      orb.rotation.x = Math.sin(t * Math.PI * 2) * 0.08;
+
+      const p = pose || { x: 0, y: 0, scale: 1 };
+      gsap.set(canvas, {
+        x: p.x,
+        y: p.y,
+        scale: p.scale,
+        rotationX: 0,
+        rotationY: 0,
+        rotationZ: 0,
+        xPercent: -50,
+        yPercent: -50,
+        autoAlpha: gain,
+        force3D: true,
+      });
+
+      if (gain > 0.02) renderer.render(scene, camera);
+    },
+    canvas,
+    dispose() {
+      renderer.dispose();
+      geo.dispose();
+      mat.dispose();
+      envMap.dispose();
+      pmrem.dispose();
+    },
   };
 }
 
@@ -98,14 +208,56 @@ export function createField({ root, gsap, reduce }) {
   let m = metrics();
   let mode = "idle";
   let passP = 0;
-  let entered = false;
   const state = { t: 0 };
-  const enter = { g: reduce ? 1 : 0 };
-  let lastT = 0;
-  let hubFlash = 0;
+
   let idleTl = null;
   let whisperTl = null;
   let resizeTimer = 0;
+
+  const rng = mulberry32(0xa5c11e);
+  const slabs = [];
+
+  if (!reduce) {
+    for (let i = 0; i < 22; i++) {
+      const w = 14 + rng() * 36;
+      const h = w * (2.8 + rng() * 1.6);
+      const color = PALETTE[i % PALETTE.length];
+      const el = makeSlab(w, h, color);
+      root.appendChild(el);
+
+      const ang = rng() * Math.PI * 2;
+      const rad = 300 + rng() * 620;
+      let x = Math.cos(ang) * rad;
+      let y = Math.sin(ang) * rad * 0.56;
+      if (Math.abs(x) < 340) x += x < 0 ? -360 : 360;
+      if (Math.abs(y) < 80) y += y < 0 ? -160 : 160;
+
+      slabs.push({
+        el,
+        phase: (i * 0.097 + rng() * 0.05) % 1,
+        x,
+        y,
+        tiltX: (rng() - 0.5) * 12,
+        tiltY: (rng() - 0.5) * 28,
+        peak: color === "gold" ? 0.78 : 0.52,
+        idleX: x,
+        idleY: y,
+        railX: x < 0 ? -420 : 420,
+        keepWhisper: false,
+        whisperSample: null,
+      });
+    }
+
+    KEEP_INDICES.forEach((idx, keepIndex) => {
+      const it = slabs[idx];
+      it.keepWhisper = true;
+      it.whisperSample = {
+        side: keepIndex < 3 ? -1 : 1,
+        row: keepIndex % 3,
+        inset: rng() * 24,
+      };
+    });
+  }
 
   const dock = document.createElement("div");
   dock.className = "dock";
@@ -117,298 +269,260 @@ export function createField({ root, gsap, reduce }) {
     viewBox: "-1200 -1200 2400 2400",
     "aria-hidden": "true",
   });
-  const defs = svgEl("defs", {});
-  const mask = svgEl("mask", { id: "dock-deck-mask" });
-  const maskOuter = svgEl("circle", { cx: "0", cy: "0", fill: "#fff" });
-  const maskInner = svgEl("circle", { cx: "0", cy: "0", fill: "#000" });
-  mask.append(maskOuter, maskInner);
-  defs.appendChild(mask);
-  const deck = svgEl("circle", {
-    class: "dock-deck",
-    cx: "0",
-    cy: "0",
-    mask: "url(#dock-deck-mask)",
+  const ringCore = svgEl("circle", { class: "dock-ring is-core", cx: "0", cy: "0" });
+  const ringInner = svgEl("circle", { class: "dock-ring is-inner", cx: "0", cy: "0" });
+  const ringMid = svgEl("circle", { class: "dock-ring is-mid", cx: "0", cy: "0" });
+  const ringOuter = svgEl("circle", { class: "dock-ring is-outer", cx: "0", cy: "0" });
+  const alignLine = svgEl("line", {
+    class: "dock-align",
+    x1: "0",
+    y1: "0",
+    x2: "0",
+    y2: "0",
   });
-  const railOuter = svgEl("circle", { class: "dock-rail", cx: "0", cy: "0" });
-  const railInner = svgEl("circle", { class: "dock-rail is-inner", cx: "0", cy: "0" });
-  const tickGroup = svgEl("g", { class: "dock-ticks" });
-  const spokeGroup = svgEl("g", { class: "dock-spokes" });
-  const ticks = [];
-  for (let i = 0; i < TICK_COUNT; i++) {
-    const tick = svgEl("line", { class: "dock-tick" });
-    tickGroup.appendChild(tick);
-    ticks.push(tick);
-  }
-  const spokeEls = BERTH_ANGLES.map((_, i) => {
-    const line = svgEl("line", { class: "dock-spoke" });
-    line.style.setProperty("--node", NODE_COLORS[i]);
-    spokeGroup.appendChild(line);
-    return line;
-  });
-  svg.append(defs, deck, railOuter, railInner, tickGroup, spokeGroup);
+  svg.append(ringCore, ringInner, ringMid, ringOuter, alignLine);
   dock.appendChild(svg);
 
-  const capsules = CAPSULE_PHASES.map((phase) => {
+  const ringEls = {
+    inner: ringInner,
+    mid: ringMid,
+    outer: ringOuter,
+    core: ringCore,
+  };
+
+  const nodes = STATION_NODES.map((spec) => {
     const el = document.createElement("div");
-    el.className = "dock-capsule";
-    el.setAttribute("aria-hidden", "true");
-    const theta = wrap01(phase) * Math.PI * 2;
-    const node = sourceNodeColor(theta);
-    el.style.setProperty("--node", node);
+    el.className = "dock-node" + (spec.accent ? " is-accent" : "");
+    const label = document.createElement("span");
+    label.className = "dock-node-label";
+    label.textContent = spec.label;
+    el.appendChild(label);
     dock.appendChild(el);
-    return { el, theta, node };
+    return { el, spec, x: 0, y: 0 };
   });
 
-  const packets = BERTH_ANGLES.map((_, i) => ({
-    el: (() => {
-      const el = document.createElement("div");
-      el.className = "dock-packet";
-      el.style.setProperty("--node", NODE_COLORS[i]);
-      el.setAttribute("aria-hidden", "true");
-      dock.appendChild(el);
-      return el;
-    })(),
-    p: 1,
-    armed: true,
-  }));
+  let hover = null;
 
-  const berths = BERTH_ANGLES.map((theta, index) => {
-    const el = document.createElement("div");
-    el.className = "dock-berth";
-    el.style.setProperty("--node", NODE_COLORS[index]);
-    el.setAttribute("aria-hidden", "true");
-    const plate = document.createElement("div");
-    plate.className = "dock-plate";
-    const port = document.createElement("div");
-    port.className = "dock-port";
-    plate.appendChild(port);
-    el.appendChild(plate);
-    dock.appendChild(el);
-    return {
-      el,
-      plate,
-      index,
-      theta,
-      keepWhisper: true,
-      on: 0,
-    };
-  });
-
-  function sizeRails(r, inner) {
-    railOuter.setAttribute("r", String(r));
-    railInner.setAttribute("r", String(inner));
-    deck.setAttribute("r", String(r));
-    maskOuter.setAttribute("r", String(r));
-    maskInner.setAttribute("r", String(inner));
-
-    for (let i = 0; i < TICK_COUNT; i++) {
-      const theta = (i / TICK_COUNT) * Math.PI * 2;
-      const c = Math.cos(theta);
-      const s = Math.sin(theta);
-      const tick = ticks[i];
-      tick.setAttribute("x1", (c * (r + 6)).toFixed(2));
-      tick.setAttribute("y1", (s * (r + 6)).toFixed(2));
-      tick.setAttribute("x2", (c * (r + 14)).toFixed(2));
-      tick.setAttribute("y2", (s * (r + 14)).toFixed(2));
+  let orbView = null;
+  if (!reduce) {
+    try {
+      orbView = createOrbView(root, gsap);
+    } catch (err) {
+      orbView = null;
     }
   }
 
-  function layoutIdle(t, u = 0) {
-    const tilt = m.tilt + 14 * u;
-    const spread = 1 + 0.32 * u;
-    const r = m.r * spread;
-    const inner = m.inner * (1 + 0.08 * u);
-    const gain = enter.g;
+  function layoutSlab(it, t, x = it.x, y = it.y, peak = it.peak) {
+    const p = (it.phase + t) % 1;
+    const z = FAR + p * TRAVEL;
+    gsap.set(it.el, {
+      x,
+      y,
+      z,
+      xPercent: -50,
+      yPercent: -50,
+      rotationX: it.tiltX,
+      rotationY: it.tiltY,
+      autoAlpha: alphaAt(p, peak),
+      force3D: true,
+    });
+  }
 
-    sizeRails(r, inner);
+  function layoutSlabsIdle(t) {
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      it.el.style.display = "";
+      layoutSlab(it, t, it.idleX, it.idleY, it.peak);
+    }
+  }
+
+  function layoutSlabsPass(t, p) {
+    const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
+    const fade = gsap.utils.clamp(0, 1, (p - 0.22) / 0.26);
+    const pull = 0.4 * u;
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      if (fade >= 1) {
+        gsap.set(it.el, { autoAlpha: 0 });
+        it.el.style.display = "none";
+        it.el.style.willChange = "auto";
+        continue;
+      }
+      it.el.style.display = "";
+      it.el.style.willChange = "transform";
+      const x = it.idleX + (it.railX - it.idleX) * pull;
+      const y = it.idleY * (1 - pull * 0.25);
+      layoutSlab(it, t, x, y, it.peak * (1 + 0.35 * u) * (1 - fade));
+    }
+  }
+
+  function hideSlabs() {
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      gsap.set(it.el, { autoAlpha: 0 });
+      it.el.style.display = "none";
+      it.el.style.willChange = "auto";
+    }
+  }
+
+  function sizeRings() {
+    ringCore.setAttribute("r", String(m.hub * 1.08));
+    ringInner.setAttribute("r", String(m.rIn));
+    ringMid.setAttribute("r", String(m.rMid));
+    ringOuter.setAttribute("r", String(m.r));
+  }
+
+  function ringRadius(name) {
+    if (name === "inner") return m.rIn;
+    if (name === "mid") return m.rMid;
+    return m.r;
+  }
+
+  function layoutOrbs(t, gain, pose) {
+    if (orbView) orbView.layout(t, m.hub, gain, m.compact, pose);
+  }
+
+  function clearHot() {
+    dock.classList.remove("is-orb-hot");
+    nodes.forEach((node) => node.el.classList.remove("is-hot"));
+    Object.keys(ringEls).forEach((key) => ringEls[key].classList.remove("is-hot"));
+    alignLine.classList.remove("is-hot");
+  }
+
+  function applyHover() {
+    clearHot();
+    if (!hover) {
+      alignLine.setAttribute("x2", "0");
+      alignLine.setAttribute("y2", "0");
+      return;
+    }
+    if (hover === "orb") {
+      dock.classList.add("is-orb-hot");
+      nodes.forEach((node) => node.el.classList.add("is-hot"));
+      Object.keys(ringEls).forEach((key) => ringEls[key].classList.add("is-hot"));
+      return;
+    }
+    hover.el.classList.add("is-hot");
+    ringEls[hover.spec.ring].classList.add("is-hot");
+    ringCore.classList.add("is-hot");
+    alignLine.classList.add("is-hot");
+    alignLine.setAttribute("x2", hover.x.toFixed(2));
+    alignLine.setAttribute("y2", hover.y.toFixed(2));
+  }
+
+  function setHover(next) {
+    if (next === hover) return;
+    hover = next;
+    applyHover();
+  }
+
+  function bindHover() {
+    nodes.forEach((node) => {
+      node.el.addEventListener("pointerenter", () => setHover(node));
+      node.el.addEventListener("pointerleave", () => {
+        if (hover === node) setHover(null);
+      });
+    });
+    const canvas = orbView && orbView.canvas;
+    if (canvas) {
+      canvas.addEventListener("pointerenter", () => setHover("orb"));
+      canvas.addEventListener("pointerleave", () => {
+        if (hover === "orb") setHover(null);
+      });
+    }
+  }
+
+  function layoutDock(t, gain, pose) {
+    sizeRings();
     gsap.set(dock, {
-      rotationX: tilt,
+      x: pose.x,
+      y: pose.y,
+      scale: pose.scale,
+      rotationX: 0,
       autoAlpha: gain,
       force3D: true,
     });
-    gsap.set(svg, { autoAlpha: 1 - u * 0.12 });
-    deck.style.fillOpacity = String(1 - u * 0.82);
+    gsap.set(svg, { autoAlpha: 1 });
 
-    capsules.forEach((cap, i) => {
-      if (reduce) {
-        gsap.set(cap.el, { autoAlpha: 0 });
-        return;
-      }
-      const theta = wrap01(t + CAPSULE_PHASES[i]) * Math.PI * 2;
-      cap.theta = theta;
-      const node = sourceNodeColor(theta);
-      if (cap.node !== node) {
-        cap.node = node;
-        cap.el.style.setProperty("--node", node);
-      }
-      const pose = poseAt(theta, r, inner);
-      gsap.set(cap.el, {
-        x: pose.x,
-        y: pose.y,
+    const live = gain > 0.55;
+    const spin = t * Math.PI * 2;
+    nodes.forEach((node) => {
+      const speed = RING_SPIN[node.spec.ring] || 1;
+      const pos = poseAt(node.spec.angle + spin * speed, ringRadius(node.spec.ring));
+      node.x = pos.x;
+      node.y = pos.y;
+      node.el.style.pointerEvents = live ? "auto" : "none";
+      gsap.set(node.el, {
+        x: pos.x,
+        y: pos.y,
         z: 0,
         xPercent: -50,
         yPercent: -50,
-        rotation: pose.rot,
-        autoAlpha: (0.55 + 0.4 * pose.depth) * (1 - u * 0.28),
+        rotationX: 0,
+        rotationY: 0,
+        rotationZ: 0,
+        autoAlpha: gain,
         force3D: true,
       });
     });
 
-    berths.forEach((berth, i) => {
-      const pose = poseAt(berth.theta, r, inner);
-      let heat = 0;
-      if (!reduce) {
-        capsules.forEach((cap) => {
-          const prox = 1 - Math.min(1, angDist(cap.theta, berth.theta) / DOCK_WINDOW);
-          if (prox > heat) heat = prox;
-        });
-      } else {
-        heat = 0.2;
-      }
-      berth.on = heat;
-      berth.el.classList.toggle("is-on", heat > 0.55);
+    if (orbView && orbView.canvas) {
+      orbView.canvas.style.pointerEvents = live ? "auto" : "none";
+      orbView.canvas.style.cursor = live ? "pointer" : "default";
+    }
 
-      const packet = packets[i];
-      if (reduce) packet.p = 1;
+    if (hover && hover !== "orb") {
+      alignLine.setAttribute("x2", hover.x.toFixed(2));
+      alignLine.setAttribute("y2", hover.y.toFixed(2));
+    }
 
-      const travel = packet.p * packet.p * (3 - 2 * packet.p);
-      const px = pose.x + (pose.innerX - pose.x) * travel;
-      const py = pose.y + (pose.innerY - pose.y) * travel;
-      const packetAlpha = packet.p >= 1 ? 0 : packet.p < 0.12 ? packet.p / 0.12 : (1 - packet.p) / 0.18;
-      gsap.set(packet.el, {
-        x: px,
-        y: py,
-        z: 0,
-        xPercent: -50,
-        yPercent: -50,
-        autoAlpha: reduce ? 0 : Math.max(0, Math.min(1, packetAlpha)),
-        force3D: true,
-      });
-
-      spokeEls[i].setAttribute("x1", pose.innerX.toFixed(2));
-      spokeEls[i].setAttribute("y1", pose.innerY.toFixed(2));
-      spokeEls[i].setAttribute("x2", pose.x.toFixed(2));
-      spokeEls[i].setAttribute("y2", pose.y.toFixed(2));
-      spokeEls[i].setAttribute("stroke-opacity", String((0.16 + 0.5 * heat) * (1 - u * 0.4)));
-
-      gsap.set(berth.el, {
-        x: pose.x,
-        y: pose.y,
-        z: 1,
-        xPercent: -50,
-        yPercent: -50,
-        rotation: 0,
-        autoAlpha: 0.82 + 0.18 * pose.depth,
-        force3D: true,
-      });
-    });
-
-    railInner.setAttribute("stroke-opacity", String(0.2 + 0.45 * hubFlash));
+    layoutOrbs(t, gain, pose);
   }
 
-  function stepTraffic(dtSec) {
-    if (reduce || dtSec <= 0) return;
-    berths.forEach((berth, i) => {
-      const packet = packets[i];
-      if (berth.on > 0.78 && packet.armed) {
-        packet.p = 0;
-        packet.armed = false;
-      }
-      if (berth.on < 0.28) packet.armed = true;
-      if (packet.p < 1) {
-        packet.p = Math.min(1, packet.p + dtSec / 0.72);
-        if (packet.p >= 1) hubFlash = 1;
-      }
+  function layoutStation(p) {
+    const dockIn = gsap.utils.clamp(0, 1, (p - 0.22) / 0.28);
+    const slide = gsap.utils.clamp(0, 1, (p - 0.36) / 0.34);
+    const easeSlide = slide * slide * (3 - 2 * slide);
+    const pose = stationPose(m);
+    const from = { x: 0, y: 0, scale: 1 };
+    layoutDock(state.t, dockIn, {
+      x: from.x + (pose.x - from.x) * easeSlide,
+      y: from.y + (pose.y - from.y) * easeSlide,
+      scale: from.scale + (pose.scale - from.scale) * easeSlide,
     });
-  }
-
-  function layoutWhisper(t, k = 1) {
-    const fromU = 1;
-    const r = m.r * (1 + 0.32 * fromU);
-    const inner = m.inner * 1.08;
-    const fromTilt = m.tilt + 14 * fromU;
-
-    gsap.set(dock, {
-      rotationX: fromTilt * (1 - k),
-      autoAlpha: 1,
-      force3D: true,
-    });
-    gsap.set(svg, { autoAlpha: 1 - k });
-    capsules.forEach((cap) => gsap.set(cap.el, { autoAlpha: 0 }));
-    packets.forEach((packet) => gsap.set(packet.el, { autoAlpha: 0 }));
-
-    const pulse = 0.16 + 0.05 * Math.sin(t * Math.PI * 2);
-
-    berths.forEach((berth) => {
-      const pose = poseAt(berth.theta, r, inner);
-      const to = whisperXY(berth.index, m.w, m.h);
-      berth.el.classList.remove("is-on");
-      gsap.set(berth.el, {
-        x: pose.x + (to.x - pose.x) * k,
-        y: pose.y + (to.y - pose.y) * k,
-        z: 0,
-        xPercent: -50,
-        yPercent: -50,
-        rotation: 0,
-        autoAlpha: (0.82 + 0.18 * pose.depth) * (1 - k) + pulse * k,
-        force3D: true,
-      });
-    });
+    gsap.set(root, { perspective: 1100 });
+    if (p < 0.48) layoutSlabsPass(state.t, p);
+    else hideSlabs();
   }
 
   function tickIdle() {
-    const dt = state.t - lastT;
-    const wrapped = dt < -0.5 ? dt + 1 : dt;
-    lastT = state.t;
-    const dtSec = Math.max(0, wrapped) * DURATION;
-    hubFlash = Math.max(0, hubFlash - dtSec * 2.4);
-    stepTraffic(dtSec);
-
     if (mode === "idle") {
-      layoutIdle(state.t, 0);
+      layoutSlabsIdle(state.t);
+      gsap.set(dock, { autoAlpha: 0 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
+      gsap.set(root, { perspective: 1100 });
       return;
     }
-    if (mode === "pass" && passP < 0.78) {
-      layoutIdle(state.t, gsap.utils.clamp(0, 1, (passP - 0.18) / 0.54));
+    if (mode === "pass") {
+      layoutStation(passP);
+      return;
     }
-  }
-
-  function corridorU(p) {
-    return gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
+    if (mode === "whisper") {
+      hideSlabs();
+      layoutDock(state.t, 1, stationPose(m));
+      gsap.set(root, { perspective: 1100 });
+    }
   }
 
   function setProgress(p) {
     passP = p;
     if (mode === "whisper" || mode === "paused") return;
-    if (p < 0.78) {
-      const u = corridorU(p);
-      if (idleTl) {
-        idleTl.timeScale(1 + 1.6 * u);
-        if (idleTl.paused()) idleTl.play();
-      }
-      layoutIdle(state.t, u);
-      return;
-    }
+    const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
     if (idleTl) {
-      idleTl.pause();
-      idleTl.timeScale(1);
+      idleTl.timeScale(p < 0.55 ? 1 + 2.2 * u : 1);
+      if (idleTl.paused()) idleTl.play();
     }
-    layoutWhisper(state.t, (p - 0.78) / 0.22);
-  }
-
-  function showChrome(on) {
-    const vis = on ? "" : "none";
-    svg.style.display = vis;
-    capsules.forEach((cap) => {
-      cap.el.style.display = vis;
-    });
-    packets.forEach((packet) => {
-      packet.el.style.display = vis;
-    });
-    berths.forEach((berth) => {
-      berth.el.style.display = "";
-      berth.el.style.willChange = on ? "transform" : "auto";
-    });
+    layoutStation(p);
   }
 
   function setMode(next) {
@@ -419,52 +533,66 @@ export function createField({ root, gsap, reduce }) {
     if (next === "pass") {
       if (whisperTl) whisperTl.pause();
       if (idleTl) {
-        idleTl.timeScale(1 + 1.6 * corridorU(passP));
-        if (passP < 0.78 && idleTl.paused()) idleTl.play();
+        idleTl.duration(passP < 0.55 ? SLAB_DURATION : DOCK_DURATION);
+        const u = gsap.utils.clamp(0, 1, (passP - 0.18) / 0.54);
+        idleTl.timeScale(passP < 0.55 ? 1 + 2.2 * u : 1);
+        if (idleTl.paused()) idleTl.play();
       }
-      showChrome(true);
+      slabs.forEach((it) => {
+        it.el.style.display = "";
+        it.el.style.willChange = "transform";
+      });
       return;
     }
     if (next === "whisper") {
-      if (idleTl) idleTl.pause();
-      showChrome(true);
-      svg.style.display = "none";
-      capsules.forEach((cap) => {
-        cap.el.style.display = "none";
-      });
-      packets.forEach((packet) => {
-        packet.el.style.display = "none";
-      });
-      if (whisperTl) {
-        whisperTl.progress(state.t);
-        whisperTl.play();
+      hideSlabs();
+      if (idleTl) {
+        idleTl.duration(DOCK_DURATION);
+        idleTl.timeScale(1);
+        if (idleTl.paused()) idleTl.play();
       }
-      layoutWhisper(state.t, 1);
+      if (whisperTl) whisperTl.pause();
+      layoutDock(state.t, 1, stationPose(m));
+      gsap.set(root, { perspective: 1100 });
       return;
     }
     if (next === "idle") {
       if (whisperTl) whisperTl.pause();
       if (idleTl) {
+        idleTl.duration(SLAB_DURATION);
         idleTl.timeScale(1);
         idleTl.progress(state.t);
         idleTl.play();
       }
-      showChrome(true);
-      layoutIdle(state.t, 0);
+      slabs.forEach((it) => {
+        it.el.style.display = "";
+        it.el.style.willChange = "transform";
+      });
+      gsap.set(dock, { autoAlpha: 0, x: 0, y: 0, scale: 1 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
+      gsap.set(root, { perspective: 1100 });
+      layoutSlabsIdle(state.t);
       return;
     }
     if (next === "paused") {
       if (idleTl) idleTl.pause();
       if (whisperTl) whisperTl.pause();
+      hideSlabs();
       gsap.set(dock, { autoAlpha: 0 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
     }
   }
 
   function onResize() {
     m = metrics();
-    if (mode === "whisper") layoutWhisper(state.t, 1);
-    else if (mode === "pass") setProgress(passP);
-    else if (mode !== "paused") layoutIdle(state.t, 0);
+    if (mode === "whisper") {
+      hideSlabs();
+      layoutDock(state.t, 1, stationPose(m));
+    } else if (mode === "pass") setProgress(passP);
+    else if (mode !== "paused") {
+      layoutSlabsIdle(state.t);
+      gsap.set(dock, { autoAlpha: 0 });
+    }
   }
 
   function handleResize() {
@@ -478,7 +606,7 @@ export function createField({ root, gsap, reduce }) {
       { t: 0 },
       {
         t: 1,
-        duration: DURATION,
+        duration: SLAB_DURATION,
         ease: "none",
         repeat: -1,
         paused: true,
@@ -499,41 +627,35 @@ export function createField({ root, gsap, reduce }) {
         overwrite: false,
         immediateRender: false,
         onUpdate: function () {
-          if (mode === "whisper") layoutWhisper(state.t, 1);
+          if (mode === "whisper") {
+            hideSlabs();
+            layoutDock(state.t, 1, stationPose(m));
+          }
         },
       }
     );
-    gsap.set(dock, { autoAlpha: 0, rotationX: m.tilt, force3D: true });
   }
 
-  layoutIdle(0, 0);
-  if (reduce) {
-    gsap.set(dock, { autoAlpha: 0.9, rotationX: m.tilt, force3D: true });
-    capsules.forEach((cap) => gsap.set(cap.el, { autoAlpha: 0 }));
-    packets.forEach((packet) => gsap.set(packet.el, { autoAlpha: 0 }));
+  gsap.set(dock, { autoAlpha: 0, rotationX: 0, x: 0, y: 0, scale: 1, force3D: true });
+  gsap.set(root, { perspective: 1100 });
+  if (!reduce) layoutSlabsIdle(0);
+  else {
+    hideSlabs();
+    gsap.set(dock, { autoAlpha: 0 });
   }
 
+  bindHover();
   window.addEventListener("resize", handleResize);
 
   const controller = {
-    items: berths,
+    items: slabs,
     mode,
     startIdle() {
       if (mode === "whisper" || mode === "paused") return;
-      if (!entered) {
-        entered = true;
-        if (!reduce) {
-          gsap.to(enter, {
-            g: 1,
-            duration: 1.2,
-            ease: "power2.out",
-            onUpdate: function () {
-              if (mode === "idle") layoutIdle(state.t, 0);
-            },
-          });
-        }
+      if (idleTl) {
+        idleTl.duration(mode === "idle" ? SLAB_DURATION : DOCK_DURATION);
+        idleTl.play();
       }
-      if (idleTl) idleTl.play();
     },
     playEnter() {
       this.startIdle();
@@ -548,16 +670,20 @@ export function createField({ root, gsap, reduce }) {
     },
     layout(t = state.t) {
       m = metrics();
-      if (mode === "whisper") layoutWhisper(t, 1);
-      else layoutIdle(t, mode === "pass" ? corridorU(passP) : 0);
+      if (mode === "whisper") {
+        hideSlabs();
+        layoutDock(t, 1, stationPose(m));
+      } else if (mode === "pass") layoutStation(passP);
+      else layoutSlabsIdle(t);
     },
     destroy() {
       window.removeEventListener("resize", handleResize);
       window.clearTimeout(resizeTimer);
       if (idleTl) idleTl.kill();
       if (whisperTl) whisperTl.kill();
-      berths.forEach((berth) => {
-        berth.el.style.willChange = "auto";
+      if (orbView) orbView.dispose();
+      slabs.forEach((it) => {
+        it.el.style.willChange = "auto";
       });
     },
   };

@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>XTATION - Your gateway to intelligent products</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+        }
+      }
+    </script>
     <style>
       @font-face {
         font-family: "Apfel Grotezk";
@@ -28,6 +36,7 @@
         --ivory: #f7f8fa;
         --steel: #5a616c;
         --dim: #6e7580;
+        --gold: #d4a056;
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
@@ -80,14 +89,15 @@
         overflow: hidden;
         isolation: isolate;
         pointer-events: none;
+        background: var(--bg);
         transform: translateZ(0);
       }
 
       #field {
         position: absolute;
         inset: 0;
-        perspective: 1680px;
-        perspective-origin: 50% 46%;
+        perspective: 1100px;
+        perspective-origin: 50% 48%;
         transform-style: preserve-3d;
         pointer-events: none;
       }
@@ -142,7 +152,7 @@
         display: flex;
         align-items: baseline;
         gap: 10px;
-        color: var(--ink);
+        color: inherit;
       }
 
       #brand em {
