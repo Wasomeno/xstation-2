@@ -10,18 +10,13 @@ html {
   overflow-x: hidden;
   width: 100%;
   max-width: 100%;
-  margin-top: -160svh;
+  margin-top: 0;
   pointer-events: none;
 }
 
 #work-root > section,
 #work-root > footer {
   pointer-events: auto;
-}
-
-.station-hold {
-  min-height: 160svh;
-  pointer-events: none;
 }
 
 html.lenis,
@@ -59,12 +54,10 @@ html.lenis body {
   --pad: clamp(1.15rem, 4vw, 2.75rem);
 }
 
-#hero-cta:focus-visible,
+.station-cta:focus-visible,
 .thumb:focus-visible,
 .look-close:focus-visible,
-#site-links a:focus-visible,
-.inquiry-qr:focus-visible,
-.readout a:focus-visible {
+.inquiry-qr:focus-visible {
   outline: 1px solid var(--ink);
   outline-offset: 4px;
 }
@@ -135,7 +128,17 @@ html.lenis body {
   font-weight: 400;
   letter-spacing: -0.05em;
   line-height: 1.02;
+  text-transform: none;
   color: var(--ink);
+}
+
+.index-line {
+  display: block;
+  overflow: hidden;
+}
+
+.index-line > span {
+  display: block;
 }
 
 .space {
@@ -561,28 +564,21 @@ html.is-looking body {
 }
 
 .clients {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: clamp(16rem, 38vh, 22rem);
   background: var(--bg);
-  padding: clamp(5rem, 14vh, 8.5rem) var(--pad) clamp(4rem, 9vh, 6rem);
+  padding: clamp(3.6rem, 7vh, 5rem) var(--pad);
+  border-top: 1px solid var(--line);
 }
 
-.clients-copy {
-  display: grid;
-  gap: 0.85rem;
-  margin-bottom: clamp(2.2rem, 5vh, 3.4rem);
-  max-width: 22rem;
-}
-
-.clients-copy h2 {
-  font-size: clamp(2.8rem, 6.8vw, 5.4rem);
+.clients-title {
+  margin: 0 0 clamp(1.5rem, 3.2vh, 2.2rem);
+  font-size: clamp(1.02rem, 1.5vw, 1.18rem);
   font-weight: 400;
-  letter-spacing: -0.055em;
-  line-height: 0.92;
-}
-
-.clients-copy p {
-  max-width: 28ch;
-  font-size: 1rem;
-  line-height: 1.5;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: var(--steel);
 }
 
@@ -639,8 +635,8 @@ html.is-looking body {
   grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
   gap: clamp(2rem, 6vw, 5rem);
   align-items: center;
-  min-height: 100dvh;
-  padding: clamp(6rem, 12vh, 8rem) var(--pad) 3.5rem;
+  min-height: 0;
+  padding: clamp(2rem, 4.5vh, 3rem) var(--pad) 3.5rem;
   background: var(--bg);
 }
 
@@ -829,13 +825,13 @@ html.is-looking body {
   }
 
   .clients {
-    padding-top: 4.6rem;
-    padding-bottom: 3rem;
+    min-height: 0;
+    padding-top: 3.4rem;
+    padding-bottom: 3.4rem;
   }
 
-  .clients-copy {
-    max-width: none;
-    margin-bottom: 1.8rem;
+  .clients-title {
+    margin-bottom: 1.45rem;
   }
 
   .client-list {
@@ -862,7 +858,7 @@ html.is-looking body {
 
   .inquiry {
     min-height: 0;
-    padding-top: 3.5rem;
+    padding-top: 2.2rem;
   }
 
   .inquiry-code {

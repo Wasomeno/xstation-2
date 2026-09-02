@@ -39,12 +39,12 @@ const SLAB_SLOTS = [
 const BASE_TILT = 0;
 const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
 const STATION_NODES = [
-  { label: "Marketing", ring: "mid", angle: Math.PI / 2, accent: true },
-  { label: "Prototypes", ring: "inner", angle: 0.52, accent: false },
-  { label: "Products", ring: "outer", angle: 0.06, accent: false },
-  { label: "Legal", ring: "mid", angle: -Math.PI / 2, accent: true },
-  { label: "Documents", ring: "inner", angle: -2.45, accent: false },
-  { label: "Hiring", ring: "outer", angle: Math.PI, accent: false },
+  { label: "Marketing & Content", ring: "mid", angle: Math.PI / 2, accent: true },
+  { label: "Prototyping", ring: "inner", angle: 0.52, accent: false },
+  { label: "AI Agents", ring: "outer", angle: 0.06, accent: false },
+  { label: "Customer Engagement", ring: "mid", angle: -Math.PI / 2, accent: true },
+  { label: "Document Management", ring: "inner", angle: -2.45, accent: false },
+  { label: "Talent Assessment", ring: "outer", angle: Math.PI, accent: false },
 ];
 
 function mulberry32(seed) {
@@ -336,6 +336,7 @@ export function createField({ root, gsap, reduce }) {
   const nodes = STATION_NODES.map((spec) => {
     const el = document.createElement("div");
     el.className = "dock-node" + (spec.accent ? " is-accent" : "");
+    if (spec.label === "Products") el.setAttribute("data-dock", "products");
     const label = document.createElement("span");
     label.className = "dock-node-label";
     label.textContent = spec.label;
@@ -345,6 +346,8 @@ export function createField({ root, gsap, reduce }) {
   });
 
   let hover = null;
+  let orbitFrozen = false;
+  const productsNode = nodes.find((node) => node.el.dataset.dock === "products") || null;
 
   let orbView = null;
   if (!reduce) {
@@ -486,33 +489,42 @@ export function createField({ root, gsap, reduce }) {
       autoAlpha: gain,
       force3D: true,
     });
-    gsap.set(svg, { autoAlpha: 1 });
+    if (!orbitFrozen) gsap.set(svg, { autoAlpha: 1 });
 
-    const live = gain > 0.55;
+    const live = gain > 0.55 && !orbitFrozen;
     const spin = t * Math.PI * 2;
-    nodes.forEach((node) => {
-      const speed = RING_SPIN[node.spec.ring] || 1;
-      const pos = poseAt(node.spec.angle + spin * speed, ringRadius(node.spec.ring));
-      node.x = pos.x;
-      node.y = pos.y;
-      node.el.style.pointerEvents = live ? "auto" : "none";
-      gsap.set(node.el, {
-        x: pos.x,
-        y: pos.y,
-        z: 0,
-        xPercent: -50,
-        yPercent: -50,
-        rotationX: 0,
-        rotationY: 0,
-        rotationZ: 0,
-        autoAlpha: gain,
-        force3D: true,
+    if (!orbitFrozen) {
+      nodes.forEach((node) => {
+        const speed = RING_SPIN[node.spec.ring] || 1;
+        const pos = poseAt(node.spec.angle + spin * speed, ringRadius(node.spec.ring));
+        node.x = pos.x;
+        node.y = pos.y;
+        node.el.style.pointerEvents = live ? "auto" : "none";
+        gsap.set(node.el, {
+          x: pos.x,
+          y: pos.y,
+          z: 0,
+          xPercent: -50,
+          yPercent: -50,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+          autoAlpha: gain,
+          force3D: true,
+        });
       });
-    });
+    } else {
+      nodes.forEach((node) => {
+        node.el.style.pointerEvents = "none";
+      });
+    }
 
     if (orbView && orbView.canvas) {
       orbView.canvas.style.pointerEvents = live ? "auto" : "none";
       orbView.canvas.style.cursor = live ? "pointer" : "default";
+    }
+    if (orbitFrozen && !layoutDock._companionsForced) {
+      return;
     }
 
     if (hover && hover !== "orb") {
@@ -561,6 +573,7 @@ export function createField({ root, gsap, reduce }) {
   function setProgress(p) {
     passP = p;
     if (mode === "whisper" || mode === "paused") return;
+    if (orbitFrozen) return;
     const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
     if (idleTl) {
       idleTl.timeScale(p < 0.55 ? 1 + 2.2 * u : 1);
@@ -569,10 +582,82 @@ export function createField({ root, gsap, reduce }) {
     layoutStation(p);
   }
 
+  function freezeOrbit() {
+    if (orbitFrozen) return;
+    orbitFrozen = true;
+    if (idleTl) idleTl.pause();
+    if (whisperTl) whisperTl.pause();
+  }
+
+  function unfreezeOrbit() {
+    if (!orbitFrozen) return;
+    orbitFrozen = false;
+    if (mode === "pass") layoutStation(passP);
+    else if (mode === "whisper") {
+      if (idleTl) {
+        idleTl.duration(DOCK_DURATION);
+        idleTl.timeScale(1);
+        idleTl.play();
+      }
+      layoutDock(state.t, 1, stationPose(m));
+    } else if (mode === "idle") {
+      if (idleTl) idleTl.play();
+    }
+  }
+
+  function hideProductsNode() {
+    if (productsNode) productsNode.el.style.visibility = "hidden";
+  }
+
+  function showProductsNode() {
+    if (productsNode) productsNode.el.style.visibility = "";
+  }
+
+  function setCompanionsVisible(on) {
+    const alpha = on ? 1 : 0;
+    const dur = on ? 0.28 : 0.45;
+    nodes.forEach((node) => {
+      if (node === productsNode) return;
+      gsap.to(node.el, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    });
+    gsap.to(svg, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    if (orbView && orbView.canvas) {
+      gsap.to(orbView.canvas, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    }
+  }
+
+  function getProductsRect() {
+    if (!productsNode) return null;
+    return productsNode.el.getBoundingClientRect();
+  }
+
+  function recedeDock(amount) {
+    const a = gsap.utils.clamp(0, 1, amount);
+    if (a > 0.002) freezeOrbit();
+    else unfreezeOrbit();
+    const alpha = 1 - a;
+    const sc = 1 - 0.08 * a;
+    nodes.forEach((node) => {
+      gsap.set(node.el, { autoAlpha: alpha, scale: sc, transformOrigin: "50% 50%" });
+    });
+    gsap.set(svg, { autoAlpha: alpha });
+    if (orbView && orbView.canvas) {
+      gsap.set(orbView.canvas, { autoAlpha: alpha, scale: sc, transformOrigin: "50% 50%" });
+    }
+  }
+
   function setMode(next) {
     if (next === mode) return;
     mode = next;
     controller.mode = next;
+    if (orbitFrozen && next !== "idle") {
+      if (idleTl) idleTl.pause();
+      if (whisperTl) whisperTl.pause();
+      hideSlabs();
+      if (next === "paused") return;
+      layoutDock(state.t, 1, stationPose(m));
+      return;
+    }
 
     if (next === "pass") {
       if (whisperTl) whisperTl.pause();
@@ -605,7 +690,6 @@ export function createField({ root, gsap, reduce }) {
       if (idleTl) {
         idleTl.duration(SLAB_DURATION);
         idleTl.timeScale(1);
-        idleTl.progress(state.t);
         idleTl.play();
       }
       slabs.forEach((it) => {
@@ -646,39 +730,33 @@ export function createField({ root, gsap, reduce }) {
   }
 
   if (!reduce) {
-    idleTl = gsap.fromTo(
-      state,
-      { t: 0 },
-      {
-        t: 1,
-        duration: SLAB_DURATION,
-        ease: "none",
-        repeat: -1,
-        paused: true,
-        overwrite: false,
-        immediateRender: false,
-        onUpdate: tickIdle,
-      }
-    );
-    whisperTl = gsap.fromTo(
-      state,
-      { t: 0 },
-      {
-        t: 1,
-        duration: WHISPER_DURATION,
-        ease: "none",
-        repeat: -1,
-        paused: true,
-        overwrite: false,
-        immediateRender: false,
-        onUpdate: function () {
-          if (mode === "whisper") {
-            hideSlabs();
-            layoutDock(state.t, 1, stationPose(m));
-          }
-        },
-      }
-    );
+    idleTl = gsap.to(state, {
+      t: "+=1",
+      duration: SLAB_DURATION,
+      ease: "none",
+      repeat: -1,
+      repeatRefresh: true,
+      paused: true,
+      overwrite: false,
+      immediateRender: false,
+      onUpdate: tickIdle,
+    });
+    whisperTl = gsap.to(state, {
+      t: "+=1",
+      duration: WHISPER_DURATION,
+      ease: "none",
+      repeat: -1,
+      repeatRefresh: true,
+      paused: true,
+      overwrite: false,
+      immediateRender: false,
+      onUpdate: function () {
+        if (mode === "whisper") {
+          hideSlabs();
+          layoutDock(state.t, 1, stationPose(m));
+        }
+      },
+    });
   }
 
   gsap.set(dock, { autoAlpha: 0, rotationX: 0, x: 0, y: 0, scale: 1, force3D: true });
@@ -707,6 +785,13 @@ export function createField({ root, gsap, reduce }) {
     },
     setMode,
     setProgress,
+    freezeOrbit,
+    unfreezeOrbit,
+    hideProductsNode,
+    showProductsNode,
+    setCompanionsVisible,
+    getProductsRect,
+    recedeDock,
     pause() {
       setMode("paused");
     },

@@ -287,6 +287,7 @@ function smooth() {
   return lenis;
 }
 
+
 function bindPass() {
   if (reduce || shot || !gsap || !ScrollTrigger) return;
 
@@ -468,7 +469,7 @@ function revealField() {
 
   if (!gsap) return;
   if (reduce) {
-    gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 1, y: 0 });
+    gsap.set("#site-nav, #title", { autoAlpha: 1, y: 0 });
     gsap.set(lines, { autoAlpha: 1, y: 0 });
     gsap.set("#hero-copy", { autoAlpha: 0 });
     return;
@@ -478,7 +479,6 @@ function revealField() {
   gsap.set("#hero-copy", { autoAlpha: 0, y: 28 });
   gsap.set(lines, { autoAlpha: 0, y: 36 });
   gsap.set("#site-nav", { autoAlpha: 0, y: -14 });
-  gsap.set("#hero-cta", { autoAlpha: 0, y: 18 });
 
   const tl = gsap.timeline({ delay: 0.32 });
   tl.to(
@@ -490,11 +490,6 @@ function revealField() {
     "#site-nav",
     { autoAlpha: 1, y: 0, duration: 0.8, ease: "power2.out" },
     0.18
-  );
-  tl.to(
-    "#hero-cta",
-    { autoAlpha: 1, y: 0, duration: 0.85, ease: "expo.out" },
-    0.28
   );
 }
 
@@ -519,7 +514,7 @@ const isShot = applyShot();
 
 if (gsap && ScrollTrigger && !isShot) {
   gsap.registerPlugin(ScrollTrigger);
-  gsap.set("#site-nav, #title, #hero-cta, #hero-copy", { autoAlpha: 0 });
+  gsap.set("#site-nav, #title, #hero-copy", { autoAlpha: 0 });
   const ctx = gsap.context(() => {
     scroller = smooth();
     bindPass();

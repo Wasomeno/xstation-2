@@ -22,7 +22,7 @@
   fill: none;
   stroke: var(--ink);
   stroke-width: 1;
-  stroke-opacity: 0.16;
+  stroke-opacity: 0.3;
   stroke-dasharray: 4 8;
   vector-effect: non-scaling-stroke;
   transition:
@@ -31,16 +31,16 @@
 }
 
 .dock-ring.is-core {
-  stroke-opacity: 0.28;
+  stroke-opacity: 0.4;
   stroke-dasharray: none;
 }
 
 .dock-ring.is-mid {
-  stroke-opacity: 0.2;
+  stroke-opacity: 0.34;
 }
 
 .dock-ring.is-outer {
-  stroke-opacity: 0.14;
+  stroke-opacity: 0.26;
 }
 
 .dock-ring.is-hot {
@@ -79,7 +79,7 @@
   height: 78px;
   margin: 0;
   border-radius: 50%;
-  background: #fff;
+  background: var(--ivory);
   border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   box-shadow:
     0 1px 0 color-mix(in srgb, #fff 80%, transparent),
@@ -107,7 +107,7 @@
 
 .dock-node-label {
   display: block;
-  max-width: 10ch;
+  max-width: 14ch;
   padding: 0 6px;
   text-align: center;
   font-family: var(--sans);
@@ -172,6 +172,6 @@
 
   .dock-node-label {
     font-size: 9px;
-    max-width: 8ch;
+    max-width: 12ch;
   }
 }

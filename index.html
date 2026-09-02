@@ -31,13 +31,13 @@
       }
 
       :root {
-        --bg: #f4f5f7;
+        --bg: #d8dce4;
         --ink: #1c1f26;
-        --ivory: #f7f8fa;
+        --ivory: #eef1f5;
         --steel: #5a616c;
         --dim: #6e7580;
-        --surface: #eceef1;
-        --line: color-mix(in srgb, var(--ink) 12%, transparent);
+        --surface: #e4e8ee;
+        --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --gold: #d4a056;
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
@@ -176,6 +176,19 @@
         font-size: 18px;
         letter-spacing: 0.04em;
         text-transform: none;
+        padding: 0.2em 0.45em;
+        margin: -0.2em -0.45em;
+        background: color-mix(in srgb, var(--bg) 66%, transparent);
+        box-shadow: 0 0 18px 12px color-mix(in srgb, var(--bg) 56%, transparent);
+        border-radius: 2px;
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+
+      @supports not (backdrop-filter: blur(8px)) {
+        #brand em {
+          background: color-mix(in srgb, var(--bg) 66%, transparent);
+        }
       }
 
       #title-layer {
@@ -350,7 +363,7 @@
         z-index: 22;
         display: flex;
         align-items: center;
-        width: min(42vw, 32rem);
+        width: min(48vw, 38rem);
         padding: 7.5rem 0 5rem clamp(20px, 4.2vw, 56px);
         box-sizing: border-box;
         pointer-events: none;
@@ -359,15 +372,15 @@
 
       #hero-copy .doctrine-block {
         display: grid;
-        gap: 1.05rem;
-        max-width: 22rem;
+        gap: 1.2rem;
+        max-width: 30rem;
       }
 
       #hero-copy h2 {
         margin: 0;
         font-family: var(--sans);
         font-weight: 400;
-        font-size: clamp(1.7rem, 3vw, 2.75rem);
+        font-size: clamp(2.15rem, 4.2vw, 3.65rem);
         line-height: 1.08;
         letter-spacing: -0.04em;
         color: var(--ink);
@@ -375,13 +388,42 @@
 
       #hero-copy p {
         margin: 0;
-        max-width: 34ch;
+        max-width: 40ch;
         font-family: var(--sans);
         font-weight: 400;
-        font-size: clamp(0.92rem, 1.15vw, 1.05rem);
+        font-size: clamp(1.08rem, 1.5vw, 1.32rem);
         line-height: 1.5;
         letter-spacing: -0.01em;
         color: var(--steel);
+      }
+
+      .station-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.35rem 1.75rem;
+        margin-top: 0.35rem;
+        pointer-events: auto;
+      }
+
+      .station-cta {
+        color: var(--steel);
+        font-family: var(--sans);
+        font-size: 15px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        line-height: 1.2;
+        padding-bottom: 0.12rem;
+        border-bottom: 1px solid transparent;
+        transition:
+          color 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+          border-color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
+      .station-cta:hover,
+      .station-cta:focus-visible {
+        color: var(--ink);
+        border-bottom-color: var(--ink);
       }
 
       @media (max-width: 767px) {
@@ -396,12 +438,12 @@
         }
 
         #hero-copy h2 {
-          font-size: 1.55rem;
+          font-size: 1.85rem;
         }
 
         #hero-copy p {
           max-width: 36ch;
-          font-size: 0.95rem;
+          font-size: 1.08rem;
         }
       }
     </style>
@@ -418,10 +460,6 @@
       <a id="brand" href="#root">
         <em>XTATION</em>
       </a>
-      <nav id="site-links" aria-label="Primary">
-        <a href="#work">Work</a>
-        <a href="#contact">Contact</a>
-      </nav>
     </header>
     <div id="pin-slot">
       <div id="root">
@@ -430,20 +468,6 @@
           <div id="edge-fade"></div>
           <div id="title-layer">
             <h1 id="title"><span>Your Gateway To</span><span>Intelligent Products</span></h1>
-            <a id="hero-cta" href="#work">
-              <span class="hero-cta-label">See Products</span>
-              <span class="hero-cta-chevrons" aria-hidden="true">
-                <svg viewBox="0 0 14 8" focusable="false">
-                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
-                </svg>
-                <svg viewBox="0 0 14 8" focusable="false">
-                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
-                </svg>
-                <svg viewBox="0 0 14 8" focusable="false">
-                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
-                </svg>
-              </span>
-            </a>
           </div>
           <div id="hero-copy">
             <div class="doctrine-block">
@@ -451,6 +475,10 @@
               <p id="doctrine-lead">
                 Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
               </p>
+              <div class="station-actions">
+                <a class="station-cta" href="#work">See Products</a>
+                <a class="station-cta" href="#contact">Book a Demo</a>
+              </div>
             </div>
           </div>
           <div id="vignette"></div>
@@ -459,9 +487,8 @@
     </div>
 
     <div id="work-root" class="work-pad">
-      <div class="station-hold" aria-hidden="true"></div>
       <section class="chapter" id="work" aria-labelledby="index-title">
-        <h2 class="index-mark" id="index-title">Explore What AI Can Do<br />for Your Business</h2>
+        <h2 class="index-mark" id="index-title"><span class="index-line"><span>Explore What AI Can Do</span></span><span class="index-line"><span>for Your Business</span></span></h2>
       </section>
 
       <section class="space is-app" id="bikinkonten" aria-labelledby="bikinkonten-title">
@@ -470,16 +497,10 @@
           <p class="space-caption"><strong>BikinKonten</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Marketing</p>
+          <p class="field-mark js-enter-child">Digital Marketing</p>
           <div class="space-copy">
             <h2 id="bikinkonten-title" class="js-enter-child">BikinKonten</h2>
             <p class="lede js-enter-child">Plan, create, and organize social media content for every brand from a single workspace. BikinKonten connects your brand references and content plans with AI-generated images and videos, making high-volume content production faster and easier to manage.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Digital marketing</span>
-              <span><span class="k">Input</span> Brand and plans</span>
-              <span><span class="k">Output</span> Images and video</span>
-              <span><span class="k">Gate</span> One workspace</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" aria-label="BikinKonten owner dashboard">
                 <img src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -501,16 +522,10 @@
           <p class="space-caption"><strong>Lubna</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Marketing</p>
+          <p class="field-mark js-enter-child">Digital Marketing</p>
           <div class="space-copy">
             <h2 id="lubna-title" class="js-enter-child">Lubna</h2>
             <p class="lede js-enter-child">Lubna is an AI chatbot assistant that helps teams plan, create, and publish branded social media content through a simple conversational workflow. Share a brief, and Lubna turns it into content ready for publishing, faster and with less manual work.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Chatbot assistant</span>
-              <span><span class="k">Input</span> Brief</span>
-              <span><span class="k">Output</span> Ready-to-publish content</span>
-              <span><span class="k">Gate</span> Conversation</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Lubna still 1">
                 <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -532,14 +547,9 @@
           <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="HireAssess assessment form" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Hiring</p>
+          <p class="field-mark js-enter-child">Technical Hiring</p>
           <h2 class="stage-mark js-enter-child" id="hireassess-title">HireAssess</h2>
           <p class="js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
-          <div class="readout js-enter-child">
-            <span><span class="k">Job</span> HR</span>
-            <span><span class="k">Input</span> GitHub, GitLab, QA</span>
-            <span><span class="k">Output</span> Skill scores</span>
-          </div>
           <div class="thumbs js-enter-child">
             <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-form.jpg" aria-label="HireAssess assessment form">
               <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -560,16 +570,10 @@
           <p class="space-caption"><strong>Arkiv</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Documents</p>
+          <p class="field-mark js-enter-child">Document Management</p>
           <div class="space-copy">
             <h2 id="arkiv-title" class="js-enter-child">Arkiv</h2>
             <p class="lede js-enter-child">ARKIV gives teams a secure workspace to store, manage, share, and govern business documents in one place. With granular permissions, version control, approval workflows, and an AI assistant that helps find information across authorized files, ARKIV keeps your documents organized while giving your team control over who can access them.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Document management</span>
-              <span><span class="k">Input</span> Business files</span>
-              <span><span class="k">Output</span> Search and control</span>
-              <span><span class="k">Gate</span> Permissions</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" aria-label="Arkiv dashboard">
                 <img src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -592,16 +596,10 @@
           <p class="space-caption"><strong>AInya</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Chat</p>
+          <p class="field-mark js-enter-child">Customer Chat</p>
           <div class="space-copy">
             <h2 id="ainya-title" class="js-enter-child">AInya</h2>
             <p class="lede js-enter-child">AInya is a WhatsApp chatbot that answers customer questions about your products using your business knowledge. It gives prospects instant, consistent answers, helping your team engage more customers without responding to every question manually.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Chatbot assistant</span>
-              <span><span class="k">Input</span> WhatsApp</span>
-              <span><span class="k">Output</span> Product answers</span>
-              <span><span class="k">Gate</span> Business knowledge</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="AInya still 1">
                 <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -623,12 +621,9 @@
           <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Codes</p>
+          <p class="field-mark js-enter-child">Software Development</p>
           <h2 class="stage-mark js-enter-child" id="codev-title">Codev</h2>
           <p class="js-enter-child">Codev is an agent in the XTATION lineup.</p>
-          <div class="readout js-enter-child">
-            <span><span class="k">Job</span> Agent</span>
-          </div>
         </aside>
       </section>
 
@@ -638,16 +633,10 @@
           <p class="space-caption"><strong>CoFrame</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Prototypes</p>
+          <p class="field-mark js-enter-child">Product Prototyping</p>
           <div class="space-copy">
             <h2 id="coframe-title" class="js-enter-child">CoFrame</h2>
             <p class="lede js-enter-child">Prototyping turns ideas and requirements into interactive web prototypes through a simple AI-powered chat. Create and refine backoffice applications or landing pages conversationally, helping teams visualize and validate ideas before development.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Chat based</span>
-              <span><span class="k">Input</span> Ideas and requirements</span>
-              <span><span class="k">Output</span> Interactive prototypes</span>
-              <span><span class="k">Gate</span> Conversation</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="CoFrame still 1">
                 <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
@@ -670,16 +659,10 @@
           <p class="space-caption"><strong>Legal Due Diligent</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Legal</p>
+          <p class="field-mark js-enter-child">Legal Due Diligence</p>
           <div class="space-copy">
             <h2 id="due-diligent-title" class="js-enter-child">Legal Due Diligent</h2>
             <p class="lede js-enter-child">A legal due diligence product from the XTATION legal line.</p>
-            <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Legal</span>
-              <span><span class="k">Input</span> Records</span>
-              <span><span class="k">Output</span> Diligence</span>
-              <span><span class="k">Gate</span> Review</span>
-            </div>
             <div class="thumbs js-enter-child">
               <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal-still.jpg" aria-label="Legal Due Diligent still 1">
                 <img src="videos/gateway-hero/media/signal-still.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
@@ -701,22 +684,14 @@
           <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Legal</p>
+          <p class="field-mark js-enter-child">Contract Review</p>
           <h2 class="stage-mark js-enter-child" id="review-kontrak-title">Review Kontrak</h2>
           <p class="js-enter-child">A legal product for reviewing contracts.</p>
-          <div class="readout js-enter-child">
-            <span><span class="k">Job</span> Legal</span>
-            <span><span class="k">Input</span> Contracts</span>
-            <span><span class="k">Output</span> Review</span>
-          </div>
         </aside>
       </section>
 
       <section class="clients" id="clients" aria-labelledby="clients-title">
-        <div class="clients-copy js-enter">
-          <h2 id="clients-title" class="js-enter-child">Clients</h2>
-          <p class="js-enter-child">Companies with XTATION products in production.</p>
-        </div>
+        <h2 id="clients-title" class="clients-title js-enter">Trusted by</h2>
         <ul class="client-list js-enter">
           <li class="js-enter-child" data-client="pama">
             <img src="videos/gateway-hero/media/clients/pama.png" alt="PAMA" width="201" height="224" loading="lazy" decoding="async" />
