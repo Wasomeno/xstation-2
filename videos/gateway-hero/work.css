@@ -3,14 +3,22 @@ html {
 }
 
 #work-root {
+  --join: 22vh;
   position: relative;
   z-index: 20;
-  background: transparent;
   color: var(--ink);
   overflow-x: hidden;
   width: 100%;
   max-width: 100%;
-  margin-top: 0;
+  margin-top: calc(var(--join) * -1);
+  padding-top: var(--join);
+  background: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0) 0%,
+    rgb(255 255 255 / 0.28) 8vh,
+    rgb(255 255 255 / 0.78) 15vh,
+    #ffffff 22vh
+  );
   pointer-events: none;
 }
 
@@ -52,6 +60,7 @@ html.lenis body {
 
 .work-pad {
   --pad: clamp(1.15rem, 4vw, 2.75rem);
+  --project-gap: 2rem;
 }
 
 .station-cta:focus-visible,
@@ -117,8 +126,8 @@ html.lenis body {
 
 .chapter {
   position: relative;
-  background: var(--bg);
-  padding: clamp(3.8rem, 8vh, 6.25rem) var(--pad) clamp(2rem, 4.2vh, 3.25rem);
+  background: transparent;
+  padding: clamp(3.8rem, 8vh, 6.25rem) var(--pad) var(--project-gap);
 }
 
 .index-mark {
@@ -146,8 +155,15 @@ html.lenis body {
   grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 1fr);
   min-height: 80dvh;
   gap: 0.7rem;
-  padding: 0.7rem var(--pad) 2.4rem;
-  background: var(--bg);
+  padding: 0 var(--pad);
+  background: transparent;
+}
+
+.space + .space,
+.space + .stage,
+.stage + .space,
+.stage + .stage {
+  margin-top: var(--project-gap);
 }
 
 .space.is-flip {

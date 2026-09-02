@@ -92,11 +92,6 @@
     background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.dock-node.is-accent {
-  border-color: var(--ink);
-  border-width: 1.5px;
-}
-
 .dock-node:hover,
 .dock-node.is-hot {
   border-color: var(--ink);
