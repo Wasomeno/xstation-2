@@ -136,10 +136,17 @@
 }
 
 .slab.is-gold {
-  color: var(--gold, #d4a056);
+  color: var(--gold, var(--blue));
   box-shadow:
-    0 0 16px color-mix(in srgb, var(--gold, #d4a056) 45%, transparent),
-    0 0 36px color-mix(in srgb, var(--gold, #d4a056) 22%, transparent);
+    0 0 16px color-mix(in srgb, var(--gold, var(--blue)) 45%, transparent),
+    0 0 36px color-mix(in srgb, var(--gold, var(--blue)) 22%, transparent);
+}
+
+.slab.is-peri {
+  color: var(--peri);
+  box-shadow:
+    0 0 16px color-mix(in srgb, var(--peri) 36%, transparent),
+    0 0 32px color-mix(in srgb, var(--peri) 16%, transparent);
 }
 
 .slab.is-steel {

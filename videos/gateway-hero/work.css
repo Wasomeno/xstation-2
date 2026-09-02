@@ -84,7 +84,7 @@ html.lenis body {
 }
 
 .doctrine-band {
-  --node: #d63c32;
+  --node: var(--blue);
   position: relative;
   margin: clamp(3.5rem, 8vh, 6rem) var(--pad) 0;
   overflow: hidden;
@@ -144,7 +144,7 @@ html.lenis body {
 .space {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 1fr);
-  min-height: 100dvh;
+  min-height: 80dvh;
   gap: 0.7rem;
   padding: 0.7rem var(--pad) 2.4rem;
   background: var(--bg);
@@ -160,7 +160,7 @@ html.lenis body {
 
 .space-stage {
   position: relative;
-  min-height: 34rem;
+  min-height: 27.2rem;
   overflow: hidden;
 }
 
@@ -177,7 +177,7 @@ html.lenis body {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: #0c1016;
+  background: var(--navy);
   border: 0;
 }
 
@@ -197,7 +197,7 @@ html.lenis body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 42%, rgba(0, 0, 0, 0.72) 100%);
+  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--navy) 72%, transparent) 100%);
   pointer-events: none;
 }
 
@@ -206,7 +206,7 @@ html.lenis body {
   background: radial-gradient(
     ellipse 78% 62% at 50% 48%,
     transparent 52%,
-    rgba(0, 0, 0, 0.38) 100%
+    color-mix(in srgb, var(--navy) 38%, transparent) 100%
   );
 }
 
@@ -236,9 +236,18 @@ html.lenis body {
 
 .space-panel,
 .stage-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 55%, transparent);
+  background:
+    radial-gradient(
+      120% 70% at 0% 0%,
+      color-mix(in srgb, var(--navy) 6%, transparent) 0%,
+      color-mix(in srgb, var(--navy) 2%, transparent) 38%,
+      transparent 68%
+    ),
+    #f7f8fc;
+  border: 1px solid color-mix(in srgb, var(--navy) 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--navy) 8%, transparent),
+    0 16px 36px color-mix(in srgb, var(--navy) 4%, transparent);
   color: var(--ink);
 }
 
@@ -246,7 +255,7 @@ html.lenis body {
   padding: 1.35rem 1.5rem 1.4rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 34rem;
+  min-height: 27.2rem;
 }
 
 .field-mark {
@@ -471,7 +480,7 @@ html.is-looking body {
 
 .stage {
   position: relative;
-  min-height: 100dvh;
+  min-height: 80dvh;
   overflow: hidden;
   isolation: isolate;
   background: var(--bg);
@@ -489,7 +498,7 @@ html.is-looking body {
 }
 
 .stage.is-app {
-  background: #0c1016;
+  background: var(--navy);
 }
 
 .stage.is-app .stage-media {
@@ -497,14 +506,14 @@ html.is-looking body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0 18vh;
+  padding: 0 0 14.4vh;
   box-sizing: border-box;
 }
 
 .stage.is-app .stage-media img {
   width: min(100%, 1120px);
   height: auto;
-  max-height: 72dvh;
+  max-height: 57.6dvh;
   object-fit: contain;
   object-position: center;
 }
@@ -513,7 +522,7 @@ html.is-looking body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.55) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--navy) 20%, transparent) 0%, color-mix(in srgb, var(--navy) 55%, transparent) 100%);
   pointer-events: none;
 }
 
@@ -522,7 +531,7 @@ html.is-looking body {
   background: radial-gradient(
     ellipse 70% 58% at 50% 42%,
     transparent 48%,
-    rgba(0, 0, 0, 0.42) 100%
+    color-mix(in srgb, var(--navy) 42%, transparent) 100%
   );
 }
 
@@ -766,7 +775,7 @@ html.is-looking body {
 
   .space-stage,
   .space-panel {
-    min-height: 26rem;
+    min-height: 20.8rem;
   }
 
   .index-mark {

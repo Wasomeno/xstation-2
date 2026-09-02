@@ -31,12 +31,18 @@
       }
 
       :root {
-        --bg: #f4f5f7;
-        --ink: #1c1f26;
-        --ivory: #f7f8fa;
-        --steel: #5a616c;
-        --dim: #6e7580;
-        --gold: #d4a056;
+        --navy: #091540;
+        --blue: #1b2cc1;
+        --peri: #7692ff;
+        --sky: #abd2fa;
+        --bg: color-mix(in srgb, var(--sky) 8%, #ffffff);
+        --ink: var(--navy);
+        --ivory: color-mix(in srgb, var(--sky) 22%, #ffffff);
+        --steel: color-mix(in srgb, var(--navy) 72%, var(--blue));
+        --dim: color-mix(in srgb, var(--navy) 50%, var(--peri));
+        --surface: color-mix(in srgb, var(--sky) 50%, #ffffff);
+        --line: color-mix(in srgb, var(--ink) 16%, transparent);
+        --gold: var(--blue);
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
@@ -91,6 +97,11 @@
         pointer-events: none;
         background: var(--bg);
         transform: translateZ(0);
+        transition: background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
+      html.is-station #field-stage {
+        background: color-mix(in srgb, var(--sky) 18%, var(--bg));
       }
 
       #field {
@@ -123,9 +134,10 @@
         background: linear-gradient(
           to bottom,
           color-mix(in srgb, var(--bg) 92%, transparent) 0%,
-          transparent 16%,
-          transparent 84%,
-          color-mix(in srgb, var(--bg) 92%, transparent) 100%
+          transparent 18%,
+          transparent 64%,
+          color-mix(in srgb, var(--sky) 18%, transparent) 84%,
+          color-mix(in srgb, var(--sky) 42%, var(--bg)) 100%
         );
       }
 

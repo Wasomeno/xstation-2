@@ -9,7 +9,7 @@ const WHISPER_DURATION = 18;
 const FAR = -1880;
 const NEAR = 620;
 const TRAVEL = NEAR - FAR;
-const PALETTE = ["ivory", "ivory", "ivory", "ivory", "steel", "steel", "gold", "dim"];
+const PALETTE = ["ivory", "ivory", "steel", "peri", "gold", "gold", "dim", "peri"];
 const KEEP_INDICES = [6, 14, 1, 4, 9, 12];
 const SLAB_SLOTS = [
   [-3, -1],
@@ -151,17 +151,17 @@ function createOrbView(host, gsap) {
   scene.environment = envMap;
   envScene.dispose();
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xc5c8ce, 0.85));
-  const key = new THREE.DirectionalLight(0xffffff, 1.35);
+  scene.add(new THREE.HemisphereLight(0xabd2fa, 0x091540, 0.85));
+  const key = new THREE.DirectionalLight(0xeaf3fe, 1.35);
   key.position.set(-2.2, 3.4, 2.8);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xf4f5f7, 0.4);
+  const fill = new THREE.DirectionalLight(0x7692ff, 0.45);
   fill.position.set(2.8, 0.6, 1.6);
   scene.add(fill);
 
   const geo = new THREE.SphereGeometry(1, 96, 64);
   const mat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
+    color: 0xabd2fa,
     roughness: 0.12,
     metalness: 0.04,
     clearcoat: 1,
@@ -280,7 +280,7 @@ export function createField({ root, gsap, reduce }) {
         phase: ((col + 3) * 0.11 + (row + 1.5) * 0.17 + i * 0.02) % 1,
         x: 0,
         y: 0,
-        peak: color === "gold" ? 0.78 : 0.52,
+        peak: color === "gold" || color === "peri" ? 0.78 : 0.52,
         idleX: 0,
         idleY: 0,
         railX: 0,
