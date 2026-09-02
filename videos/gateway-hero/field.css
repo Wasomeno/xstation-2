@@ -44,7 +44,7 @@
 }
 
 .dock-spoke {
-  stroke: var(--ink);
+  stroke: var(--node, var(--ink));
   stroke-width: 1;
   stroke-linecap: butt;
   vector-effect: non-scaling-stroke;
@@ -65,13 +65,7 @@
 .dock-berth {
   display: grid;
   place-items: center;
-}
-
-.dock-plate,
-.dock-port {
-  transition:
-    background-color 0.45s cubic-bezier(0.32, 0.72, 0, 1),
-    border-color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+  --node: var(--ink);
 }
 
 .dock-plate {
@@ -79,38 +73,28 @@
   height: 26px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 55%, transparent);
+  background: var(--node);
+  border: 1px solid var(--node);
 }
 
 .dock-port {
   width: 9px;
   height: 9px;
-  border: 1px solid color-mix(in srgb, var(--ink) 32%, transparent);
-}
-
-.dock-berth.is-on .dock-plate {
-  background: var(--ink);
-  border-color: var(--ink);
-  box-shadow: none;
-}
-
-.dock-berth.is-on .dock-port {
   background: var(--ivory);
-  border-color: var(--ivory);
+  border: 1px solid var(--ivory);
 }
 
 .dock-capsule {
   width: 18px;
   height: 6px;
-  background: var(--ink);
+  background-color: var(--node, var(--ink));
+  transition: background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .dock-packet {
   width: 6px;
   height: 6px;
-  background: var(--ink);
+  background: var(--node, var(--ink));
 }
 
 @media (max-width: 767px) {

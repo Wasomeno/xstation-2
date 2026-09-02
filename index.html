@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>XTATION - Your Station For Projects And Apps</title>
+    <title>XTATION - Your gateway to intelligent products</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
       @font-face {
@@ -182,7 +182,7 @@
 
       #title {
         margin: 0;
-        max-width: min(22ch, 92vw);
+        max-width: min(26ch, 92vw);
         text-align: center;
         font-family: var(--sans);
         font-weight: 400;
@@ -199,9 +199,13 @@
 
       #hero-cta {
         pointer-events: auto;
-        display: inline-block;
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
         margin-top: 1.7rem;
-        padding: 0;
+        margin-bottom: -2.4rem;
+        padding: 0 0 2.4rem;
         border: 0;
         background: transparent;
         color: var(--steel);
@@ -215,12 +219,101 @@
         transition: color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
-      #hero-cta:hover {
+      #hero-cta:hover,
+      #hero-cta:focus-visible {
         color: var(--ink);
       }
 
       #hero-cta:active {
         transform: scale(0.98);
+      }
+
+      .hero-cta-chevrons {
+        position: absolute;
+        top: calc(100% - 2.15rem);
+        left: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 14px;
+        height: 22px;
+        overflow: hidden;
+        pointer-events: none;
+        transform: translateX(-50%);
+      }
+
+      .hero-cta-chevrons svg {
+        display: block;
+        width: 13px;
+        height: 8px;
+        margin-top: -2px;
+        overflow: visible;
+        stroke: currentColor;
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+        opacity: 0;
+        transform: translate3d(0, -7px, 0) scale(0.82);
+        transform-origin: 50% 0%;
+        transition:
+          opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+          transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
+      .hero-cta-chevrons svg:first-child {
+        margin-top: 0;
+        transition-delay: 0.11s;
+      }
+
+      .hero-cta-chevrons svg:nth-child(2) {
+        transition-delay: 0.055s;
+      }
+
+      .hero-cta-chevrons svg:nth-child(3) {
+        transition-delay: 0s;
+      }
+
+      #hero-cta:hover .hero-cta-chevrons svg,
+      #hero-cta:focus-visible .hero-cta-chevrons svg {
+        transform: translate3d(0, 0, 0) scale(1);
+        transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      #hero-cta:hover .hero-cta-chevrons svg:nth-child(1),
+      #hero-cta:focus-visible .hero-cta-chevrons svg:nth-child(1) {
+        opacity: 0.9;
+        transition-delay: 0s;
+        transition-duration: 0.42s, 0.48s;
+      }
+
+      #hero-cta:hover .hero-cta-chevrons svg:nth-child(2),
+      #hero-cta:focus-visible .hero-cta-chevrons svg:nth-child(2) {
+        opacity: 0.46;
+        transition-delay: 0.065s;
+        transition-duration: 0.46s, 0.52s;
+      }
+
+      #hero-cta:hover .hero-cta-chevrons svg:nth-child(3),
+      #hero-cta:focus-visible .hero-cta-chevrons svg:nth-child(3) {
+        opacity: 0.2;
+        transition-delay: 0.13s;
+        transition-duration: 0.5s, 0.56s;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hero-cta-chevrons svg {
+          transform: none;
+          transition: opacity 0.2s ease;
+          transition-delay: 0s;
+        }
+
+        #hero-cta:hover .hero-cta-chevrons svg,
+        #hero-cta:focus-visible .hero-cta-chevrons svg {
+          transform: none;
+          transition-delay: 0s;
+          transition-duration: 0.2s;
+        }
       }
 
       #vignette {
@@ -259,8 +352,21 @@
           <div id="veil"></div>
           <div id="edge-fade"></div>
           <div id="title-layer">
-            <h1 id="title"><span>Your Station For</span><span>Projects And Apps</span></h1>
-            <a id="hero-cta" href="#index">See Products</a>
+            <h1 id="title"><span>Your gateway to</span><span>intelligent products</span></h1>
+            <a id="hero-cta" href="#index">
+              <span class="hero-cta-label">See Products</span>
+              <span class="hero-cta-chevrons" aria-hidden="true">
+                <svg viewBox="0 0 14 8" focusable="false">
+                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
+                </svg>
+                <svg viewBox="0 0 14 8" focusable="false">
+                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
+                </svg>
+                <svg viewBox="0 0 14 8" focusable="false">
+                  <path d="M1.2 1.5 L7 6.5 L12.8 1.5" />
+                </svg>
+              </span>
+            </a>
           </div>
           <div id="vignette"></div>
         </section>
@@ -271,183 +377,336 @@
       <section class="doctrine" id="work" aria-labelledby="doctrine-lead">
         <div class="doctrine-copy js-enter">
           <p id="doctrine-lead" class="js-enter-child">
-            XTATION is the station for company projects and apps. Copilots, RAG, agents, and evals, with a person on the decision.
+            XTATION is the station for company projects and apps. Marketing, hiring, documents, legal, and prototypes, with a person on the decision.
           </p>
         </div>
-        <figure class="doctrine-band">
-          <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" decoding="async" />
-          <figcaption class="doctrine-note">Every stack looks different.</figcaption>
-          <p class="doctrine-mark" aria-hidden="true"><span>Models</span><span>In Production</span></p>
+        <figure class="doctrine-band" aria-hidden="true">
+          <span class="doctrine-seam"></span>
+          <span class="doctrine-node"></span>
         </figure>
       </section>
 
       <section class="chapter" id="index" aria-labelledby="index-title">
-        <h2 class="index-mark" id="index-title">Copilot</h2>
-        <div class="index-void">
-          <aside class="work-card js-enter">
-            <div class="work-card-top">
-              <p>Kite</p>
-              <a class="work-go" href="#kite" aria-label="Open Kite">
-                <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M4.5 11.5 11.5 4.5M5.5 4.5h6v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </a>
-            </div>
-            <figure>
-              <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" decoding="async" />
-            </figure>
-          </aside>
-          <nav class="place-map" aria-label="Products">
-            <a href="#kite" class="is-on">Kite</a>
-            <a href="#meridian">Meridian</a>
-            <a href="#relay">Relay</a>
-            <a href="#quorum">Quorum</a>
-          </nav>
-        </div>
+        <h2 class="index-mark" id="index-title">Products</h2>
       </section>
 
-      <section class="space" id="kite" aria-labelledby="kite-title">
+      <section class="space is-app" id="bikinkonten" aria-labelledby="bikinkonten-title">
         <div class="space-stage">
-          <img class="hero" src="videos/gateway-hero/media/forge.jpg" alt="Kite" width="1280" height="720" loading="lazy" decoding="async" />
-          <p class="space-caption"><strong>Kite</strong></p>
+          <img class="hero" src="videos/gateway-hero/media/products/bikinkonten-library.jpg" alt="BikinKonten content library" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>BikinKonten</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <div class="tabs" role="tablist" aria-label="Kite views">
-            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="kite-about">About</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="kite-plan">System</button>
+          <div class="tabs" role="tablist" aria-label="BikinKonten views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="bikinkonten-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="bikinkonten-plan">System</button>
           </div>
-          <div class="pane" id="kite-about">
-            <h2 id="kite-title" class="js-enter-child">Kite<br />Support copilot<br />Human-gated inbox</h2>
-            <p class="lede js-enter-child">The model drafts the reply. A reviewer owns the send. Quiet until a thread actually needs a person.</p>
+          <div class="pane" id="bikinkonten-about">
+            <h2 id="bikinkonten-title" class="js-enter-child">BikinKonten</h2>
+            <p class="lede js-enter-child">Plan, create, and organize social media content for every brand from a single workspace. BikinKonten connects your brand references and content plans with AI-generated images and videos, making high-volume content production faster and easier to manage.</p>
             <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Support</span>
-              <span><span class="k">Input</span> Tickets</span>
-              <span><span class="k">Output</span> Reviewed replies</span>
-              <span><span class="k">Gate</span> Human in the loop</span>
-              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Kite%20brief">Request brief</a></span>
+              <span><span class="k">Job</span> Digital marketing</span>
+              <span><span class="k">Input</span> Brand and plans</span>
+              <span><span class="k">Output</span> Images and video</span>
+              <span><span class="k">Gate</span> One workspace</span>
             </div>
             <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/forge.jpg" aria-label="Kite still 1">
-                <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" aria-label="BikinKonten owner dashboard">
+                <img src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal.jpg" aria-label="Kite still 2">
-                <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-library.jpg" aria-label="BikinKonten content library">
+                <img src="videos/gateway-hero/media/products/bikinkonten-library.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal-still.jpg" aria-label="Kite still 3">
-                <img src="videos/gateway-hero/media/signal-still.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-generator.jpg" aria-label="BikinKonten generator">
+                <img src="videos/gateway-hero/media/products/bikinkonten-generator.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
             </div>
           </div>
-          <div class="pane" id="kite-plan" hidden>
+          <div class="pane" id="bikinkonten-plan" hidden>
             <h2>How it runs</h2>
-            <p class="plan-copy">Kite ranks inbound threads, drafts a reply from the knowledge base, and only raises a person when a send is required.</p>
+            <p class="plan-copy">Connect brand references and content plans, then generate images and video from one workspace.</p>
           </div>
         </div>
       </section>
 
-      <section class="space is-flip" id="meridian" aria-labelledby="meridian-title">
+      <section class="space is-flip" id="lubna" aria-labelledby="lubna-title">
         <div class="space-stage">
-          <img class="hero" src="videos/gateway-hero/media/harbor.jpg" alt="Meridian" width="1280" height="720" loading="lazy" decoding="async" />
-          <p class="space-caption"><strong>Meridian</strong></p>
+          <img class="hero" src="videos/gateway-hero/media/harbor.jpg" alt="Lubna" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Lubna</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <div class="tabs" role="tablist" aria-label="Meridian views">
-            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="meridian-about">About</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="meridian-plan">System</button>
+          <div class="tabs" role="tablist" aria-label="Lubna views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="lubna-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="lubna-plan">System</button>
           </div>
-          <div class="pane" id="meridian-about">
-            <h2 id="meridian-title" class="js-enter-child">Meridian<br />RAG knowledge<br />Cited answers</h2>
-            <p class="lede js-enter-child">Ask over a private corpus. Every sentence points to a source. If it cannot be retrieved, it does not ship.</p>
+          <div class="pane" id="lubna-about">
+            <h2 id="lubna-title" class="js-enter-child">Lubna</h2>
+            <p class="lede js-enter-child">Lubna is an AI chatbot assistant that helps teams plan, create, and publish branded social media content through a simple conversational workflow. Share a brief, and Lubna turns it into content ready for publishing, faster and with less manual work.</p>
             <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Knowledge</span>
-              <span><span class="k">Input</span> Corpus</span>
-              <span><span class="k">Output</span> Cited answers</span>
-              <span><span class="k">Gate</span> Source or silence</span>
-              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Meridian%20brief">Request brief</a></span>
+              <span><span class="k">Job</span> Chatbot assistant</span>
+              <span><span class="k">Input</span> Brief</span>
+              <span><span class="k">Output</span> Ready-to-publish content</span>
+              <span><span class="k">Gate</span> Conversation</span>
             </div>
             <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Meridian still 1">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Lubna still 1">
                 <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Meridian still 2">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Lubna still 2">
                 <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="Meridian still 3">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="Lubna still 3">
                 <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
               </button>
             </div>
           </div>
-          <div class="pane" id="meridian-plan" hidden>
+          <div class="pane" id="lubna-plan" hidden>
             <h2>How it runs</h2>
-            <p class="plan-copy">Meridian retrieves with hybrid search, writes the answer, and shows the path. Sources sit in the margin. Faithfulness is checked before the page is shown.</p>
+            <p class="plan-copy">Share a brief in conversation. Lubna plans, creates, and prepares branded posts for publishing.</p>
           </div>
         </div>
       </section>
 
-      <section class="stage" id="relay" aria-labelledby="relay-title">
+      <section class="stage is-app" id="hireassess" aria-labelledby="hireassess-title">
         <div class="stage-media">
-          <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+          <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="HireAssess assessment form" width="1280" height="720" loading="lazy" decoding="async" />
         </div>
         <aside class="stage-card js-enter">
-          <h2 class="stage-mark js-enter-child" id="relay-title">Relay</h2>
-          <h3 class="js-enter-child">Agents, tools, and a person on one timeline</h3>
-          <p class="js-enter-child">The run is visible. Pause at an approval gate. Continue without rebuilding the graph.</p>
+          <h2 class="stage-mark js-enter-child" id="hireassess-title">HireAssess</h2>
+          <p class="js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
           <div class="readout js-enter-child">
-            <span><span class="k">Job</span> Agents</span>
-            <span><span class="k">Input</span> Tools</span>
-            <span><span class="k">Output</span> A traced run</span>
+            <span><span class="k">Job</span> HR</span>
+            <span><span class="k">Input</span> GitHub, GitLab, QA</span>
+            <span><span class="k">Output</span> Skill scores</span>
+          </div>
+          <div class="thumbs js-enter-child">
+            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-form.jpg" aria-label="HireAssess assessment form">
+              <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            </button>
+            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-processing.jpg" aria-label="HireAssess processing a repository">
+              <img src="videos/gateway-hero/media/products/hireassess-processing.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            </button>
+            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-results.jpg" aria-label="HireAssess results">
+              <img src="videos/gateway-hero/media/products/hireassess-results.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+            </button>
           </div>
         </aside>
       </section>
 
-      <section class="space" id="quorum" aria-labelledby="quorum-title">
+      <section class="space is-app" id="arkiv" aria-labelledby="arkiv-title">
         <div class="space-stage">
-          <img class="hero" src="videos/gateway-hero/media/prism.jpg" alt="Quorum" width="1280" height="720" loading="lazy" decoding="async" />
-          <p class="space-caption"><strong>Quorum</strong></p>
+          <img class="hero" src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" alt="Arkiv dashboard" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Arkiv</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <div class="tabs" role="tablist" aria-label="Quorum views">
-            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="quorum-about">About</button>
-            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="quorum-plan">System</button>
+          <div class="tabs" role="tablist" aria-label="Arkiv views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="arkiv-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="arkiv-plan">System</button>
           </div>
-          <div class="pane" id="quorum-about">
-            <h2 id="quorum-title" class="js-enter-child">Quorum<br />Evals and traces<br />Pass or fail</h2>
-            <p class="lede js-enter-child">Replay the run, score it, and refuse it before a customer sees it. Built for people who have to sign off.</p>
+          <div class="pane" id="arkiv-about">
+            <h2 id="arkiv-title" class="js-enter-child">Arkiv</h2>
+            <p class="lede js-enter-child">ARKIV gives teams a secure workspace to store, manage, share, and govern business documents in one place. With granular permissions, version control, approval workflows, and an AI assistant that helps find information across authorized files, ARKIV keeps your documents organized while giving your team control over who can access them.</p>
             <div class="readout js-enter-child">
-              <span><span class="k">Job</span> Eval</span>
-              <span><span class="k">Input</span> Traces</span>
-              <span><span class="k">Output</span> A verdict</span>
-              <span><span class="k">Gate</span> Refuse the run</span>
-              <span><span class="k">Brief</span> <a href="mailto:hello@xstation?subject=Quorum%20brief">Request brief</a></span>
+              <span><span class="k">Job</span> Document management</span>
+              <span><span class="k">Input</span> Business files</span>
+              <span><span class="k">Output</span> Search and control</span>
+              <span><span class="k">Gate</span> Permissions</span>
             </div>
             <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/prism.jpg" aria-label="Quorum still 1">
-                <img src="videos/gateway-hero/media/prism.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" aria-label="Arkiv dashboard">
+                <img src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal.jpg" aria-label="Quorum still 2">
-                <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-drive.jpg" aria-label="Arkiv My Drive">
+                <img src="videos/gateway-hero/media/products/arkiv-drive.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Quorum still 3">
-                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-review.jpg" aria-label="Arkiv contract review">
+                <img src="videos/gateway-hero/media/products/arkiv-review.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
               </button>
             </div>
           </div>
-          <div class="pane" id="quorum-plan" hidden>
+          <div class="pane" id="arkiv-plan" hidden>
             <h2>How it runs</h2>
-            <p class="plan-copy">Quorum stores traces, scores, and the dataset they were judged against. You can replay a run, mark it, and block it before it ships.</p>
+            <p class="plan-copy">Store, share, and govern files with permissions, version control, and an AI assistant that searches authorized documents.</p>
           </div>
         </div>
       </section>
 
+      <section class="space is-flip" id="ainya" aria-labelledby="ainya-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/aether.jpg" alt="AInya" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>AInya</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="AInya views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="ainya-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="ainya-plan">System</button>
+          </div>
+          <div class="pane" id="ainya-about">
+            <h2 id="ainya-title" class="js-enter-child">AInya</h2>
+            <p class="lede js-enter-child">AInya is a WhatsApp chatbot that answers customer questions about your products using your business knowledge. It gives prospects instant, consistent answers, helping your team engage more customers without responding to every question manually.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Chatbot assistant</span>
+              <span><span class="k">Input</span> WhatsApp</span>
+              <span><span class="k">Output</span> Product answers</span>
+              <span><span class="k">Gate</span> Business knowledge</span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="AInya still 1">
+                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="AInya still 2">
+                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="AInya still 3">
+                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="ainya-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">A prospect asks on WhatsApp. The agent answers from your business knowledge, without a person on every thread.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage" id="codev" aria-labelledby="codev-title">
+        <div class="stage-media">
+          <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+        </div>
+        <aside class="stage-card js-enter">
+          <h2 class="stage-mark js-enter-child" id="codev-title">Codev</h2>
+          <p class="js-enter-child">Codev is an agent in the XTATION lineup.</p>
+          <div class="readout js-enter-child">
+            <span><span class="k">Job</span> Agent</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="space" id="coframe" aria-labelledby="coframe-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/vista.jpg" alt="CoFrame" width="1152" height="864" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>CoFrame</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="CoFrame views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="coframe-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="coframe-plan">System</button>
+          </div>
+          <div class="pane" id="coframe-about">
+            <h2 id="coframe-title" class="js-enter-child">CoFrame</h2>
+            <p class="lede js-enter-child">Prototyping turns ideas and requirements into interactive web prototypes through a simple AI-powered chat. Create and refine backoffice applications or landing pages conversationally, helping teams visualize and validate ideas before development.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Chat based</span>
+              <span><span class="k">Input</span> Ideas and requirements</span>
+              <span><span class="k">Output</span> Interactive prototypes</span>
+              <span><span class="k">Gate</span> Conversation</span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="CoFrame still 1">
+                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/forge.jpg" aria-label="CoFrame still 2">
+                <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/thread.jpg" aria-label="CoFrame still 3">
+                <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="coframe-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">Describe the idea in chat. CoFrame turns it into an interactive prototype for backoffice apps or landing pages.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="space is-flip" id="due-diligent" aria-labelledby="due-diligent-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/signal-still.jpg" alt="Legal Due Diligent" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Legal Due Diligent</strong></p>
+        </div>
+        <div class="space-panel js-enter">
+          <div class="tabs" role="tablist" aria-label="Legal Due Diligent views">
+            <button class="tab is-on" type="button" role="tab" aria-selected="true" data-pane="due-diligent-about">About</button>
+            <button class="tab" type="button" role="tab" aria-selected="false" data-pane="due-diligent-plan">System</button>
+          </div>
+          <div class="pane" id="due-diligent-about">
+            <h2 id="due-diligent-title" class="js-enter-child">Legal Due Diligent</h2>
+            <p class="lede js-enter-child">A legal due diligence product from the XTATION legal line.</p>
+            <div class="readout js-enter-child">
+              <span><span class="k">Job</span> Legal</span>
+              <span><span class="k">Input</span> Records</span>
+              <span><span class="k">Output</span> Diligence</span>
+              <span><span class="k">Gate</span> Review</span>
+            </div>
+            <div class="thumbs js-enter-child">
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal-still.jpg" aria-label="Legal Due Diligent still 1">
+                <img src="videos/gateway-hero/media/signal-still.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/prism.jpg" aria-label="Legal Due Diligent still 2">
+                <img src="videos/gateway-hero/media/prism.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Legal Due Diligent still 3">
+                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+              </button>
+            </div>
+          </div>
+          <div class="pane" id="due-diligent-plan" hidden>
+            <h2>How it runs</h2>
+            <p class="plan-copy">Run legal due diligence from a dedicated product in the station.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage" id="review-kontrak" aria-labelledby="review-kontrak-title">
+        <div class="stage-media">
+          <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+        </div>
+        <aside class="stage-card js-enter">
+          <h2 class="stage-mark js-enter-child" id="review-kontrak-title">Review Kontrak</h2>
+          <p class="js-enter-child">A legal product for reviewing contracts.</p>
+          <div class="readout js-enter-child">
+            <span><span class="k">Job</span> Legal</span>
+            <span><span class="k">Input</span> Contracts</span>
+            <span><span class="k">Output</span> Review</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="clients" id="clients" aria-labelledby="clients-title">
+        <div class="clients-copy js-enter">
+          <h2 id="clients-title" class="js-enter-child">Clients</h2>
+          <p class="js-enter-child">Companies with XTATION products in production.</p>
+        </div>
+        <ul class="client-list js-enter">
+          <li class="js-enter-child" data-client="pama">
+            <img src="videos/gateway-hero/media/clients/pama.png" alt="PAMA" width="201" height="224" loading="lazy" decoding="async" />
+          </li>
+          <li class="js-enter-child" data-client="pertamina">
+            <img src="videos/gateway-hero/media/clients/pertamina-patra-niaga.png" alt="Pertamina Patra Niaga" width="585" height="193" loading="lazy" decoding="async" />
+          </li>
+          <li class="js-enter-child" data-client="pupuk">
+            <img src="videos/gateway-hero/media/clients/pupuk-indonesia.png" alt="Pupuk Indonesia" width="2024" height="906" loading="lazy" decoding="async" />
+          </li>
+          <li class="js-enter-child" data-client="resona">
+            <img src="videos/gateway-hero/media/clients/bank-resona-perdania.png" alt="Bank Resona Perdania" width="1306" height="1036" loading="lazy" decoding="async" />
+          </li>
+          <li class="js-enter-child" data-client="kpp">
+            <img src="videos/gateway-hero/media/clients/kpp-mining.png" alt="KPP Mining" width="1552" height="686" loading="lazy" decoding="async" />
+          </li>
+          <li class="js-enter-child" data-client="kalla">
+            <img src="videos/gateway-hero/media/clients/kalla.png" alt="Kalla" width="387" height="104" loading="lazy" decoding="async" />
+          </li>
+        </ul>
+      </section>
+
       <section class="inquiry" id="contact" aria-labelledby="inquiry-title">
         <div class="inquiry-copy">
-          <h2 id="inquiry-title">If this is the product you need, scan.</h2>
-          <p>This code opens mail. Name the workflow. We take a small number of LLM builds a year.</p>
+          <h2 id="inquiry-title">Let's Build<br />Intelligent Solution<br />for Your Business</h2>
+          <p>Scan the QR code on the side if you want to connect with us.</p>
         </div>
         <figure class="inquiry-code">
-          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Open a mail to hello@xstation">
+          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
             <img src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
-            <span class="inquiry-mail">hello@xstation</span>
           </a>
         </figure>
       </section>
@@ -456,6 +715,24 @@
         <span>XTATION, 2026</span>
         <a href="mailto:hello@xstation">hello@xstation</a>
       </footer>
+    </div>
+
+    <div
+      id="look"
+      class="look"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="look-caption"
+      hidden
+    >
+      <button class="look-veil" type="button" tabindex="-1" aria-label="Close image"></button>
+      <figure class="look-frame">
+        <div class="look-media">
+          <img id="look-img" alt="" />
+        </div>
+        <figcaption id="look-caption" class="look-caption"></figcaption>
+      </figure>
+      <button class="look-close" type="button">Close</button>
     </div>
 
     <script type="module" src="videos/gateway-hero/work.js"></script>

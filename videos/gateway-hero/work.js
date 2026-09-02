@@ -11,32 +11,361 @@ const field = createField({
   reduce,
 });
 
+let scroller = null;
+
 function bindTabs() {
   document.querySelectorAll(".space-panel").forEach((panel) => {
-    panel.querySelectorAll(".tab").forEach((tab) => {
+    const tabList = panel.querySelector(".tabs");
+    const tabs = [...panel.querySelectorAll(".tab")];
+    const panes = [...panel.querySelectorAll(".pane")];
+    if (!tabList || !tabs.length || !panes.length) return;
+
+    const ink = document.createElement("span");
+    ink.className = "tab-ink";
+    ink.setAttribute("aria-hidden", "true");
+    tabList.appendChild(ink);
+
+    let current = panes.find((p) => !p.hidden) || panes[0];
+    let swapTl = null;
+
+    function inkTo(tab, immediate) {
+      const parent = tabList.getBoundingClientRect();
+      const r = tab.getBoundingClientRect();
+      const x = r.left - parent.left;
+      const y = r.top - parent.top;
+      const w = r.width;
+      const h = r.height;
+      if (!gsap || reduce || immediate) {
+        if (gsap) gsap.set(ink, { x, y, scaleX: 1, scaleY: 1, width: w, height: h });
+        else {
+          ink.style.width = w + "px";
+          ink.style.height = h + "px";
+          ink.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+        }
+        return;
+      }
+      const prev = ink.getBoundingClientRect();
+      const prevW = prev.width || w;
+      const prevH = prev.height || h;
+      gsap.set(ink, { width: w, height: h });
+      gsap.fromTo(
+        ink,
+        {
+          x: prev.left - parent.left,
+          y: prev.top - parent.top,
+          scaleX: prevW / Math.max(w, 1),
+          scaleY: prevH / Math.max(h, 1),
+        },
+        { x, y, scaleX: 1, scaleY: 1, duration: 0.48, ease: "expo.out" }
+      );
+    }
+
+    function selectTab(tab) {
+      tabs.forEach((t) => {
+        const on = t === tab;
+        t.classList.toggle("is-on", on);
+        t.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      inkTo(tab, false);
+    }
+
+    function showPane(next, dir) {
+      if (next === current) return;
+      if (swapTl) swapTl.progress(1);
+
+      const outgoing = current;
+      const incoming = next;
+
+      if (!gsap || reduce) {
+        outgoing.hidden = true;
+        incoming.hidden = false;
+        current = incoming;
+        return;
+      }
+
+      incoming.hidden = false;
+      gsap.set(incoming, { autoAlpha: 0, x: 16 * dir, zIndex: 1 });
+      gsap.set(outgoing, { zIndex: 0 });
+
+      swapTl = gsap.timeline({
+        onComplete: () => {
+          outgoing.hidden = true;
+          gsap.set(outgoing, { clearProps: "all" });
+          gsap.set(incoming, { clearProps: "transform,zIndex" });
+          current = incoming;
+          swapTl = null;
+        },
+      });
+      swapTl.to(
+        outgoing,
+        { autoAlpha: 0, x: -12 * dir, duration: 0.28, ease: "power2.in" },
+        0
+      );
+      swapTl.to(
+        incoming,
+        { autoAlpha: 1, x: 0, duration: 0.5, ease: "expo.out" },
+        0.1
+      );
+    }
+
+    const onTab = tabs.find((t) => t.classList.contains("is-on")) || tabs[0];
+    inkTo(onTab, true);
+    window.addEventListener("resize", () => {
+      const active = tabs.find((t) => t.classList.contains("is-on")) || onTab;
+      inkTo(active, true);
+    });
+
+    tabs.forEach((tab, i) => {
       tab.addEventListener("click", () => {
-        const pane = tab.dataset.pane;
-        panel.querySelectorAll(".tab").forEach((t) => {
-          const on = t === tab;
-          t.classList.toggle("is-on", on);
-          t.setAttribute("aria-selected", on ? "true" : "false");
-        });
-        panel.querySelectorAll(".pane").forEach((p) => {
-          p.hidden = p.id !== pane;
-        });
+        const next = panes.find((p) => p.id === tab.dataset.pane);
+        if (!next || next === current) return;
+        const fromIdx = panes.indexOf(current);
+        const toIdx = panes.indexOf(next);
+        selectTab(tab);
+        showPane(next, toIdx > fromIdx ? 1 : -1);
+      });
+      tab.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        e.preventDefault();
+        const step = e.key === "ArrowRight" ? 1 : -1;
+        const nextTab = tabs[(i + step + tabs.length) % tabs.length];
+        nextTab.focus();
+        nextTab.click();
       });
     });
   });
 }
 
+function originFrom(el, dest) {
+  const from = el.getBoundingClientRect();
+  const to = dest.getBoundingClientRect();
+  return {
+    x: from.left + from.width / 2 - (to.left + to.width / 2),
+    y: from.top + from.height / 2 - (to.top + to.height / 2),
+    scale: Math.max(0.08, from.width / Math.max(to.width, 1)),
+  };
+}
+
 function bindThumbs() {
+  const look = document.getElementById("look");
+  const veil = look && look.querySelector(".look-veil");
+  const media = look && look.querySelector(".look-media");
+  const img = document.getElementById("look-img");
+  const caption = document.getElementById("look-caption");
+  const closeBtn = look && look.querySelector(".look-close");
+  if (!look || !veil || !media || !img || !caption || !closeBtn) return;
+
+  const inertEls = ["pin-slot", "work-root", "site-nav", "field-stage"]
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+
+  let open = false;
+  let closing = false;
+  let lastThumb = null;
+  let lookTl = null;
+  let restoreFocus = null;
+  let token = 0;
+
+  document.querySelectorAll(".thumb").forEach((thumb) => {
+    thumb.setAttribute("aria-haspopup", "dialog");
+    thumb.setAttribute("aria-expanded", "false");
+    thumb.setAttribute("aria-controls", "look");
+  });
+
+  function setInert(on) {
+    inertEls.forEach((el) => {
+      if (on) el.setAttribute("inert", "");
+      else el.removeAttribute("inert");
+    });
+  }
+
+  function syncHero(thumb) {
+    const frame = thumb.closest(".space, .stage");
+    const hero =
+      (frame && frame.querySelector("img.hero")) ||
+      (frame && frame.querySelector(".stage-media img"));
+    const src = thumb.dataset.src;
+    if (!hero || !src) return;
+    hero.src = src;
+    const label = thumb.getAttribute("aria-label");
+    if (label) hero.alt = label;
+  }
+
+  function lockPage(on) {
+    document.documentElement.classList.toggle("is-looking", on);
+    if (on) scroller?.stop();
+    else scroller?.start();
+    setInert(on);
+  }
+
+  function showInstant() {
+    if (gsap) {
+      gsap.set(veil, { autoAlpha: 1 });
+      gsap.set(media, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
+      gsap.set(caption, { autoAlpha: 1, y: 0 });
+      gsap.set(closeBtn, { autoAlpha: 1, y: 0 });
+    } else {
+      veil.style.opacity = "1";
+      media.style.opacity = "1";
+      media.style.transform = "none";
+      caption.style.opacity = "1";
+      closeBtn.style.opacity = "1";
+    }
+  }
+
+  function playOpen(thumb) {
+    if (!gsap || reduce) {
+      showInstant();
+      return;
+    }
+
+    gsap.set(veil, { autoAlpha: 0 });
+    gsap.set(media, { autoAlpha: 0, x: 0, y: 0, scale: 1 });
+    gsap.set(caption, { autoAlpha: 0, y: 10 });
+    gsap.set(closeBtn, { autoAlpha: 0, y: -8 });
+
+    const origin = originFrom(thumb, media);
+    gsap.set(media, {
+      x: origin.x,
+      y: origin.y,
+      scale: origin.scale,
+      autoAlpha: 0.55,
+    });
+
+    lookTl = gsap.timeline({
+      onComplete: () => {
+        lookTl = null;
+      },
+    });
+    lookTl.to(veil, { autoAlpha: 1, duration: 0.4, ease: "power2.out" }, 0);
+    lookTl.to(
+      media,
+      { x: 0, y: 0, scale: 1, autoAlpha: 1, duration: 0.72, ease: "expo.out" },
+      0.04
+    );
+    lookTl.to(
+      closeBtn,
+      { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out" },
+      0.22
+    );
+    lookTl.to(
+      caption,
+      { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out" },
+      0.28
+    );
+  }
+
+  async function openLook(thumb) {
+    const src = thumb.dataset.src;
+    if (!src || closing) return;
+    const mine = ++token;
+
+    syncHero(thumb);
+
+    if (lastThumb && lastThumb !== thumb) {
+      lastThumb.setAttribute("aria-expanded", "false");
+    }
+    lastThumb = thumb;
+    thumb.setAttribute("aria-expanded", "true");
+
+    const label = thumb.getAttribute("aria-label") || "";
+    img.src = src;
+    img.alt = label;
+    caption.textContent = label;
+    if (typeof img.decode === "function") {
+      try {
+        await img.decode();
+      } catch (_) {
+        /* cached or broken; still open */
+      }
+    }
+    if (mine !== token || closing) return;
+
+    if (open) {
+      if (!gsap || reduce) return;
+      gsap.fromTo(
+        media,
+        { autoAlpha: 0.7, scale: 0.985 },
+        { autoAlpha: 1, scale: 1, duration: 0.35, ease: "expo.out" }
+      );
+      return;
+    }
+
+    restoreFocus = document.activeElement;
+    look.hidden = false;
+    look.classList.add("is-open");
+    open = true;
+    lockPage(true);
+    playOpen(thumb);
+    closeBtn.focus();
+  }
+
+  function finishClose() {
+    if (gsap) gsap.set([veil, media, caption, closeBtn], { clearProps: "all" });
+    look.classList.remove("is-open");
+    look.hidden = true;
+    open = false;
+    closing = false;
+    lookTl = null;
+    lockPage(false);
+    if (lastThumb) lastThumb.setAttribute("aria-expanded", "false");
+    const focusEl = restoreFocus;
+    restoreFocus = null;
+    if (focusEl && typeof focusEl.focus === "function") focusEl.focus();
+  }
+
+  function closeLook() {
+    if (!open || closing) return;
+    closing = true;
+    token += 1;
+    if (lookTl) lookTl.kill();
+
+    if (!gsap || reduce) {
+      finishClose();
+      return;
+    }
+
+    const origin = lastThumb
+      ? originFrom(lastThumb, media)
+      : { x: 0, y: 18, scale: 0.96 };
+
+    lookTl = gsap.timeline({ onComplete: finishClose });
+    lookTl.to(closeBtn, { autoAlpha: 0, y: -6, duration: 0.18, ease: "power2.in" }, 0);
+    lookTl.to(caption, { autoAlpha: 0, y: 8, duration: 0.2, ease: "power2.in" }, 0);
+    lookTl.to(
+      media,
+      {
+        x: origin.x,
+        y: origin.y,
+        scale: origin.scale,
+        autoAlpha: 0,
+        duration: 0.42,
+        ease: "power2.in",
+      },
+      0.02
+    );
+    lookTl.to(veil, { autoAlpha: 0, duration: 0.32, ease: "power2.in" }, 0.08);
+  }
+
+  function onKey(e) {
+    if (!open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeLook();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    closeBtn.focus();
+  }
+
   document.addEventListener("click", (e) => {
     const thumb = e.target.closest(".thumb");
-    if (!thumb) return;
-    const space = thumb.closest(".space");
-    const hero = space && space.querySelector("img.hero");
-    if (hero && thumb.dataset.src) hero.src = thumb.dataset.src;
+    if (thumb) openLook(thumb);
   });
+  veil.addEventListener("click", closeLook);
+  closeBtn.addEventListener("click", closeLook);
+  document.addEventListener("keydown", onKey);
 }
 
 function smooth() {
@@ -88,7 +417,7 @@ function bindPass() {
 
   const passTl = gsap.timeline();
   passTl.fromTo(
-    "#title, #hero-cta",
+    "#title-layer",
     { autoAlpha: 1, scale: 1 },
     { autoAlpha: 0, scale: 0.985, ease: "none", duration: 0.2, immediateRender: false },
     0.08
@@ -170,6 +499,64 @@ function bindEnter() {
   });
 }
 
+function bindParallax() {
+  if (reduce || shot || !gsap || !ScrollTrigger) return;
+  if (window.matchMedia("(max-width: 767px)").matches) return;
+
+  document.querySelectorAll(".space-stage img.hero, .stage-media img").forEach((img) => {
+    const trigger = img.closest(".space, .stage");
+    if (!trigger) return;
+    const app = trigger.classList.contains("is-app");
+    gsap.fromTo(
+      img,
+      {
+        yPercent: app ? -7 : -14,
+        scale: app ? 1 : 1.08,
+      },
+      {
+        yPercent: app ? 7 : 14,
+        scale: 1,
+        ease: "none",
+        force3D: true,
+        scrollTrigger: {
+          trigger,
+          start: "top bottom",
+          end: "bottom top",
+          scrub: 0.55,
+          invalidateOnRefresh: true,
+        },
+      }
+    );
+  });
+
+  const band = document.querySelector(".doctrine-band");
+  const node = document.querySelector(".doctrine-node");
+  if (band && node) {
+    gsap.fromTo(
+      node,
+      {
+        x: () => band.offsetWidth * 0.3 - node.offsetWidth / 2,
+        yPercent: -50,
+        left: 0,
+      },
+      {
+        x: () => band.offsetWidth * 0.56 - node.offsetWidth / 2,
+        yPercent: -50,
+        left: 0,
+        ease: "none",
+        force3D: true,
+        scrollTrigger: {
+          trigger: band,
+          start: "top 80%",
+          end: "bottom 35%",
+          scrub: 0.6,
+          invalidateOnRefresh: true,
+        },
+      }
+    );
+  }
+}
+
 function bindFieldPause() {
   if (reduce || shot || !ScrollTrigger) return;
   let pauseCount = 0;
@@ -179,9 +566,9 @@ function bindFieldPause() {
     field.setMode(pauseCount > 0 ? "paused" : "whisper");
   }
 
-  ["#kite", "#meridian", "#relay", "#quorum"].forEach((sel) => {
+  document.querySelectorAll(".space, .stage").forEach((el) => {
     ScrollTrigger.create({
-      trigger: sel,
+      trigger: el,
       start: "top 70%",
       end: "bottom 30%",
       onEnter: () => bump(true),
@@ -250,16 +637,17 @@ if (gsap && ScrollTrigger && !isShot) {
   gsap.registerPlugin(ScrollTrigger);
   gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 0 });
   const ctx = gsap.context(() => {
-    smooth();
+    scroller = smooth();
     bindPass();
     bindEnter();
+    bindParallax();
     bindFieldPause();
   }, document.body);
 
   window.addEventListener("load", () => ScrollTrigger.refresh());
   window.addEventListener("pagehide", () => ctx.revert());
 } else if (!isShot) {
-  smooth();
+  scroller = smooth();
 }
 
 if (!isShot) revealField();

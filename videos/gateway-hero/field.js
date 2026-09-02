@@ -3,7 +3,8 @@ const DURATION = 20;
 const WHISPER_DURATION = 18;
 const BASE_TILT = 58;
 const DOCK_WINDOW = 0.34;
-const BERTH_ANGLES = [0.72, 2.42, 3.86, 5.56];
+const BERTH_ANGLES = [0.32, 1.37, 2.41, 3.46, 4.5, 5.55];
+const NODE_COLORS = ["#d63c32", "#e07a16", "#c9a00a", "#2b9a4a", "#2c62d4", "#6d3cc4"];
 const CAPSULE_PHASES = [0.04, 0.37, 0.71];
 const TICK_COUNT = 64;
 
@@ -15,6 +16,20 @@ function angDist(a, b) {
 
 function wrap01(t) {
   return t - Math.floor(t);
+}
+
+function sourceNodeColor(theta) {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < BERTH_ANGLES.length; i++) {
+    let d = theta - BERTH_ANGLES[i];
+    if (d < 0) d += Math.PI * 2;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return NODE_COLORS[best];
 }
 
 function svgEl(name, attrs) {
@@ -40,11 +55,12 @@ function metrics() {
 }
 
 function whisperXY(index, w, h) {
-  const side = index < 2 ? -1 : 1;
-  const row = index % 2 === 0 ? 0 : 2;
+  const half = BERTH_ANGLES.length / 2;
+  const side = index < half ? -1 : 1;
+  const row = index % half;
   return {
     x: side * (w / 2 - (w < 720 ? 28 : 52)),
-    y: (row - 1) * h * 0.28,
+    y: (row - (half - 1) / 2) * h * 0.28,
   };
 }
 
@@ -123,26 +139,31 @@ export function createField({ root, gsap, reduce }) {
     tickGroup.appendChild(tick);
     ticks.push(tick);
   }
-  const spokeEls = BERTH_ANGLES.map(() => {
+  const spokeEls = BERTH_ANGLES.map((_, i) => {
     const line = svgEl("line", { class: "dock-spoke" });
+    line.style.setProperty("--node", NODE_COLORS[i]);
     spokeGroup.appendChild(line);
     return line;
   });
   svg.append(defs, deck, railOuter, railInner, tickGroup, spokeGroup);
   dock.appendChild(svg);
 
-  const capsules = CAPSULE_PHASES.map(() => {
+  const capsules = CAPSULE_PHASES.map((phase) => {
     const el = document.createElement("div");
     el.className = "dock-capsule";
     el.setAttribute("aria-hidden", "true");
+    const theta = wrap01(phase) * Math.PI * 2;
+    const node = sourceNodeColor(theta);
+    el.style.setProperty("--node", node);
     dock.appendChild(el);
-    return { el, theta: 0 };
+    return { el, theta, node };
   });
 
-  const packets = BERTH_ANGLES.map(() => ({
+  const packets = BERTH_ANGLES.map((_, i) => ({
     el: (() => {
       const el = document.createElement("div");
       el.className = "dock-packet";
+      el.style.setProperty("--node", NODE_COLORS[i]);
       el.setAttribute("aria-hidden", "true");
       dock.appendChild(el);
       return el;
@@ -154,6 +175,7 @@ export function createField({ root, gsap, reduce }) {
   const berths = BERTH_ANGLES.map((theta, index) => {
     const el = document.createElement("div");
     el.className = "dock-berth";
+    el.style.setProperty("--node", NODE_COLORS[index]);
     el.setAttribute("aria-hidden", "true");
     const plate = document.createElement("div");
     plate.className = "dock-plate";
@@ -214,6 +236,11 @@ export function createField({ root, gsap, reduce }) {
       }
       const theta = wrap01(t + CAPSULE_PHASES[i]) * Math.PI * 2;
       cap.theta = theta;
+      const node = sourceNodeColor(theta);
+      if (cap.node !== node) {
+        cap.node = node;
+        cap.el.style.setProperty("--node", node);
+      }
       const pose = poseAt(theta, r, inner);
       gsap.set(cap.el, {
         x: pose.x,
