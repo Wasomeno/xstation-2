@@ -39,30 +39,6 @@ function bindThumbs() {
   });
 }
 
-function bindForm() {
-  const form = document.getElementById("inquiry-form");
-  const status = document.getElementById("inquiry-status");
-  if (!form) return;
-
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const data = new FormData(form);
-    const name = String(data.get("name") || "").trim();
-    const email = String(data.get("email") || "").trim();
-    const note = String(data.get("note") || "").trim();
-    if (!name || !email) {
-      if (status) status.textContent = "Name and email are required.";
-      return;
-    }
-
-    const subject = encodeURIComponent("XSTATION brief from " + name);
-    const body = encodeURIComponent("Name: " + name + "\nEmail: " + email + "\n\n" + note);
-    window.location.href = "mailto:hello@xstation?subject=" + subject + "&body=" + body;
-    if (status) status.textContent = "Opening your mail app.";
-    form.reset();
-  });
-}
-
 function smooth() {
   if (reduce || shot || typeof window.Lenis !== "function") return null;
 
@@ -112,36 +88,16 @@ function bindPass() {
 
   const passTl = gsap.timeline();
   passTl.fromTo(
-    "#title",
+    "#title, #hero-cta",
     { autoAlpha: 1, scale: 1 },
     { autoAlpha: 0, scale: 0.985, ease: "none", duration: 0.2, immediateRender: false },
     0.08
   );
   passTl.fromTo(
-    "#field",
-    { perspective: 1100 },
-    { perspective: 720, ease: "none", duration: 0.54 },
-    0.18
-  );
-  passTl.to("#field", { perspective: 1100, ease: "none", duration: 0.22 }, 0.78);
-  passTl.fromTo(
     "#veil, #vignette, #edge-fade",
     { autoAlpha: 1 },
-    { autoAlpha: 0, ease: "none", duration: 0.3 },
-    0.32
-  );
-  passTl.fromTo(
-    "#gate-threshold",
-    { autoAlpha: 0 },
-    { autoAlpha: 1, duration: 0.06, ease: "power2.out" },
-    0.52
-  );
-  passTl.to("#gate-threshold", { autoAlpha: 0, duration: 0.08, ease: "power2.in" }, 0.64);
-  passTl.fromTo(
-    "#gate-scan",
-    { attr: { y: -1.12 } },
-    { attr: { y: 1.1 }, ease: "power2.inOut", duration: 0.12 },
-    0.52
+    { autoAlpha: 0, ease: "none", duration: 0.22, immediateRender: false },
+    0.12
   );
   passTl.to(
     {},
@@ -159,14 +115,20 @@ function bindPass() {
     id: "hero-pass",
     trigger: "#pin-slot",
     start: "top top",
-    end: () => window.innerHeight * 1.6,
+    end: () => "+=" + window.innerHeight * 1.6,
     pin: "#root",
     pinSpacing: false,
-    scrub: 0.45,
     anticipatePin: 1,
+    scrub: 0.45,
     invalidateOnRefresh: true,
     animation: passTl,
-    onEnter: () => field.setMode("pass"),
+    onUpdate: (self) => {
+      if (self.progress <= 0.001) {
+        if (field.mode === "pass") field.setMode("idle");
+        return;
+      }
+      if (field.mode === "idle") field.setMode("pass");
+    },
     onLeave: () => field.setMode("whisper"),
     onEnterBack: () => field.setMode("pass"),
     onLeaveBack: () => field.setMode("idle"),
@@ -231,34 +193,43 @@ function bindFieldPause() {
 }
 
 function revealField() {
-  if (!gsap) {
-    field.startIdle();
-    return;
-  }
-  if (reduce) {
-    gsap.set("#site-nav, #title", { autoAlpha: 1, y: 0 });
-    field.startIdle();
-    return;
-  }
-  gsap.fromTo(
-    "#site-nav",
-    { autoAlpha: 0, y: -10 },
-    { autoAlpha: 1, y: 0, duration: 0.7, ease: "power2.out", delay: 0.08 }
-  );
-  gsap.fromTo(
-    "#title",
-    { autoAlpha: 0 },
-    { autoAlpha: 1, duration: 0.7, ease: "power1.out", delay: 0.25 }
-  );
+  const lines = document.querySelectorAll("#title span");
   field.startIdle();
+
+  if (!gsap) return;
+  if (reduce) {
+    gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 1, y: 0 });
+    gsap.set(lines, { autoAlpha: 1, y: 0 });
+    return;
+  }
+
+  gsap.set("#title", { autoAlpha: 1 });
+  gsap.set(lines, { autoAlpha: 0, y: 36 });
+  gsap.set("#site-nav", { autoAlpha: 0, y: -14 });
+  gsap.set("#hero-cta", { autoAlpha: 0, y: 18 });
+
+  const tl = gsap.timeline({ delay: 0.32 });
+  tl.to(
+    lines,
+    { autoAlpha: 1, y: 0, duration: 1.05, ease: "expo.out", stagger: 0.11 },
+    0
+  );
+  tl.to(
+    "#site-nav",
+    { autoAlpha: 1, y: 0, duration: 0.8, ease: "power2.out" },
+    0.18
+  );
+  tl.to(
+    "#hero-cta",
+    { autoAlpha: 1, y: 0, duration: 0.85, ease: "expo.out" },
+    0.28
+  );
 }
 
 function applyShot() {
   if (!shot) return false;
-  const boot = document.getElementById("boot");
   const pinSlot = document.getElementById("pin-slot");
   const workRoot = document.getElementById("work-root");
-  if (boot) boot.hidden = true;
   if (pinSlot) pinSlot.style.display = "none";
   if (workRoot) workRoot.style.marginTop = "0";
   const target = document.getElementById(shot);
@@ -272,13 +243,12 @@ function applyShot() {
 
 bindTabs();
 bindThumbs();
-bindForm();
 
 const isShot = applyShot();
 
 if (gsap && ScrollTrigger && !isShot) {
   gsap.registerPlugin(ScrollTrigger);
-  gsap.set("#site-nav, #title", { autoAlpha: 0 });
+  gsap.set("#site-nav, #title, #hero-cta", { autoAlpha: 0 });
   const ctx = gsap.context(() => {
     smooth();
     bindPass();
@@ -287,16 +257,9 @@ if (gsap && ScrollTrigger && !isShot) {
   }, document.body);
 
   window.addEventListener("load", () => ScrollTrigger.refresh());
-  window.addEventListener("gateway:reveal", () => ScrollTrigger.refresh());
   window.addEventListener("pagehide", () => ctx.revert());
 } else if (!isShot) {
   smooth();
 }
 
-if (isShot) {
-  /* field stays idle-paused; no startIdle */
-} else if (window.__gatewayReady) {
-  revealField();
-} else {
-  window.addEventListener("gateway:reveal", revealField, { once: true });
-}
+if (!isShot) revealField();

@@ -3,16 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>XSTATION - Your Gateway To Intelligent Products</title>
+    <title>XTATION - Your Station For Projects And Apps</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
-        }
-      }
-    </script>
     <style>
       @font-face {
         font-family: "Apfel Grotezk";
@@ -31,14 +23,13 @@
       }
 
       :root {
-        --bg: #000000;
-        --ivory: #f3efe6;
-        --gold: #d4a056;
-        --steel: #9aabc0;
-        --dim: #8a93a3;
-        --surface: #050505;
-        --line: color-mix(in srgb, var(--ivory) 10%, transparent);
-        --gold-light: color-mix(in srgb, var(--gold) 55%, transparent);
+        --bg: #f4f5f7;
+        --ink: #1c1f26;
+        --ivory: #f7f8fa;
+        --steel: #5a616c;
+        --dim: #6e7580;
+        --surface: #eceef1;
+        --line: color-mix(in srgb, var(--ink) 12%, transparent);
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
@@ -48,6 +39,10 @@
         box-sizing: border-box;
       }
 
+      html {
+        color-scheme: light;
+      }
+
       html,
       body {
         width: 100%;
@@ -55,7 +50,7 @@
         max-width: 100%;
         overflow-x: hidden;
         background: var(--bg);
-        color: var(--ivory);
+        color: var(--ink);
         font-family: var(--sans);
       }
 
@@ -94,47 +89,17 @@
         overflow: hidden;
         isolation: isolate;
         pointer-events: none;
+        background: var(--bg);
         transform: translateZ(0);
       }
 
       #field {
         position: absolute;
         inset: 0;
-        perspective: 1100px;
-        perspective-origin: 50% 48%;
+        perspective: 1680px;
+        perspective-origin: 50% 46%;
         transform-style: preserve-3d;
         pointer-events: none;
-      }
-
-      .slab {
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        margin: 0;
-        pointer-events: none;
-        will-change: transform;
-        background: currentColor;
-        color: var(--ivory);
-        box-shadow:
-          0 0 16px currentColor,
-          0 0 40px color-mix(in srgb, currentColor 75%, transparent),
-          0 0 72px color-mix(in srgb, currentColor 40%, transparent);
-      }
-
-      .slab.is-gold {
-        color: var(--gold);
-        box-shadow:
-          0 0 20px var(--gold),
-          0 0 48px color-mix(in srgb, var(--gold) 80%, transparent),
-          0 0 88px color-mix(in srgb, var(--gold) 45%, transparent);
-      }
-
-      .slab.is-steel {
-        color: var(--steel);
-      }
-
-      .slab.is-dim {
-        color: var(--dim);
       }
 
       #veil {
@@ -143,10 +108,10 @@
         z-index: 16;
         pointer-events: none;
         background: radial-gradient(
-          ellipse 42% 30% at 50% 50%,
-          rgba(0, 0, 0, 0.72) 0%,
-          rgba(0, 0, 0, 0.28) 42%,
-          rgba(0, 0, 0, 0) 72%
+          circle at 50% 48%,
+          color-mix(in srgb, var(--bg) 82%, transparent) 0%,
+          color-mix(in srgb, var(--bg) 28%, transparent) 18%,
+          transparent 42%
         );
       }
 
@@ -157,10 +122,10 @@
         pointer-events: none;
         background: linear-gradient(
           to bottom,
-          rgba(0, 0, 0, 0.78) 0%,
-          rgba(0, 0, 0, 0) 16%,
-          rgba(0, 0, 0, 0) 84%,
-          rgba(0, 0, 0, 0.78) 100%
+          color-mix(in srgb, var(--bg) 92%, transparent) 0%,
+          transparent 16%,
+          transparent 84%,
+          color-mix(in srgb, var(--bg) 92%, transparent) 100%
         );
       }
 
@@ -179,7 +144,7 @@
         font-weight: 400;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: var(--ivory);
+        color: var(--ink);
         pointer-events: auto;
       }
 
@@ -187,7 +152,7 @@
         display: flex;
         align-items: baseline;
         gap: 10px;
-        color: var(--ivory);
+        color: var(--ink);
       }
 
       #brand em {
@@ -224,7 +189,38 @@
         font-size: clamp(36px, 5.2vw, 64px);
         line-height: 1.12;
         letter-spacing: -0.03em;
-        color: var(--ivory);
+        color: var(--ink);
+        overflow: hidden;
+      }
+
+      #title span {
+        display: block;
+      }
+
+      #hero-cta {
+        pointer-events: auto;
+        display: inline-block;
+        margin-top: 1.7rem;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--steel);
+        font-family: var(--sans);
+        font-size: 15px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        line-height: 1.2;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
+      #hero-cta:hover {
+        color: var(--ink);
+      }
+
+      #hero-cta:active {
+        transform: scale(0.98);
       }
 
       #vignette {
@@ -234,102 +230,23 @@
         z-index: 16;
         background: radial-gradient(
           ellipse 78% 72% at 50% 48%,
-          rgba(0, 0, 0, 0) 40%,
-          rgba(0, 0, 0, 0.55) 100%
+          transparent 40%,
+          color-mix(in srgb, var(--bg) 58%, transparent) 100%
         );
       }
-
-      #gate-threshold {
-        position: absolute;
-        left: 50%;
-        top: 48%;
-        width: min(42vw, 22rem);
-        height: min(42vw, 22rem);
-        transform: translate(-50%, -50%);
-        z-index: 18;
-        pointer-events: none;
-        opacity: 0;
-        mix-blend-mode: screen;
-      }
-
-      #boot {
-        position: fixed;
-        inset: 0;
-        z-index: 40;
-        background: var(--bg);
-        color: var(--ivory);
-        overflow: hidden;
-      }
-
-      #boot-canvas {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-
-      #boot-copy {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 8.5svh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 18px;
-        pointer-events: none;
-        opacity: 0;
-      }
-
-      #boot-word {
-        font-family: var(--sans);
-        font-size: 11px;
-        font-weight: 400;
-        letter-spacing: 0.46em;
-        text-indent: 0.46em;
-        text-transform: uppercase;
-        color: var(--ivory);
-        opacity: 0.72;
-      }
-
-      #boot-rail {
-        width: 56px;
-        height: 1px;
-        background: color-mix(in srgb, var(--ivory) 14%, transparent);
-        overflow: hidden;
-      }
-
-      #boot-fill {
-        width: 100%;
-        height: 100%;
-        background: var(--gold);
-        transform: scaleX(0);
-        transform-origin: left center;
-      }
-
-      #boot.is-leaving {
-        pointer-events: none;
-      }
     </style>
+    <link rel="stylesheet" href="videos/gateway-hero/field.css" />
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
   <body>
-    <div id="boot" role="status" aria-live="polite" aria-label="Loading XSTATION">
-      <canvas id="boot-canvas" aria-hidden="true"></canvas>
-      <div id="boot-copy">
-        <span id="boot-word">XSTATION</span>
-        <span id="boot-rail" aria-hidden="true"><span id="boot-fill"></span></span>
-      </div>
-    </div>
     <div id="field-stage">
       <div id="field"></div>
     </div>
     <header id="site-nav">
       <a id="brand" href="#root">
-        <em>XSTATION</em>
+        <em>XTATION</em>
       </a>
       <nav id="site-links" aria-label="Primary">
         <a href="#work">Work</a>
@@ -341,25 +258,9 @@
         <section id="hero">
           <div id="veil"></div>
           <div id="edge-fade"></div>
-          <svg id="gate-threshold" viewBox="-1.4 -1.4 2.8 2.8" aria-hidden="true">
-            <polygon
-              id="gate-ivory"
-              fill="none"
-              stroke="#f3efe6"
-              stroke-width="0.028"
-              points="0.628,-0.260 0.260,-0.628 -0.260,-0.628 -0.628,-0.260 -0.628,0.260 -0.260,0.628 0.260,0.628 0.628,0.260"
-            />
-            <polygon
-              id="gate-gold"
-              fill="none"
-              stroke="#d4a056"
-              stroke-width="0.022"
-              points="0.960,0 0.679,-0.679 0,-0.960 -0.679,-0.679 -0.960,0 -0.679,0.679 0,0.960 0.679,0.679"
-            />
-            <rect id="gate-scan" x="-1.2" y="-1.12" width="2.4" height="0.018" fill="#d4a056" opacity="0.55" />
-          </svg>
           <div id="title-layer">
-            <h1 id="title">Your Gateway To<br />Intelligent Products</h1>
+            <h1 id="title"><span>Your Station For</span><span>Projects And Apps</span></h1>
+            <a id="hero-cta" href="#index">See Products</a>
           </div>
           <div id="vignette"></div>
         </section>
@@ -370,10 +271,7 @@
       <section class="doctrine" id="work" aria-labelledby="doctrine-lead">
         <div class="doctrine-copy js-enter">
           <p id="doctrine-lead" class="js-enter-child">
-            XSTATION builds production LLM applications. Support copilots, RAG over a private corpus, agents with a human in the loop, and evals that can stop a run.
-          </p>
-          <p class="js-enter-child">
-            We do not ship a chatbot demo. We ship the product around the model: retrieval, tool calls, traces, citations, and a person where a decision is required.
+            XTATION is the station for company projects and apps. Copilots, RAG, agents, and evals, with a person on the decision.
           </p>
         </div>
         <figure class="doctrine-band">
@@ -543,35 +441,23 @@
 
       <section class="inquiry" id="contact" aria-labelledby="inquiry-title">
         <div class="inquiry-copy">
-          <h2 id="inquiry-title">If this is the product you need, write.</h2>
-          <p>We take a small number of LLM builds a year. Name the workflow and we will answer.</p>
-          <a class="inquiry-mail" href="mailto:hello@xstation">hello@xstation</a>
+          <h2 id="inquiry-title">If this is the product you need, scan.</h2>
+          <p>This code opens mail. Name the workflow. We take a small number of LLM builds a year.</p>
         </div>
-        <form class="inquiry-form js-enter" id="inquiry-form" action="mailto:hello@xstation" method="post" enctype="text/plain">
-          <label class="js-enter-child">
-            Name
-            <input type="text" name="name" autocomplete="name" required />
-          </label>
-          <label class="js-enter-child">
-            Email
-            <input type="email" name="email" autocomplete="email" required />
-          </label>
-          <label class="js-enter-child">
-            Note
-            <textarea name="note" rows="4"></textarea>
-          </label>
-          <button type="submit">Send</button>
-          <p class="status" id="inquiry-status" role="status"></p>
-        </form>
+        <figure class="inquiry-code">
+          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Open a mail to hello@xstation">
+            <img src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
+            <span class="inquiry-mail">hello@xstation</span>
+          </a>
+        </figure>
       </section>
 
       <footer class="work-end">
-        <span>XSTATION, 2026</span>
+        <span>XTATION, 2026</span>
         <a href="mailto:hello@xstation">hello@xstation</a>
       </footer>
     </div>
 
-    <script type="module" src="videos/gateway-hero/loader.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
   </body>
 </html>

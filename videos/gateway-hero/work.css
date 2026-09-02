@@ -4,9 +4,9 @@ html {
 
 #work-root {
   position: relative;
-  z-index: 10;
+  z-index: 20;
   background: transparent;
-  color: var(--ivory);
+  color: var(--ink);
   overflow-x: hidden;
   width: 100%;
   max-width: 100%;
@@ -23,7 +23,7 @@ html.lenis body {
 }
 
 #site-nav {
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0) 100%);
+  background: var(--bg);
 }
 
 #site-links {
@@ -34,8 +34,14 @@ html.lenis body {
   text-transform: uppercase;
 }
 
+#site-links a {
+  padding-bottom: 0.1rem;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 #site-links a:hover {
-  color: var(--gold);
+  border-bottom-color: var(--ink);
 }
 
 .work-pad {
@@ -48,8 +54,8 @@ html.lenis body {
   display: grid;
   place-items: center;
   background: transparent;
-  color: var(--ivory);
-  border: 1px solid var(--gold);
+  color: var(--ink);
+  border: 1px solid var(--ink);
   flex-shrink: 0;
   cursor: pointer;
   transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
@@ -70,15 +76,14 @@ html.lenis body {
 }
 
 .work-go:focus-visible,
+#hero-cta:focus-visible,
 .tab:focus-visible,
 .thumb:focus-visible,
 .place-map a:focus-visible,
 #site-links a:focus-visible,
-.inquiry-form button:focus-visible,
-.inquiry-form input:focus-visible,
-.inquiry-form textarea:focus-visible,
+.inquiry-qr:focus-visible,
 .readout a:focus-visible {
-  outline: 1px solid var(--gold);
+  outline: 1px solid var(--ink);
   outline-offset: 4px;
 }
 
@@ -99,7 +104,7 @@ html.lenis body {
   font-size: clamp(1.15rem, 2.1vw, 1.55rem);
   line-height: 1.45;
   letter-spacing: -0.02em;
-  color: rgba(243, 239, 230, 0.92);
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
   max-width: 34ch;
 }
 
@@ -134,7 +139,7 @@ html.lenis body {
   left: 1.3rem;
   z-index: 2;
   font-size: 0.82rem;
-  color: rgba(243, 239, 230, 0.72);
+  color: color-mix(in srgb, var(--ivory) 78%, transparent);
   letter-spacing: 0.01em;
 }
 
@@ -152,6 +157,7 @@ html.lenis body {
   font-weight: 400;
   letter-spacing: -0.04em;
   line-height: 0.95;
+  color: var(--ivory);
   pointer-events: none;
 }
 
@@ -176,7 +182,7 @@ html.lenis body {
   font-weight: 400;
   letter-spacing: -0.06em;
   line-height: 0.9;
-  color: var(--ivory);
+  color: var(--ink);
 }
 
 .index-void {
@@ -193,8 +199,8 @@ html.lenis body {
   width: min(16.8rem, calc(100% - 2.4rem));
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 6%, transparent);
-  color: var(--ivory);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 55%, transparent);
+  color: var(--ink);
   padding: 1rem 1rem 0.9rem;
 }
 
@@ -214,7 +220,7 @@ html.lenis body {
 .work-card figure {
   overflow: hidden;
   aspect-ratio: 1.35 / 1;
-  background: #0a0a0a;
+  background: var(--surface);
 }
 
 .work-card img {
@@ -236,14 +242,14 @@ html.lenis body {
 
 .place-map a {
   font-size: 0.88rem;
-  color: rgba(243, 239, 230, 0.55);
+  color: color-mix(in srgb, var(--ink) 52%, transparent);
   letter-spacing: -0.01em;
   transition: color 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .place-map a:hover,
 .place-map a.is-on {
-  color: var(--ivory);
+  color: var(--ink);
 }
 
 .space {
@@ -297,7 +303,7 @@ html.lenis body {
 .space-caption em {
   font-style: normal;
   font-size: 0.82rem;
-  color: rgba(243, 239, 230, 0.7);
+  color: color-mix(in srgb, var(--ivory) 78%, transparent);
 }
 
 .space-caption strong {
@@ -305,7 +311,7 @@ html.lenis body {
   font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--dim);
+  color: var(--ivory);
   line-height: 1.2;
 }
 
@@ -313,8 +319,8 @@ html.lenis body {
 .stage-card {
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 6%, transparent);
-  color: var(--ivory);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ivory) 55%, transparent);
+  color: var(--ink);
 }
 
 .space-panel {
@@ -334,7 +340,7 @@ html.lenis body {
   min-height: 2.3rem;
   padding: 0 1rem;
   background: transparent;
-  color: var(--ivory);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 0;
   font-family: var(--sans);
@@ -345,9 +351,9 @@ html.lenis body {
 
 .tab.is-on {
   background: transparent;
-  color: var(--ivory);
-  box-shadow: inset 0 0 0 1px var(--gold);
-  border-color: var(--gold-light);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 42%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 28%, transparent);
 }
 
 .space-panel h2 {
@@ -389,11 +395,12 @@ html.lenis body {
 }
 
 .readout a {
-  color: var(--ivory);
+  color: var(--ink);
 }
 
 .readout a:hover {
-  color: var(--gold);
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink);
 }
 
 .pane[hidden] {
@@ -411,7 +418,7 @@ html.lenis body {
 .thumb {
   aspect-ratio: 1.15 / 1;
   overflow: hidden;
-  background: #050505;
+  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
   border: 0;
   padding: 0;
   cursor: pointer;
@@ -522,88 +529,46 @@ html.lenis body {
   color: var(--steel);
 }
 
-.inquiry-mail {
-  display: inline-block;
-  margin-top: 2rem;
-  font-size: 1.05rem;
-  color: var(--ivory);
-  border-bottom: 1px solid rgba(243, 239, 230, 0.28);
-  padding-bottom: 0.12rem;
-}
-
-.inquiry-mail:hover {
-  color: var(--gold);
-  border-color: var(--gold);
-}
-
-.inquiry-form {
-  display: grid;
-  gap: 1.05rem;
-}
-
-.inquiry-form label {
-  display: grid;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--dim);
-}
-
-.inquiry-form input,
-.inquiry-form textarea {
-  width: 100%;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(243, 239, 230, 0.18);
-  color: var(--ivory);
-  font-family: var(--sans);
-  font-size: 1rem;
-  padding: 0.45rem 0 0.55rem;
-  border-radius: 0;
-}
-
-.inquiry-form textarea {
-  min-height: 6.5rem;
-  resize: vertical;
-  line-height: 1.45;
-}
-
-.inquiry-form input::placeholder,
-.inquiry-form textarea::placeholder {
-  color: rgba(243, 239, 230, 0.28);
-}
-
-.inquiry-form input:focus,
-.inquiry-form textarea:focus {
-  outline: none;
-  border-bottom-color: var(--gold);
-}
-
-.inquiry-form button {
+.inquiry-code {
   justify-self: start;
-  margin-top: 0.4rem;
-  min-height: 2.7rem;
-  padding: 0 1.35rem;
-  background: var(--gold);
-  color: #111;
-  border: 0;
-  font-family: var(--sans);
-  font-size: 0.92rem;
-  cursor: pointer;
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  width: min(100%, 22rem);
+  margin: 0;
 }
 
-.inquiry-form button:hover {
-  transform: translateY(-1px);
+.inquiry-qr {
+  display: grid;
+  gap: 0.95rem;
+  justify-items: start;
+  color: var(--ink);
+  transition: transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.inquiry-form button:active {
+.inquiry-qr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  background: var(--ivory);
+}
+
+.inquiry-qr:hover {
+  transform: translateY(-2px);
+}
+
+.inquiry-qr:active {
   transform: scale(0.98);
 }
 
-.inquiry-form .status {
-  font-size: 0.88rem;
-  color: var(--steel);
-  min-height: 1.2em;
+.inquiry-mail {
+  display: inline-block;
+  font-size: 1.05rem;
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  padding-bottom: 0.12rem;
+}
+
+.inquiry-qr:hover .inquiry-mail {
+  border-color: var(--ink);
 }
 
 .work-end {
@@ -614,12 +579,12 @@ html.lenis body {
   padding: 1.2rem var(--pad) 1.6rem;
   font-size: 0.82rem;
   color: var(--dim);
-  border-top: 1px solid rgba(243, 239, 230, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   background: var(--bg);
 }
 
 .work-end a:hover {
-  color: var(--ivory);
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -629,10 +594,6 @@ html.lenis body {
 
   #work-root {
     margin-top: 0 !important;
-  }
-
-  #gate-threshold {
-    display: none !important;
   }
 
   .js-enter,
@@ -728,6 +689,11 @@ html.lenis body {
   .inquiry {
     min-height: 0;
     padding-top: 3.5rem;
+  }
+
+  .inquiry-code {
+    justify-self: start;
+    width: min(100%, 16rem);
   }
 
   .work-end {

@@ -1,6 +1,6 @@
-# Xstation
+# XTATION
 
-Landing page (`index.html`) for Xstation — gateway to intelligent products.
+Landing page (`index.html`) for XTATION - a station for company projects and apps.
 
 ## Run locally
 
