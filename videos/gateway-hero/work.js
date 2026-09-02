@@ -13,129 +13,6 @@ const field = createField({
 
 let scroller = null;
 
-function bindTabs() {
-  document.querySelectorAll(".space-panel").forEach((panel) => {
-    const tabList = panel.querySelector(".tabs");
-    const tabs = [...panel.querySelectorAll(".tab")];
-    const panes = [...panel.querySelectorAll(".pane")];
-    if (!tabList || !tabs.length || !panes.length) return;
-
-    const ink = document.createElement("span");
-    ink.className = "tab-ink";
-    ink.setAttribute("aria-hidden", "true");
-    tabList.appendChild(ink);
-
-    let current = panes.find((p) => !p.hidden) || panes[0];
-    let swapTl = null;
-
-    function inkTo(tab, immediate) {
-      const parent = tabList.getBoundingClientRect();
-      const r = tab.getBoundingClientRect();
-      const x = r.left - parent.left;
-      const y = r.top - parent.top;
-      const w = r.width;
-      const h = r.height;
-      if (!gsap || reduce || immediate) {
-        if (gsap) gsap.set(ink, { x, y, scaleX: 1, scaleY: 1, width: w, height: h });
-        else {
-          ink.style.width = w + "px";
-          ink.style.height = h + "px";
-          ink.style.transform = "translate3d(" + x + "px," + y + "px,0)";
-        }
-        return;
-      }
-      const prev = ink.getBoundingClientRect();
-      const prevW = prev.width || w;
-      const prevH = prev.height || h;
-      gsap.set(ink, { width: w, height: h });
-      gsap.fromTo(
-        ink,
-        {
-          x: prev.left - parent.left,
-          y: prev.top - parent.top,
-          scaleX: prevW / Math.max(w, 1),
-          scaleY: prevH / Math.max(h, 1),
-        },
-        { x, y, scaleX: 1, scaleY: 1, duration: 0.48, ease: "expo.out" }
-      );
-    }
-
-    function selectTab(tab) {
-      tabs.forEach((t) => {
-        const on = t === tab;
-        t.classList.toggle("is-on", on);
-        t.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      inkTo(tab, false);
-    }
-
-    function showPane(next, dir) {
-      if (next === current) return;
-      if (swapTl) swapTl.progress(1);
-
-      const outgoing = current;
-      const incoming = next;
-
-      if (!gsap || reduce) {
-        outgoing.hidden = true;
-        incoming.hidden = false;
-        current = incoming;
-        return;
-      }
-
-      incoming.hidden = false;
-      gsap.set(incoming, { autoAlpha: 0, x: 16 * dir, zIndex: 1 });
-      gsap.set(outgoing, { zIndex: 0 });
-
-      swapTl = gsap.timeline({
-        onComplete: () => {
-          outgoing.hidden = true;
-          gsap.set(outgoing, { clearProps: "all" });
-          gsap.set(incoming, { clearProps: "transform,zIndex" });
-          current = incoming;
-          swapTl = null;
-        },
-      });
-      swapTl.to(
-        outgoing,
-        { autoAlpha: 0, x: -12 * dir, duration: 0.28, ease: "power2.in" },
-        0
-      );
-      swapTl.to(
-        incoming,
-        { autoAlpha: 1, x: 0, duration: 0.5, ease: "expo.out" },
-        0.1
-      );
-    }
-
-    const onTab = tabs.find((t) => t.classList.contains("is-on")) || tabs[0];
-    inkTo(onTab, true);
-    window.addEventListener("resize", () => {
-      const active = tabs.find((t) => t.classList.contains("is-on")) || onTab;
-      inkTo(active, true);
-    });
-
-    tabs.forEach((tab, i) => {
-      tab.addEventListener("click", () => {
-        const next = panes.find((p) => p.id === tab.dataset.pane);
-        if (!next || next === current) return;
-        const fromIdx = panes.indexOf(current);
-        const toIdx = panes.indexOf(next);
-        selectTab(tab);
-        showPane(next, toIdx > fromIdx ? 1 : -1);
-      });
-      tab.addEventListener("keydown", (e) => {
-        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-        e.preventDefault();
-        const step = e.key === "ArrowRight" ? 1 : -1;
-        const nextTab = tabs[(i + step + tabs.length) % tabs.length];
-        nextTab.focus();
-        nextTab.click();
-      });
-    });
-  });
-}
-
 function originFrom(el, dest) {
   const from = el.getBoundingClientRect();
   const to = dest.getBoundingClientRect();
@@ -372,12 +249,12 @@ function smooth() {
   if (reduce || shot || typeof window.Lenis !== "function") return null;
 
   const lenis = new window.Lenis({
-    duration: 1.6,
-    lerp: 0.055,
-    wheelMultiplier: 0.7,
-    touchMultiplier: 1.15,
+    duration: 2.6,
+    lerp: 0.032,
+    wheelMultiplier: 0.42,
+    touchMultiplier: 0.85,
     easing: function (t) {
-      return 1 - Math.pow(1 - t, 3);
+      return 1 - Math.pow(1 - t, 5);
     },
     smoothWheel: true,
   });
@@ -403,7 +280,7 @@ function smooth() {
       const el = document.querySelector(href);
       if (!el) return;
       e.preventDefault();
-      lenis.scrollTo(el, { offset: -8, duration: 1.6 });
+      lenis.scrollTo(el, { offset: -8, duration: 2.4 });
     });
   });
 
@@ -636,7 +513,6 @@ function applyShot() {
   return true;
 }
 
-bindTabs();
 bindThumbs();
 
 const isShot = applyShot();

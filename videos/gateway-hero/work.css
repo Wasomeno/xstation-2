@@ -60,7 +60,6 @@ html.lenis body {
 }
 
 #hero-cta:focus-visible,
-.tab:focus-visible,
 .thumb:focus-visible,
 .look-close:focus-visible,
 #site-links a:focus-visible,
@@ -131,10 +130,11 @@ html.lenis body {
 
 .index-mark {
   margin: 0;
-  font-size: clamp(3.2rem, 10vw, 8rem);
+  max-width: 11em;
+  font-size: clamp(2.25rem, 5.8vw, 4.6rem);
   font-weight: 400;
-  letter-spacing: -0.06em;
-  line-height: 0.9;
+  letter-spacing: -0.05em;
+  line-height: 1.02;
   color: var(--ink);
 }
 
@@ -246,50 +246,29 @@ html.lenis body {
   min-height: 34rem;
 }
 
-.tabs {
-  position: relative;
-  display: flex;
-  gap: 0.15rem;
-  margin-bottom: 1.35rem;
+.field-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 1.1rem;
   grid-row: 1;
   grid-column: 1;
-}
-
-.tab {
-  min-height: 2.3rem;
-  padding: 0 1rem;
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 0;
+  width: max-content;
   font-family: var(--sans);
-  font-size: 0.86rem;
-  cursor: pointer;
-  transition: border-color 0.35s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.tab.is-on {
-  background: transparent;
+  font-size: 0.9rem;
+  line-height: 1;
   color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
-.tab:active {
-  transform: scale(0.98);
+.field-mark::before {
+  content: "";
+  width: 1.35rem;
+  height: 1px;
+  background: var(--gold);
 }
 
-.tab-ink {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--ink) 28%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 42%, transparent);
-  pointer-events: none;
-  transform-origin: 0 0;
-}
-
-.pane {
+.space-copy {
   grid-row: 2;
   grid-column: 1;
   display: flex;
@@ -345,8 +324,8 @@ html.lenis body {
   border-bottom: 1px solid var(--ink);
 }
 
-.pane[hidden] {
-  display: none;
+.stage-card .field-mark {
+  margin-bottom: 0.85rem;
 }
 
 .thumbs {
@@ -485,14 +464,6 @@ html.is-looking body {
 
 .look-close:active {
   transform: scale(0.98);
-}
-
-.plan-copy {
-  margin-top: 1.2rem;
-  max-width: 48ch;
-  color: var(--steel);
-  font-size: 0.92rem;
-  line-height: 1.55;
 }
 
 .stage {
@@ -768,9 +739,7 @@ html.is-looking body {
     transition: none !important;
   }
 
-  .pane,
-  .tab-ink,
-  .tab:active {
+  .space-copy {
     transform: none !important;
   }
 
@@ -805,7 +774,7 @@ html.is-looking body {
   }
 
   .index-mark {
-    font-size: clamp(2.8rem, 14vw, 6rem);
+    font-size: clamp(2.05rem, 8.4vw, 3.4rem);
   }
 }
 

@@ -125,6 +125,9 @@
   margin: 0;
   pointer-events: none;
   will-change: transform;
+  transform-origin: 50% 50%;
+  transform-style: flat;
+  backface-visibility: hidden;
   background: currentColor;
   color: var(--ink);
   box-shadow:

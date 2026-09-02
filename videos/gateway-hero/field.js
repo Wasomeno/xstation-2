@@ -11,6 +11,30 @@ const NEAR = 620;
 const TRAVEL = NEAR - FAR;
 const PALETTE = ["ivory", "ivory", "ivory", "ivory", "steel", "steel", "gold", "dim"];
 const KEEP_INDICES = [6, 14, 1, 4, 9, 12];
+const SLAB_SLOTS = [
+  [-3, -1],
+  [-3, 0],
+  [-3, 1],
+  [-2, -1.5],
+  [-2, -0.5],
+  [-2, 0.5],
+  [-2, 1.5],
+  [-1, -1.5],
+  [-1, -0.5],
+  [-1, 0.5],
+  [-1, 1.5],
+  [1, -1.5],
+  [1, -0.5],
+  [1, 0.5],
+  [1, 1.5],
+  [2, -1.5],
+  [2, -0.5],
+  [2, 0.5],
+  [2, 1.5],
+  [3, -1],
+  [3, 0],
+  [3, 1],
+];
 
 const BASE_TILT = 0;
 const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
@@ -48,6 +72,12 @@ function makeSlab(w, h, color) {
   el.style.height = h + "px";
   el.setAttribute("aria-hidden", "true");
   return el;
+}
+
+function slabSize(col) {
+  const abs = Math.abs(col);
+  const w = abs === 1 ? 22 : abs === 2 ? 18 : 14;
+  return { w, h: Math.round(w * 4.08) };
 }
 
 function svgEl(name, attrs) {
@@ -217,36 +247,49 @@ export function createField({ root, gsap, reduce }) {
   const rng = mulberry32(0xa5c11e);
   const slabs = [];
 
-  if (!reduce) {
-    for (let i = 0; i < 22; i++) {
-      const w = 14 + rng() * 36;
-      const h = w * (2.8 + rng() * 1.6);
-      const color = PALETTE[i % PALETTE.length];
-      const el = makeSlab(w, h, color);
-      root.appendChild(el);
+  function placeSlabs() {
+    const colPitch = m.compact ? 70 : 104;
+    const rowPitch = m.compact ? 128 : 186;
+    const gutter = m.compact ? 108 : 208;
+    const rail = m.compact ? 260 : 460;
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      const x = it.col * colPitch + Math.sign(it.col) * gutter;
+      const y = it.row * rowPitch;
+      it.x = x;
+      it.y = y;
+      it.idleX = x;
+      it.idleY = y;
+      it.railX = Math.sign(it.col) * rail;
+    }
+  }
 
-      const ang = rng() * Math.PI * 2;
-      const rad = 300 + rng() * 620;
-      let x = Math.cos(ang) * rad;
-      let y = Math.sin(ang) * rad * 0.56;
-      if (Math.abs(x) < 340) x += x < 0 ? -360 : 360;
-      if (Math.abs(y) < 80) y += y < 0 ? -160 : 160;
+  if (!reduce) {
+    for (let i = 0; i < SLAB_SLOTS.length; i++) {
+      const col = SLAB_SLOTS[i][0];
+      const row = SLAB_SLOTS[i][1];
+      const size = slabSize(col);
+      const color = PALETTE[i % PALETTE.length];
+      const el = makeSlab(size.w, size.h, color);
+      root.appendChild(el);
 
       slabs.push({
         el,
-        phase: (i * 0.097 + rng() * 0.05) % 1,
-        x,
-        y,
-        tiltX: (rng() - 0.5) * 12,
-        tiltY: (rng() - 0.5) * 28,
+        col,
+        row,
+        phase: ((col + 3) * 0.11 + (row + 1.5) * 0.17 + i * 0.02) % 1,
+        x: 0,
+        y: 0,
         peak: color === "gold" ? 0.78 : 0.52,
-        idleX: x,
-        idleY: y,
-        railX: x < 0 ? -420 : 420,
+        idleX: 0,
+        idleY: 0,
+        railX: 0,
         keepWhisper: false,
         whisperSample: null,
       });
     }
+
+    placeSlabs();
 
     KEEP_INDICES.forEach((idx, keepIndex) => {
       const it = slabs[idx];
@@ -321,8 +364,9 @@ export function createField({ root, gsap, reduce }) {
       z,
       xPercent: -50,
       yPercent: -50,
-      rotationX: it.tiltX,
-      rotationY: it.tiltY,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
       autoAlpha: alphaAt(p, peak),
       force3D: true,
     });
@@ -585,6 +629,7 @@ export function createField({ root, gsap, reduce }) {
 
   function onResize() {
     m = metrics();
+    placeSlabs();
     if (mode === "whisper") {
       hideSlabs();
       layoutDock(state.t, 1, stationPose(m));
@@ -670,6 +715,7 @@ export function createField({ root, gsap, reduce }) {
     },
     layout(t = state.t) {
       m = metrics();
+      placeSlabs();
       if (mode === "whisper") {
         hideSlabs();
         layoutDock(t, 1, stationPose(m));
