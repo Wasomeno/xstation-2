@@ -102,13 +102,13 @@
         overflow: hidden;
         isolation: isolate;
         pointer-events: none;
-        background: var(--bg);
+        background: #ffffff;
         transform: translateZ(0);
         transition: background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
       html.is-station #field-stage {
-        background: color-mix(in srgb, var(--sky) 18%, var(--bg));
+        background: color-mix(in srgb, var(--sky) 18%, #ffffff);
       }
 
       #field {
@@ -131,8 +131,8 @@
         pointer-events: none;
         background: radial-gradient(
           circle at 50% 48%,
-          color-mix(in srgb, var(--bg) 82%, transparent) 0%,
-          color-mix(in srgb, var(--bg) 28%, transparent) 18%,
+          rgb(255 255 255 / 0.86) 0%,
+          rgb(255 255 255 / 0.22) 18%,
           transparent 42%
         );
       }
@@ -144,11 +144,11 @@
         pointer-events: none;
         background: linear-gradient(
           to bottom,
-          color-mix(in srgb, var(--bg) 92%, transparent) 0%,
-          transparent 18%,
+          rgb(255 255 255 / 0.92) 0%,
+          transparent 20%,
           transparent 58%,
-          color-mix(in srgb, var(--sky) 14%, transparent) 78%,
-          #ffffff 100%
+          color-mix(in srgb, var(--sky) 24%, transparent) 80%,
+          color-mix(in srgb, var(--sky) 42%, #ffffff) 100%
         );
       }
 
@@ -361,7 +361,7 @@
         background: radial-gradient(
           ellipse 78% 72% at 50% 48%,
           transparent 40%,
-          color-mix(in srgb, var(--bg) 58%, transparent) 100%
+          rgb(255 255 255 / 0.58) 100%
         );
       }
 
