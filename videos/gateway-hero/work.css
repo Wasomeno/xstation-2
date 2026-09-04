@@ -3,7 +3,7 @@ html {
 }
 
 #work-root {
-  --join: 22vh;
+  --join: var(--section-join);
   position: relative;
   z-index: 20;
   color: var(--ink);
@@ -146,6 +146,7 @@ html.lenis body {
 
 .index-line > span {
   display: block;
+  will-change: transform, opacity;
 }
 
 .space {
@@ -397,17 +398,20 @@ html.lenis body {
   z-index: 3;
   width: min(32rem, calc(100% - 2 * var(--pad)));
   padding: 1.55rem 1.6rem 1.5rem;
-  color: var(--ivory);
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--navy) 10%, transparent);
 }
 
 .stage-card .field-mark {
-  color: var(--peri);
+  color: var(--gold);
 }
 
 .stage-card .lede {
   margin-top: 0.85rem;
   max-width: 34ch;
-  color: color-mix(in srgb, var(--ivory) 84%, transparent);
+  color: var(--steel);
 }
 
 .stage-mark {
@@ -433,7 +437,7 @@ html.lenis body {
   flex-direction: column;
   justify-content: center;
   min-height: clamp(16rem, 38vh, 22rem);
-  background: var(--bg);
+  background: #ffffff;
   padding: clamp(3.6rem, 7vh, 5rem) var(--pad);
   border-top: 1px solid var(--line);
 }
@@ -502,7 +506,7 @@ html.lenis body {
   align-items: center;
   min-height: 0;
   padding: clamp(2rem, 4.5vh, 3rem) var(--pad) 3.5rem;
-  background: var(--bg);
+  background: #ffffff;
 }
 
 .inquiry-copy h2 {

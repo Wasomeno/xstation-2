@@ -618,8 +618,8 @@ export function createField({ root, gsap, reduce }) {
   }
 
   function setFocusFromProgress(p) {
-    // ScrollTrigger's snapped progress can settle a few floating-point ticks
-    // below the requested value (for example 0.639969 instead of 0.64).
+    // Progress sources can settle a few floating-point ticks below the requested
+    // value (for example 0.639969 instead of 0.64).
     const focusProgress = p + 0.0001;
     const sequence = gsap.utils.clamp(0, 1, (focusProgress - FOCUS_START) / (FOCUS_END - FOCUS_START));
 
@@ -777,8 +777,8 @@ export function createField({ root, gsap, reduce }) {
           : currentDockY;
         Object.assign(focusMotion, {
           // Continue from the transform that is actually on screen. This also
-          // keeps a fast scroll jump continuous instead of assigning the final
-          // focused pose on its first frame.
+          // keeps a fast selection change continuous instead of assigning the
+          // final focused pose on its first frame.
           dockX: Number.isFinite(currentDockX) ? currentDockX : dockX,
           dockY: Number.isFinite(currentDockY) ? currentDockY : dockY,
           dockScale: Number.isFinite(currentDockScale) ? currentDockScale : pose.scale,
@@ -874,8 +874,8 @@ export function createField({ root, gsap, reduce }) {
 
   function layoutStation(p) {
     const dockIn = gsap.utils.clamp(0, 1, (p - 0.22) / 0.28);
-    // The scrubbed setup ends at a stable, fully readable dock state. Focus is
-    // triggered later and owns its own non-scrubbed move-and-zoom animation.
+    // The progress-driven setup ends at a stable, fully readable dock state.
+    // Focus is selected later and owns its own move-and-zoom animation.
     const slide = gsap.utils.clamp(0, 1, (p - 0.36) / (DOCK_READY - 0.36));
     const easeSlide = slide * slide * (3 - 2 * slide);
     const pose = stationPose(m);

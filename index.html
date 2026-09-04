@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>XTATION - Your Gateway To Intelligent Products</title>
+    <script>
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+      }
+      window.addEventListener("pageshow", () => window.scrollTo(0, 0));
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <script type="importmap">
       {
@@ -44,6 +50,7 @@
         --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --gold: var(--blue);
         --sans: "Geist", "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --section-join: 22vh;
       }
 
       * {
@@ -80,7 +87,7 @@
 
       #pin-slot {
         position: relative;
-        height: calc(max(100svh, 720px) + 720svh);
+        height: calc(max(100svh, 720px) + var(--section-join));
       }
 
       #root {
@@ -201,16 +208,6 @@
         color: color-mix(in srgb, var(--navy) 58%, var(--peri));
       }
 
-      .welcome-brand {
-        position: absolute;
-        top: 28px;
-        left: clamp(20px, 4vw, 56px);
-        z-index: 5;
-        color: var(--ink);
-        opacity: 0;
-        pointer-events: none;
-      }
-
       .welcome-title-layer {
         position: absolute;
         inset: 0;
@@ -300,8 +297,7 @@
         color: inherit;
       }
 
-      #brand em,
-      .welcome-brand em {
+      #brand em {
         font-family: var(--sans);
         font-style: normal;
         font-weight: 400;
@@ -318,8 +314,7 @@
       }
 
       @supports not (backdrop-filter: blur(8px)) {
-        #brand em,
-        .welcome-brand em {
+        #brand em {
           background: rgb(255 255 255 / 0.72);
         }
       }
@@ -593,10 +588,6 @@
       }
 
       @media (max-width: 767px) {
-        .welcome-brand {
-          top: 22px;
-        }
-
         .welcome-title-layer {
           padding: 12svh 1.1rem 0;
         }
@@ -648,7 +639,6 @@
       <div class="welcome-backdrop"></div>
       <div class="welcome-atmosphere"></div>
       <div class="welcome-field"></div>
-      <div class="welcome-brand"><em>XTATION</em></div>
       <div class="welcome-title-layer">
         <h1 class="welcome-title"><span>Your Gateway To</span><span>Intelligent Products</span></h1>
       </div>

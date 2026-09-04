@@ -44,8 +44,6 @@ const field = createField({
   reduce,
 });
 
-let scroller = null;
-
 function prepareOrbitHero(showInterface = true) {
   field.setMode("pass");
   field.setProgress(DOCK_READY);
@@ -160,188 +158,143 @@ function setOrbitCopy(index, immediate = false) {
     );
 }
 
-function bindPass() {
-  if (reduce || shot || !gsap || !ScrollTrigger) return;
+function startOrbitAutoplay() {
+  if (reduce || shot || !gsap) return;
 
-  gsap.registerPlugin(ScrollTrigger);
+  const initialHold = 3.2;
+  const stationHold = 3.2;
+  const resetHold = 1.8;
+  const lastStation = ORBIT_STORIES.length - 1;
+  const progressForStation = (index) => {
+    return FOCUS_START + ((FOCUS_END - FOCUS_START) * index) / lastStation;
+  };
 
-  const fieldToHeroProgress = (value) => (value - DOCK_READY) / (1 - DOCK_READY);
-  const heroToFieldProgress = (value) => DOCK_READY + value * (1 - DOCK_READY);
-  const focusStart = fieldToHeroProgress(FOCUS_START);
-  const focusEnd = fieldToHeroProgress(FOCUS_END);
-  const orbitSnapPoints = Array.from({ length: ORBIT_STORIES.length }, (_, index) => {
-    const step = ORBIT_STORIES.length - 1;
-    const fieldProgress = FOCUS_START + ((FOCUS_END - FOCUS_START) * index) / step;
-    return fieldToHeroProgress(fieldProgress);
+  const orbitTl = gsap.timeline({
+    paused: true,
+    repeat: -1,
+    repeatDelay: 0.4,
   });
-  const passSnapPoints = [0, ...orbitSnapPoints];
-  let marketingGateComplete = false;
-  let marketingGateActive = false;
-  let marketingMotionDone = false;
-  let marketingInputQuiet = true;
-  let marketingMotionTimer = 0;
-  let marketingQuietTimer = 0;
 
-  function releaseMarketingGate() {
-    if (!marketingGateActive || !marketingMotionDone || !marketingInputQuiet) return;
-    marketingGateActive = false;
-    marketingGateComplete = true;
-    if (scroller) scroller.start();
+  orbitTl.to({}, { duration: initialHold });
+
+  ORBIT_STORIES.forEach((_, index) => {
+    orbitTl
+      .call(() => {
+        field.setMode("pass");
+        field.recedeDock(0);
+        field.setProgress(progressForStation(index));
+        setOrbitCopy(index);
+      })
+      .to({}, { duration: stationHold });
+  });
+
+  orbitTl
+    .call(() => {
+      field.setProgress(DOCK_READY);
+      setOrbitCopy(-1);
+    })
+    .to({}, { duration: resetHold });
+
+  function playWhenWelcomeFinishes() {
+    orbitTl.play();
   }
 
-  function scheduleMarketingInputRelease() {
-    if (!marketingGateActive) return;
-    marketingInputQuiet = false;
-    window.clearTimeout(marketingQuietTimer);
-    marketingQuietTimer = window.setTimeout(() => {
-      marketingInputQuiet = true;
-      releaseMarketingGate();
-    }, 220);
+  if (document.getElementById("welcome-bumper")) {
+    window.addEventListener("xstation:welcome-finished", playWhenWelcomeFinishes, { once: true });
+  } else {
+    playWhenWelcomeFinishes();
   }
 
-  function activateMarketingGate(trigger) {
-    if (marketingGateComplete || marketingGateActive) return;
-    marketingGateActive = true;
-    marketingMotionDone = false;
-    marketingInputQuiet = false;
+  return orbitTl;
+}
 
-    const landing = trigger.start + (trigger.end - trigger.start) * focusStart;
-    if (scroller) {
-      scroller.stop();
-      scroller.scrollTo(landing, { immediate: true, force: true });
-    } else {
-      window.scrollTo(0, landing);
-    }
+function bindSpatialFold(orbitTl) {
+  if (reduce || shot || !gsap || !ScrollTrigger || !orbitTl) return;
 
-    field.setProgress(FOCUS_START);
-    setOrbitCopy(0);
-    scheduleMarketingInputRelease();
+  const isCompact = () => window.matchMedia("(max-width: 767px)").matches;
+  const indexLines = document.querySelectorAll("#index-title .index-line > span");
+  let folded = false;
 
-    window.clearTimeout(marketingMotionTimer);
-    marketingMotionTimer = window.setTimeout(() => {
-      marketingMotionDone = true;
-      releaseMarketingGate();
-    }, 1100);
-  }
-
-  function resetMarketingGate() {
-    window.clearTimeout(marketingMotionTimer);
-    window.clearTimeout(marketingQuietTimer);
-    marketingGateActive = false;
-    marketingGateComplete = false;
-    marketingMotionDone = false;
-    marketingInputQuiet = true;
+  function lockOrbit() {
+    if (folded) return;
+    folded = true;
+    orbitTl.pause();
+    field.setProgress(DOCK_READY);
     setOrbitCopy(-1);
-    if (scroller) scroller.start();
+    field.freezeOrbit();
   }
 
-  window.addEventListener("wheel", scheduleMarketingInputRelease, { passive: true });
-  window.addEventListener("touchmove", scheduleMarketingInputRelease, { passive: true });
-  window.addEventListener("touchend", scheduleMarketingInputRelease, { passive: true });
-
-  function snapPassProgress(value) {
-    if (value < focusStart || value > focusEnd) return value;
-    if (!marketingGateComplete && value >= focusStart) return focusStart;
-    return passSnapPoints.reduce((closest, point) => {
-      return Math.abs(point - value) < Math.abs(closest - value) ? point : closest;
-    }, passSnapPoints[0]);
+  function releaseOrbit() {
+    if (!folded) return;
+    folded = false;
+    field.unfreezeOrbit();
+    orbitTl.restart();
   }
 
-  const passTl = gsap.timeline();
-  passTl.to(
-    {},
-    {
-      duration: 1,
-      ease: "none",
-      onUpdate: function () {
-        const heroProgress = this.progress();
-        const rawProgress = heroToFieldProgress(heroProgress);
-        const progress = !marketingGateComplete && rawProgress >= FOCUS_START
-          ? FOCUS_START
-          : rawProgress;
-        field.setProgress(progress);
-        setOrbitCopy(field.getFocus());
-      },
+  gsap.timeline({
+    defaults: { ease: "none" },
+    scrollTrigger: {
+      id: "orbit-spatial-fold",
+      trigger: "#work",
+      start: "top 92%",
+      end: "top 18%",
+      scrub: 0.8,
+      invalidateOnRefresh: true,
+      onEnter: lockOrbit,
+      onEnterBack: lockOrbit,
+      onLeaveBack: releaseOrbit,
     },
-    0
-  );
+  })
+    .to("#hero-copy", {
+      autoAlpha: 0,
+      y: -42,
+      scale: 0.98,
+      duration: 0.28,
+    }, 0)
+    .to(".dock-node-label", {
+      autoAlpha: 0,
+      duration: 0.2,
+    }, 0)
+    .to(".dock-node", {
+      scale: () => isCompact() ? 0.38 : 0.24,
+      duration: 0.48,
+      ease: "power2.inOut",
+    }, 0.12)
+    .to("#field", {
+      rotationX: () => isCompact() ? 52 : 68,
+      rotationZ: () => isCompact() ? -3 : -6,
+      scale: () => isCompact() ? 0.84 : 0.78,
+      y: () => isCompact() ? "18vh" : "28vh",
+      transformOrigin: "50% 72%",
+      force3D: true,
+      duration: 0.78,
+      ease: "power2.inOut",
+    }, 0.08)
+    .to(".dock-svg", {
+      autoAlpha: 0.62,
+      duration: 0.5,
+    }, 0.25);
 
-  function stationClass(on) {
-    document.documentElement.classList.toggle("is-station", on);
-  }
+  gsap.set(indexLines, {
+    autoAlpha: 0,
+    yPercent: 105,
+  });
 
   ScrollTrigger.create({
-    id: "hero-pass",
-    trigger: "#pin-slot",
-    start: "top top",
-    // Longer pin distance makes each orbit respond to a deliberate scroll, not a nudge.
-    end: () => "+=" + window.innerHeight * 7.2,
-    pin: "#root",
-    pinSpacing: false,
-    anticipatePin: 1,
-    scrub: 0.8,
-    snap: {
-      snapTo: snapPassProgress,
-      delay: 0.06,
-      duration: { min: 0.65, max: 1.15 },
-      ease: "power3.inOut",
-      directional: true,
-      inertia: false,
-    },
-    invalidateOnRefresh: true,
-    animation: passTl,
-    onUpdate: (self) => {
-      stationClass(true);
-      if (field.mode !== "pass") field.setMode("pass");
-      if (!marketingGateComplete && self.direction > 0 && self.progress >= focusStart) {
-        activateMarketingGate(self);
-        return;
-      }
-      if (!marketingGateActive && self.direction < 0 && self.progress <= Math.max(0, focusStart - 0.01)) {
-        resetMarketingGate();
-      }
-    },
-    onLeave: (self) => {
-      if (!marketingGateComplete) {
-        activateMarketingGate(self);
-        return;
-      }
-      stationClass(true);
-      field.setMode("paused");
-      field.recedeDock(1);
-    },
-    onEnterBack: (self) => {
-      field.recedeDock(0);
-      field.setMode("pass");
-      field.setProgress(heroToFieldProgress(self.progress));
-      setOrbitCopy(field.getFocus());
-    },
-    onLeaveBack: () => {
-      resetMarketingGate();
-      stationClass(true);
-      field.recedeDock(0);
-      field.setMode("pass");
-      field.setProgress(DOCK_READY);
+    id: "products-title-enter",
+    trigger: "#work",
+    start: "top 82%",
+    once: true,
+    onEnter: () => {
+      gsap.to(indexLines, {
+        autoAlpha: 1,
+        yPercent: 0,
+        duration: 0.72,
+        stagger: 0.1,
+        ease: "power3.out",
+      });
     },
   });
-
-  window.visualViewport?.addEventListener("resize", () => ScrollTrigger.refresh());
-  window.addEventListener("orientationchange", () => ScrollTrigger.refresh());
-
-  const at = new URLSearchParams(window.location.search).get("at");
-  if (at === "station") {
-    function jumpStation() {
-      ScrollTrigger.refresh();
-      const st = ScrollTrigger.getById("hero-pass");
-      if (!st) return;
-      const y = st.start + (st.end - st.start) * 0.82;
-      if (scroller) scroller.scrollTo(y, { immediate: true });
-      else window.scrollTo(0, y);
-      ScrollTrigger.update();
-    }
-    if (document.readyState === "complete") setTimeout(jumpStation, 80);
-    else window.addEventListener("load", () => setTimeout(jumpStation, 80));
-  }
 }
 
 function bindEnter() {
@@ -408,28 +361,6 @@ function bindParallax() {
 
 }
 
-function bindFieldPause() {
-  if (reduce || shot || !ScrollTrigger) return;
-  let pauseCount = 0;
-  function bump(on) {
-    pauseCount += on ? 1 : -1;
-    if (pauseCount < 0) pauseCount = 0;
-    field.setMode(pauseCount > 0 ? "paused" : "whisper");
-  }
-
-  document.querySelectorAll(".space, .stage").forEach((el) => {
-    ScrollTrigger.create({
-      trigger: el,
-      start: "top 70%",
-      end: "bottom 30%",
-      onEnter: () => bump(true),
-      onLeave: () => bump(false),
-      onEnterBack: () => bump(true),
-      onLeaveBack: () => bump(false),
-    });
-  });
-}
-
 function applyShot() {
   if (!shot) return false;
   document.getElementById("welcome-bumper")?.remove();
@@ -448,21 +379,23 @@ function applyShot() {
 
 const isShot = applyShot();
 
-if (gsap && ScrollTrigger && !isShot) {
-  gsap.registerPlugin(ScrollTrigger);
+if (gsap && !isShot) {
+  if (ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
   const ctx = gsap.context(() => {
-    scroller = smooth();
-    bindPass();
+    smooth();
+    const orbitTl = startOrbitAutoplay();
+    bindSpatialFold(orbitTl);
     bindEnter();
     bindParallax();
-    bindFieldPause();
   }, document.body);
 
-  window.addEventListener("load", () => ScrollTrigger.refresh());
+  if (ScrollTrigger) {
+    window.addEventListener("load", () => ScrollTrigger.refresh());
+  }
   window.addEventListener("pagehide", () => ctx.revert());
 } else if (!isShot) {
-  scroller = smooth();
+  smooth();
 }
 
 if (!isShot) {

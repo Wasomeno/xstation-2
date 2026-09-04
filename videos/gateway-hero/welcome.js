@@ -3,20 +3,11 @@
   if (!bumper) return;
 
   const params = new URLSearchParams(window.location.search);
-  const forceReplay = params.get("welcome") === "1";
   const shot = params.get("shot");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const gsap = window.gsap;
-  const storageKey = "xstation-welcome-seen";
-  let seen = false;
 
-  try {
-    seen = window.sessionStorage.getItem(storageKey) === "1";
-  } catch (_) {
-    seen = false;
-  }
-
-  if (shot || (seen && !forceReplay) || !gsap) {
+  if (shot || !gsap) {
     bumper.remove();
     return;
   }
@@ -94,10 +85,6 @@
     y: reduce ? 0 : 28,
     scale: reduce ? 1 : 0.96,
   });
-  gsap.set(".welcome-brand", {
-    autoAlpha: reduce ? 1 : 0,
-    y: reduce ? 0 : -12,
-  });
   renderField();
 
   const flight = reduce ? null : gsap.to(state, {
@@ -119,11 +106,7 @@
     window.__xstationWelcomeActive = false;
     document.documentElement.classList.remove("is-welcoming");
     bumper.remove();
-    try {
-      window.sessionStorage.setItem(storageKey, "1");
-    } catch (_) {
-      // Storage can be unavailable in privacy-restricted browsing contexts.
-    }
+    window.dispatchEvent(new CustomEvent("xstation:welcome-finished"));
     window.removeEventListener("xstation:orbit-ready", releaseToOrbit);
     window.removeEventListener("pointerup", accelerate);
     window.removeEventListener("wheel", accelerate);
@@ -154,10 +137,10 @@
   const timeline = gsap.timeline({ onComplete: finish });
   if (reduce) {
     timeline
-      .to({}, { duration: 0.3 })
+      .to({}, { duration: 0.9 })
       .addPause("ready", waitForOrbit)
-      .to(bumper, { autoAlpha: 0, duration: 0.32, ease: "power2.inOut" })
-      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.28, ease: "power2.out" }, "<+=0.08");
+      .to(bumper, { autoAlpha: 0, duration: 0.6, ease: "power2.inOut" })
+      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.55, ease: "power2.out" }, "<+=0.12");
   } else {
     timeline
       .to(state, { fieldAlpha: 1, duration: 0.72, ease: "power2.out", onUpdate: renderField }, 0)
@@ -169,22 +152,20 @@
         stagger: 0.08,
         ease: "expo.out",
       }, 0.46)
-      .to(".welcome-brand", { autoAlpha: 1, y: 0, duration: 0.7, ease: "power2.out" }, 0.64)
-      .to({}, { duration: 0.34 })
+      .to({}, { duration: 1.4 })
       .addPause("ready", waitForOrbit)
       .to(titleLines, {
         autoAlpha: 0,
         y: -24,
-        duration: 0.4,
-        stagger: 0.05,
+        duration: 0.65,
+        stagger: 0.08,
         ease: "power3.in",
       })
-      .to(".welcome-brand", { autoAlpha: 0, y: -10, duration: 0.34, ease: "power2.in" }, "<")
-      .to(flight, { timeScale: 3.4, duration: 0.3, ease: "power2.in" }, "<")
-      .to(state, { exit: 1, duration: 0.72, ease: "power3.in", onUpdate: renderField }, "<")
-      .to(".welcome-atmosphere", { autoAlpha: 0, duration: 0.5, ease: "power2.in" }, "<+=0.16")
-      .to(bumper, { autoAlpha: 0, duration: 0.34, ease: "power2.inOut" }, "<+=0.26")
-      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.58, stagger: 0.06, ease: "power3.out" }, "<+=0.08");
+      .to(flight, { timeScale: 3.4, duration: 0.5, ease: "power2.in" }, "<")
+      .to(state, { exit: 1, duration: 1.25, ease: "power3.in", onUpdate: renderField }, "<")
+      .to(".welcome-atmosphere", { autoAlpha: 0, duration: 0.85, ease: "power2.in" }, "<+=0.24")
+      .to(bumper, { autoAlpha: 0, duration: 0.7, ease: "power2.inOut" }, "<+=0.38")
+      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.9, stagger: 0.08, ease: "power3.out" }, "<+=0.12");
   }
 
   window.addEventListener("xstation:orbit-ready", releaseToOrbit);
