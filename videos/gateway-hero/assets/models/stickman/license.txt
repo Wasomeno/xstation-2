@@ -1,0 +1,11 @@
+Model Information:
+* title:	Stickman
+* source:	https://sketchfab.com/3d-models/stickman-76d732e35c23477fae863dfe280b30bb
+* author:	ogulcantopsakal (https://sketchfab.com/ogulcantopsakal)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Stickman" (https://sketchfab.com/3d-models/stickman-76d732e35c23477fae863dfe280b30bb) by ogulcantopsakal (https://sketchfab.com/ogulcantopsakal) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

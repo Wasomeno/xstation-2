@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -49,6 +51,9 @@ const SLAB_SLOTS = [
 
 const BASE_TILT = 0;
 const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
+// Every orbit marker now uses the shared 3D conversation scene. Keep this
+// semantic map intact: its labels still drive the six story transitions and
+// preserve what each marker represents even though text is visually hidden.
 const STATION_NODES = [
   { label: "Marketing & Content", ring: "mid", angle: Math.PI / 2, accent: true },
   { label: "Prototyping", ring: "inner", angle: 0.52, accent: false },
@@ -246,6 +251,492 @@ function createOrbView(host, gsap) {
   };
 }
 
+const STICKMAN_ASSET_URL = new URL("assets/models/stickman/scene.gltf", import.meta.url);
+let stickmanScenePromise = null;
+
+function loadStickmanScene() {
+  if (!stickmanScenePromise) {
+    stickmanScenePromise = new Promise((resolve, reject) => {
+      new GLTFLoader().load(STICKMAN_ASSET_URL.href, (gltf) => resolve(gltf.scene), undefined, reject);
+    });
+  }
+  return stickmanScenePromise;
+}
+
+function makeUpperBodyAsset(source, material, side) {
+  source.updateMatrixWorld(true);
+  let sourceMesh = null;
+  source.traverse((child) => {
+    if (!sourceMesh && child.isMesh) sourceMesh = child;
+  });
+  if (!sourceMesh) return null;
+
+  let geometry = sourceMesh.geometry.clone();
+  geometry.applyMatrix4(sourceMesh.matrixWorld);
+  if (geometry.index) geometry = geometry.toNonIndexed();
+  geometry.computeBoundingBox();
+
+  const bounds = geometry.boundingBox;
+  const width = bounds.max.x - bounds.min.x;
+  const height = bounds.max.y - bounds.min.y;
+  const centerX = (bounds.min.x + bounds.max.x) * 0.5;
+  const shoulderY = bounds.min.y + height * 0.7;
+  const waistY = bounds.min.y + height * 0.47;
+  const shoulderX = width * 0.115;
+  const position = geometry.getAttribute("position");
+  const original = new Float32Array(position.array);
+
+  for (let index = 0; index < position.count; index += 1) {
+    const x = original[index * 3];
+    const y = original[index * 3 + 1];
+    const z = original[index * 3 + 2];
+    const relativeX = x - centerX;
+    const armSide = Math.sign(relativeX);
+    const sitsOnArmBand =
+      Math.abs(relativeX) > shoulderX &&
+      y > shoulderY - height * 0.11 &&
+      y < shoulderY + height * 0.055;
+
+    if (!sitsOnArmBand || armSide === 0) continue;
+
+    const pivotX = centerX + armSide * shoulderX;
+    const innerArm = armSide === -side;
+    const angleMagnitude = THREE.MathUtils.degToRad(innerArm ? 38 : 62);
+    const angle = armSide > 0 ? -angleMagnitude : angleMagnitude;
+    const dx = x - pivotX;
+    const dy = y - shoulderY;
+
+    position.setXYZ(
+      index,
+      pivotX + dx * Math.cos(angle) - dy * Math.sin(angle),
+      shoulderY + dx * Math.sin(angle) + dy * Math.cos(angle),
+      z,
+    );
+  }
+
+  const keptPositions = [];
+  const appendTriangle = (a, b, c) => {
+    keptPositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  };
+  const clipAtWaist = (vertices) => {
+    const clipped = [];
+    for (let index = 0; index < vertices.length; index += 1) {
+      const current = vertices[index];
+      const previous = vertices[(index + vertices.length - 1) % vertices.length];
+      const currentInside = current.originalY >= waistY;
+      const previousInside = previous.originalY >= waistY;
+
+      if (currentInside !== previousInside) {
+        const mix = (waistY - previous.originalY) / (current.originalY - previous.originalY);
+        clipped.push({
+          x: THREE.MathUtils.lerp(previous.x, current.x, mix),
+          y: THREE.MathUtils.lerp(previous.y, current.y, mix),
+          z: THREE.MathUtils.lerp(previous.z, current.z, mix),
+          originalY: waistY,
+        });
+      }
+      if (currentInside) clipped.push(current);
+    }
+    return clipped;
+  };
+
+  for (let offset = 0; offset < position.array.length; offset += 9) {
+    let armTriangle = false;
+    const triangle = [];
+    for (let vertex = 0; vertex < 3; vertex += 1) {
+      const base = offset + vertex * 3;
+      const x = original[base];
+      const y = original[base + 1];
+      armTriangle ||=
+        Math.abs(x - centerX) > shoulderX &&
+        y > shoulderY - height * 0.11 &&
+        y < shoulderY + height * 0.055;
+      triangle.push({
+        x: position.array[base],
+        y: position.array[base + 1],
+        z: position.array[base + 2],
+        originalY: y,
+      });
+    }
+
+    const polygon = armTriangle ? triangle : clipAtWaist(triangle);
+    if (polygon.length < 3) continue;
+    for (let vertex = 1; vertex < polygon.length - 1; vertex += 1) {
+      appendTriangle(polygon[0], polygon[vertex], polygon[vertex + 1]);
+    }
+  }
+
+  geometry.dispose();
+  geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(keptPositions, 3));
+  const unweldedGeometry = geometry;
+  geometry = mergeVertices(unweldedGeometry, 0.0001);
+  unweldedGeometry.dispose();
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const cropped = geometry.boundingBox;
+  const croppedCenterX = (cropped.min.x + cropped.max.x) * 0.5;
+  const croppedCenterZ = (cropped.min.z + cropped.max.z) * 0.5;
+  const croppedHeight = cropped.max.y - cropped.min.y;
+  geometry.translate(-croppedCenterX, -cropped.min.y, -croppedCenterZ);
+
+  const mesh = new THREE.Mesh(geometry, material);
+  const scale = 1.34 / croppedHeight;
+  mesh.scale.setScalar(scale);
+  mesh.position.y = 0.16;
+  return mesh;
+}
+
+function createConversationView(host, reduce, phase = 0, characterStyle = "stick") {
+  const canvas = document.createElement("canvas");
+  canvas.className = "orbit-conversation-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
+  });
+  if (!renderer.getContext()) {
+    canvas.remove();
+    return null;
+  }
+
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(200, 200, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
+  camera.position.set(0, 1.2, 7.5);
+  camera.lookAt(0, 1.12, 0);
+
+  scene.add(new THREE.HemisphereLight(0xf7faf7, 0x092328, 2.4));
+  const key = new THREE.DirectionalLight(0xffffff, 3.2);
+  key.position.set(-3, 5, 6);
+  scene.add(key);
+  const edge = new THREE.DirectionalLight(0x8bbb92, 2.1);
+  edge.position.set(4, 2, 3);
+  scene.add(edge);
+
+  const darkMaterial = new THREE.MeshStandardMaterial({
+    color: 0x092328,
+    roughness: 0.48,
+    metalness: 0.04,
+  });
+  const greenMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a835f,
+    roughness: 0.42,
+    metalness: 0.03,
+  });
+  const paleMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf7faf7,
+    roughness: 0.28,
+    metalness: 0.02,
+  });
+  const dotMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a835f,
+    roughness: 0.34,
+  });
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x092328,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+  });
+  const inactivePalette = {
+    dark: new THREE.Color(0x717977),
+    light: new THREE.Color(0xaeb4b1),
+    bubble: new THREE.Color(0xdfe3e1),
+    dot: new THREE.Color(0x7f8784),
+  };
+  const focusedPalette = {
+    dark: new THREE.Color(0x174f3d),
+    light: new THREE.Color(0x2a835f),
+    bubble: new THREE.Color(0xe5f0e7),
+    dot: new THREE.Color(0x2a835f),
+  };
+
+  const capsuleGeometry = new THREE.CapsuleGeometry(0.075, 0.5, 6, 12);
+  const torsoGeometry = new THREE.CapsuleGeometry(0.11, 0.58, 6, 12);
+  const headGeometry = new THREE.SphereGeometry(0.22, 24, 18);
+  const dotGeometry = new THREE.SphereGeometry(0.055, 18, 12);
+  const shadowGeometry = new THREE.CircleGeometry(0.42, 32);
+
+  function limb(material, length = 0.58, geometry = capsuleGeometry, sourceLength = 0.65) {
+    const pivot = new THREE.Group();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.scale.y = length / sourceLength;
+    mesh.position.y = -length * 0.5;
+    pivot.add(mesh);
+    return pivot;
+  }
+
+  function makePerson(material, side) {
+    const person = new THREE.Group();
+    person.rotation.y = side * -0.12;
+
+    if (characterStyle === "upper-body") {
+      person.position.x = side * 0.54;
+      return { person, model: null };
+    }
+
+    person.position.x = side * 0.57;
+
+    const torso = new THREE.Mesh(torsoGeometry, material);
+    torso.position.y = 0.92;
+    torso.rotation.z = side * 0.04;
+    person.add(torso);
+
+    const head = new THREE.Mesh(headGeometry, material);
+    head.position.set(side * -0.015, 1.58, 0);
+    person.add(head);
+
+    const outerArm = limb(material, 0.62);
+    outerArm.position.set(side * 0.16, 1.25, 0);
+    outerArm.rotation.z = side * -0.12;
+    person.add(outerArm);
+
+    const talkingArm = limb(material, 0.56);
+    talkingArm.position.set(side * -0.16, 1.25, 0.02);
+    talkingArm.rotation.z = side * 0.72;
+    person.add(talkingArm);
+
+    const outerLeg = limb(material, 0.72);
+    outerLeg.position.set(side * 0.095, 0.57, 0);
+    outerLeg.rotation.z = side * -0.13;
+    person.add(outerLeg);
+
+    const innerLeg = limb(material, 0.72);
+    innerLeg.position.set(side * -0.095, 0.57, 0);
+    innerLeg.rotation.z = side * 0.13;
+    person.add(innerLeg);
+
+    const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+    shadow.position.set(0, -0.17, -0.08);
+    shadow.scale.set(0.92, 0.3, 1);
+    shadow.rotation.x = -Math.PI / 2;
+    person.add(shadow);
+
+    return { person, torso, head, talkingArm };
+  }
+
+  function roundedBubbleShape() {
+    const shape = new THREE.Shape();
+    const left = -0.72;
+    const right = 0.72;
+    const bottom = -0.22;
+    const top = 0.28;
+    const radius = 0.16;
+
+    shape.moveTo(left + radius, bottom);
+    shape.lineTo(0.12, bottom);
+    shape.lineTo(0.27, -0.42);
+    shape.lineTo(0.34, bottom);
+    shape.lineTo(right - radius, bottom);
+    shape.quadraticCurveTo(right, bottom, right, bottom + radius);
+    shape.lineTo(right, top - radius);
+    shape.quadraticCurveTo(right, top, right - radius, top);
+    shape.lineTo(left + radius, top);
+    shape.quadraticCurveTo(left, top, left, top - radius);
+    shape.lineTo(left, bottom + radius);
+    shape.quadraticCurveTo(left, bottom, left + radius, bottom);
+    return shape;
+  }
+
+  const conversation = new THREE.Group();
+  const conversationBaseY = characterStyle === "upper-body" ? -0.48 : -0.66;
+  const conversationBaseScale = characterStyle === "upper-body" ? 1.08 : 1;
+  conversation.position.y = conversationBaseY;
+  conversation.scale.setScalar(conversationBaseScale);
+  scene.add(conversation);
+
+  const leftPerson = makePerson(darkMaterial, -1);
+  const rightPerson = makePerson(greenMaterial, 1);
+  conversation.add(leftPerson.person, rightPerson.person);
+  const assetGeometries = [];
+
+  if (characterStyle === "upper-body") {
+    loadStickmanScene()
+      .then((asset) => {
+        if (disposed) return;
+        leftPerson.model = makeUpperBodyAsset(asset, darkMaterial, -1);
+        rightPerson.model = makeUpperBodyAsset(asset, greenMaterial, 1);
+        [leftPerson, rightPerson].forEach((figure) => {
+          if (!figure.model) return;
+          figure.person.add(figure.model);
+          assetGeometries.push(figure.model.geometry);
+        });
+      })
+      .catch(() => {});
+  }
+
+  const bubbleGroup = new THREE.Group();
+  const bubbleBaseY = characterStyle === "upper-body" ? 1.78 : 1.98;
+  bubbleGroup.position.set(0.04, bubbleBaseY, 0.05);
+  conversation.add(bubbleGroup);
+
+  const bubbleGeometry = new THREE.ExtrudeGeometry(roundedBubbleShape(), {
+    depth: 0.09,
+    steps: 1,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize: 0.025,
+    bevelThickness: 0.025,
+  });
+  bubbleGeometry.center();
+  const bubble = new THREE.Mesh(bubbleGeometry, paleMaterial);
+  bubble.position.z = -0.03;
+  bubbleGroup.add(bubble);
+
+  const dots = [-0.24, 0, 0.24].map((x) => {
+    const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+    dot.position.set(x, 0.035, 0.11);
+    bubbleGroup.add(dot);
+    return dot;
+  });
+
+  const TWO_PI = Math.PI * 2;
+  const ENTRY_DURATION = 1.15;
+  const EXIT_DURATION = 0.72;
+  const ACTIVE_SCALE = 1.3;
+  const LOOP_DURATION = 24;
+  const easeOutQuart = (value) => 1 - Math.pow(1 - value, 4);
+
+  let frame = 0;
+  let disposed = false;
+  let isHovered = false;
+  let isFocused = host.classList.contains("is-focus");
+  let wasFocused = false;
+  let greenMix = isFocused ? 1 : 0;
+  let focusStartedAt = 0;
+  let focusStartScale = 1;
+  let focusStartRotation = 0;
+  let exitStartedAt = 0;
+  let exitStartScale = 1;
+  let exitStartRotation = 0;
+  let exitTargetRotation = 0;
+  let exitStartTilt = 0;
+  let modelScale = 1;
+  let modelRotation = 0;
+  let modelTilt = 0;
+
+  const render = (time = window.performance.now()) => {
+    if (disposed) return;
+    const motionTime = time * 0.001;
+    const seconds = motionTime + phase;
+
+    if (!reduce) {
+      conversation.position.y = conversationBaseY + Math.sin(seconds * 1.15) * 0.025;
+      if (characterStyle === "upper-body") {
+        leftPerson.person.rotation.z = -0.025 + Math.sin(seconds * 1.45) * 0.018;
+        rightPerson.person.rotation.z = 0.025 - Math.sin(seconds * 1.45 + 0.8) * 0.018;
+      } else {
+        leftPerson.torso.rotation.z = -0.04 + Math.sin(seconds * 1.35) * 0.025;
+        rightPerson.torso.rotation.z = 0.04 - Math.sin(seconds * 1.35 + 0.8) * 0.025;
+        leftPerson.head.rotation.z = Math.sin(seconds * 1.55) * 0.055;
+        rightPerson.head.rotation.z = -Math.sin(seconds * 1.55 + 0.9) * 0.055;
+        leftPerson.talkingArm.rotation.z = -0.72 - Math.sin(seconds * 2.1) * 0.18;
+        rightPerson.talkingArm.rotation.z = 0.72 + Math.sin(seconds * 1.85 + 1.1) * 0.16;
+      }
+      bubbleGroup.position.y = bubbleBaseY + Math.sin(seconds * 1.4 + 0.35) * 0.045;
+      dots.forEach((dot, index) => {
+        const pulse = 0.82 + (Math.sin(seconds * 3.1 - index * 0.72) + 1) * 0.12;
+        dot.scale.setScalar(pulse);
+      });
+    }
+
+    if (reduce) {
+      modelScale = isFocused ? ACTIVE_SCALE : 1;
+      modelRotation = 0;
+      modelTilt = 0;
+    } else {
+      if (isFocused && !wasFocused) {
+        focusStartedAt = motionTime;
+        focusStartScale = modelScale;
+        focusStartRotation = modelRotation;
+      } else if (!isFocused && wasFocused) {
+        exitStartedAt = motionTime;
+        exitStartScale = modelScale;
+        exitStartRotation = modelRotation;
+        exitTargetRotation = Math.round(modelRotation / TWO_PI) * TWO_PI;
+        exitStartTilt = modelTilt;
+      }
+
+      if (isFocused) {
+        const elapsed = Math.max(0, motionTime - focusStartedAt);
+        const entryProgress = THREE.MathUtils.clamp(elapsed / ENTRY_DURATION, 0, 1);
+        const entryEase = easeOutQuart(entryProgress);
+        const loopTime = Math.max(0, elapsed - ENTRY_DURATION);
+        modelScale = THREE.MathUtils.lerp(focusStartScale, ACTIVE_SCALE, entryEase);
+        modelRotation =
+          focusStartRotation + TWO_PI * entryEase + (loopTime / LOOP_DURATION) * TWO_PI;
+        modelTilt = Math.sin((loopTime / LOOP_DURATION) * TWO_PI) * 0.09 * entryEase;
+      } else if (wasFocused || modelScale !== 1 || modelRotation !== exitTargetRotation) {
+        const exitProgress = THREE.MathUtils.clamp((motionTime - exitStartedAt) / EXIT_DURATION, 0, 1);
+        const exitEase = easeOutQuart(exitProgress);
+        modelScale = THREE.MathUtils.lerp(exitStartScale, 1, exitEase);
+        modelRotation = THREE.MathUtils.lerp(exitStartRotation, exitTargetRotation, exitEase);
+        modelTilt = THREE.MathUtils.lerp(exitStartTilt, 0, exitEase);
+      }
+    }
+
+    wasFocused = isFocused;
+    conversation.scale.setScalar(conversationBaseScale * modelScale);
+    conversation.rotation.set(modelTilt, modelRotation, 0);
+
+    const greenTarget = isHovered || isFocused ? 1 : 0;
+    greenMix += (greenTarget - greenMix) * (reduce ? 1 : 0.1);
+    darkMaterial.color.lerpColors(inactivePalette.dark, focusedPalette.dark, greenMix);
+    greenMaterial.color.lerpColors(inactivePalette.light, focusedPalette.light, greenMix);
+    paleMaterial.color.lerpColors(inactivePalette.bubble, focusedPalette.bubble, greenMix);
+    dotMaterial.color.lerpColors(inactivePalette.dot, focusedPalette.dot, greenMix);
+
+    renderer.render(scene, camera);
+    if (!reduce) frame = window.requestAnimationFrame(render);
+  };
+
+  host.classList.add("is-conversation");
+  render();
+
+  return {
+    setHovered(next) {
+      isHovered = Boolean(next);
+      if (reduce) render();
+    },
+    setFocused(next) {
+      isFocused = Boolean(next);
+      if (reduce) render();
+    },
+    dispose() {
+      disposed = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      renderer.dispose();
+      capsuleGeometry.dispose();
+      torsoGeometry.dispose();
+      headGeometry.dispose();
+      dotGeometry.dispose();
+      shadowGeometry.dispose();
+      bubbleGeometry.dispose();
+      assetGeometries.forEach((geometry) => geometry.dispose());
+      darkMaterial.dispose();
+      greenMaterial.dispose();
+      paleMaterial.dispose();
+      dotMaterial.dispose();
+      shadowMaterial.dispose();
+    },
+  };
+}
+
 function noopController() {
   return {
     items: [],
@@ -385,6 +876,16 @@ export function createField({ root, gsap, reduce }) {
     el.appendChild(label);
     dock.appendChild(el);
     return { el, spec, spoke: spokes[index], x: 0, y: 0 };
+  });
+
+  const conversationViews = nodes.map((node, index) => {
+    try {
+      node.el.setAttribute("aria-label", node.spec.label);
+      const characterStyle = node.spec.label === "Talent Assessment" ? "upper-body" : "stick";
+      return createConversationView(node.el, reduce, index * 0.68, characterStyle);
+    } catch (err) {
+      return null;
+    }
   });
 
   let hover = null;
@@ -588,7 +1089,10 @@ export function createField({ root, gsap, reduce }) {
 
   function clearHot() {
     dock.classList.remove("is-orb-hot");
-    nodes.forEach((node) => node.el.classList.remove("is-hot"));
+    nodes.forEach((node, index) => {
+      node.el.classList.remove("is-hot");
+      conversationViews[index]?.setHovered(false);
+    });
     nodes.forEach((node) => node.spoke.classList.remove("is-hot"));
     Object.keys(ringEls).forEach((key) => ringEls[key].classList.remove("is-hot"));
     alignLine.classList.remove("is-hot");
@@ -603,12 +1107,16 @@ export function createField({ root, gsap, reduce }) {
     }
     if (hover === "orb") {
       dock.classList.add("is-orb-hot");
-      nodes.forEach((node) => node.el.classList.add("is-hot"));
+      nodes.forEach((node, index) => {
+        node.el.classList.add("is-hot");
+        conversationViews[index]?.setHovered(true);
+      });
       nodes.forEach((node) => node.spoke.classList.add("is-hot"));
       Object.keys(ringEls).forEach((key) => ringEls[key].classList.add("is-hot"));
       return;
     }
     hover.el.classList.add("is-hot");
+    conversationViews[nodes.indexOf(hover)]?.setHovered(true);
     hover.spoke.classList.add("is-hot");
     ringEls[hover.spec.ring].classList.add("is-hot");
     ringCore.classList.add("is-hot");
@@ -802,7 +1310,9 @@ export function createField({ root, gsap, reduce }) {
     }
 
     nodes.forEach((node, index) => {
-      node.el.classList.toggle("is-focus", focused && index === focusIndex);
+      const isActive = focused && index === focusIndex;
+      node.el.classList.toggle("is-focus", isActive);
+      conversationViews[index]?.setFocused(isActive);
     });
     Object.entries(ringEls).forEach(([name, ring]) => {
       ring.classList.toggle("is-focus", name === activeRing);
@@ -1177,6 +1687,7 @@ export function createField({ root, gsap, reduce }) {
       if (focusSnapTween) focusSnapTween.kill();
       if (focusExitTween) focusExitTween.kill();
       if (orbView) orbView.dispose();
+      conversationViews.forEach((view) => view?.dispose());
       slabs.forEach((it) => {
         it.el.style.willChange = "auto";
       });
