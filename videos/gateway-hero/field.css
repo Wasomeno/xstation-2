@@ -67,6 +67,24 @@
   stroke-dasharray: none;
 }
 
+.dock-spoke {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+  stroke-dasharray: 2 7;
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke-opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    stroke-width 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.dock-spoke.is-hot,
+.is-orb-hot .dock-spoke {
+  stroke-opacity: 0.66;
+  stroke-width: 1.35;
+}
+
 .dock-align {
   fill: none;
   stroke: var(--ink);

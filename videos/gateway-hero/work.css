@@ -22,8 +22,7 @@ html {
   pointer-events: none;
 }
 
-#work-root > section,
-#work-root > footer {
+#work-root > section {
   pointer-events: auto;
 }
 
@@ -131,7 +130,7 @@ html.lenis body {
 .index-mark {
   margin: 0;
   max-width: 11em;
-  font-size: clamp(2.25rem, 5.8vw, 4.6rem);
+  font-size: clamp(2.15rem, 4.6vw, 3.7rem);
   font-weight: 400;
   letter-spacing: -0.05em;
   line-height: 1.02;
@@ -439,16 +438,15 @@ html.lenis body {
   min-height: clamp(16rem, 38vh, 22rem);
   background: #ffffff;
   padding: clamp(3.6rem, 7vh, 5rem) var(--pad);
-  border-top: 1px solid var(--line);
 }
 
 .clients-title {
   margin: 0 0 clamp(1.5rem, 3.2vh, 2.2rem);
-  font-size: clamp(1.02rem, 1.5vw, 1.18rem);
+  font-size: clamp(2.15rem, 4.6vw, 3.7rem);
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  color: var(--steel);
+  color: var(--ink);
 }
 
 .client-list {
@@ -501,9 +499,10 @@ html.lenis body {
 
 .inquiry {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
-  gap: clamp(2rem, 6vw, 5rem);
+  grid-template-columns: max-content minmax(16rem, 22rem);
+  gap: clamp(1.5rem, 3vw, 3rem);
   align-items: center;
+  justify-content: center;
   min-height: 0;
   padding: clamp(2rem, 4.5vh, 3rem) var(--pad) 3.5rem;
   background: #ffffff;
@@ -553,22 +552,6 @@ html.lenis body {
 
 .inquiry-qr:active {
   transform: scale(0.98);
-}
-
-.work-end {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.2rem var(--pad) 1.6rem;
-  font-size: 0.82rem;
-  color: var(--dim);
-  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-  background: var(--bg);
-}
-
-.work-end a:hover {
-  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -622,13 +605,23 @@ html.lenis body {
     order: 0;
   }
 
+  .inquiry {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .inquiry-code {
+    justify-self: center;
+  }
+
   .space-stage,
   .space-panel {
     min-height: 20.8rem;
   }
 
-  .index-mark {
-    font-size: clamp(2.05rem, 8.4vw, 3.4rem);
+  .index-mark,
+  .clients-title {
+    font-size: clamp(2rem, 6.4vw, 3.1rem);
   }
 }
 
@@ -702,12 +695,8 @@ html.lenis body {
   }
 
   .inquiry-code {
-    justify-self: start;
+    justify-self: center;
     width: min(100%, 16rem);
   }
 
-  .work-end {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }

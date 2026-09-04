@@ -347,6 +347,17 @@ export function createField({ root, gsap, reduce }) {
   const ringInner = svgEl("circle", { class: "dock-ring is-inner", cx: "0", cy: "0" });
   const ringMid = svgEl("circle", { class: "dock-ring is-mid", cx: "0", cy: "0" });
   const ringOuter = svgEl("circle", { class: "dock-ring is-outer", cx: "0", cy: "0" });
+  const spokeGroup = svgEl("g", { class: "dock-spokes" });
+  const spokes = STATION_NODES.map(() =>
+    svgEl("line", {
+      class: "dock-spoke",
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "0",
+    }),
+  );
+  spokeGroup.append(...spokes);
   const alignLine = svgEl("line", {
     class: "dock-align",
     x1: "0",
@@ -354,7 +365,7 @@ export function createField({ root, gsap, reduce }) {
     x2: "0",
     y2: "0",
   });
-  svg.append(ringCore, ringInner, ringMid, ringOuter, alignLine);
+  svg.append(spokeGroup, ringCore, ringInner, ringMid, ringOuter, alignLine);
   dock.appendChild(svg);
 
   const ringEls = {
@@ -364,7 +375,7 @@ export function createField({ root, gsap, reduce }) {
     core: ringCore,
   };
 
-  const nodes = STATION_NODES.map((spec) => {
+  const nodes = STATION_NODES.map((spec, index) => {
     const el = document.createElement("div");
     el.className = "dock-node" + (spec.accent ? " is-accent" : "");
     if (spec.label === "Products") el.setAttribute("data-dock", "products");
@@ -373,7 +384,7 @@ export function createField({ root, gsap, reduce }) {
     label.textContent = spec.label;
     el.appendChild(label);
     dock.appendChild(el);
-    return { el, spec, x: 0, y: 0 };
+    return { el, spec, spoke: spokes[index], x: 0, y: 0 };
   });
 
   let hover = null;
@@ -558,6 +569,19 @@ export function createField({ root, gsap, reduce }) {
     return m.r;
   }
 
+  function layoutSpokes() {
+    const orbEdge = m.hub * 1.24;
+    nodes.forEach((node) => {
+      const length = Math.hypot(node.x, node.y) || 1;
+      const inwardX = (node.x / length) * orbEdge;
+      const inwardY = (node.y / length) * orbEdge;
+      node.spoke.setAttribute("x1", node.x.toFixed(2));
+      node.spoke.setAttribute("y1", node.y.toFixed(2));
+      node.spoke.setAttribute("x2", inwardX.toFixed(2));
+      node.spoke.setAttribute("y2", inwardY.toFixed(2));
+    });
+  }
+
   function layoutOrbs(t, gain, pose) {
     if (orbView) orbView.layout(t, m.hub, gain, m.compact, pose);
   }
@@ -565,6 +589,7 @@ export function createField({ root, gsap, reduce }) {
   function clearHot() {
     dock.classList.remove("is-orb-hot");
     nodes.forEach((node) => node.el.classList.remove("is-hot"));
+    nodes.forEach((node) => node.spoke.classList.remove("is-hot"));
     Object.keys(ringEls).forEach((key) => ringEls[key].classList.remove("is-hot"));
     alignLine.classList.remove("is-hot");
   }
@@ -579,10 +604,12 @@ export function createField({ root, gsap, reduce }) {
     if (hover === "orb") {
       dock.classList.add("is-orb-hot");
       nodes.forEach((node) => node.el.classList.add("is-hot"));
+      nodes.forEach((node) => node.spoke.classList.add("is-hot"));
       Object.keys(ringEls).forEach((key) => ringEls[key].classList.add("is-hot"));
       return;
     }
     hover.el.classList.add("is-hot");
+    hover.spoke.classList.add("is-hot");
     ringEls[hover.spec.ring].classList.add("is-hot");
     ringCore.classList.add("is-hot");
     alignLine.classList.add("is-hot");
@@ -827,6 +854,8 @@ export function createField({ root, gsap, reduce }) {
         node.el.style.pointerEvents = "none";
       });
     }
+
+    layoutSpokes();
 
     if (orbView && orbView.canvas) {
       orbView.canvas.style.pointerEvents = live ? "auto" : "none";

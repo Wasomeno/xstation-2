@@ -120,9 +120,9 @@
         transition: background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
-      html.is-station #field-stage {
+      /* html.is-station #field-stage {
         background: color-mix(in srgb, var(--sky) 18%, #ffffff);
-      }
+      } */
 
       #field {
         position: absolute;
@@ -704,18 +704,21 @@
         </div>
       </section>
 
-      <section class="stage is-app" id="hireassess" aria-labelledby="hireassess-title">
-        <div class="stage-media">
-          <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="HireAssess assessment form" width="1280" height="720" loading="lazy" decoding="async" />
+      <section class="space is-app" id="hireassess" aria-labelledby="hireassess-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="HireAssess assessment form" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>HireAssess</strong></p>
         </div>
-        <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Technical Hiring</p>
-          <h2 class="stage-mark js-enter-child" id="hireassess-title">HireAssess</h2>
-          <p class="lede js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
-        </aside>
+        <div class="space-panel js-enter">
+          <div class="space-copy">
+            <p class="field-mark js-enter-child">Technical Hiring</p>
+            <h2 id="hireassess-title" class="js-enter-child">HireAssess</h2>
+            <p class="lede js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
+          </div>
+        </div>
       </section>
 
-      <section class="space is-app" id="arkiv" aria-labelledby="arkiv-title">
+      <section class="space is-app is-flip" id="arkiv" aria-labelledby="arkiv-title">
         <div class="space-stage">
           <img class="hero" src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" alt="Arkiv dashboard" width="1280" height="720" loading="lazy" decoding="async" />
           <p class="space-caption"><strong>Arkiv</strong></p>
@@ -730,7 +733,7 @@
         </div>
       </section>
 
-      <section class="space is-flip" id="ainya" aria-labelledby="ainya-title">
+      <section class="space" id="ainya" aria-labelledby="ainya-title">
         <div class="space-stage">
           <img class="hero" src="videos/gateway-hero/media/aether.jpg" alt="CRM AI Agent" width="1280" height="720" loading="lazy" decoding="async" />
           <p class="space-caption"><strong>CRM AI Agent</strong></p>
@@ -745,15 +748,18 @@
         </div>
       </section>
 
-      <section class="stage" id="codev" aria-labelledby="codev-title">
-        <div class="stage-media">
-          <img src="videos/gateway-hero/media/signal.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
+      <section class="space is-flip" id="codev" aria-labelledby="codev-title">
+        <div class="space-stage">
+          <img class="hero" src="videos/gateway-hero/media/signal.jpg" alt="Codev software development workspace" width="1280" height="720" loading="lazy" decoding="async" />
+          <p class="space-caption"><strong>Codev</strong></p>
         </div>
-        <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Software Development</p>
-          <h2 class="stage-mark js-enter-child" id="codev-title">Codev</h2>
-          <p class="lede js-enter-child">Codev is an agent in the XTATION lineup.</p>
-        </aside>
+        <div class="space-panel js-enter">
+          <div class="space-copy">
+            <p class="field-mark js-enter-child">Software Development</p>
+            <h2 id="codev-title" class="js-enter-child">Codev</h2>
+            <p class="lede js-enter-child">Codev is an agent in the XTATION lineup.</p>
+          </div>
+        </div>
       </section>
 
       <section class="space" id="coframe" aria-labelledby="coframe-title">
@@ -784,17 +790,6 @@
           </div>
 
         </div>
-      </section>
-
-      <section class="stage" id="review-kontrak" aria-labelledby="review-kontrak-title">
-        <div class="stage-media">
-          <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-        </div>
-        <aside class="stage-card js-enter">
-          <p class="field-mark js-enter-child">Contract Review</p>
-          <h2 class="stage-mark js-enter-child" id="review-kontrak-title">Review Kontrak</h2>
-          <p class="lede js-enter-child">A legal product for reviewing contracts.</p>
-        </aside>
       </section>
 
       <section class="clients" id="clients" aria-labelledby="clients-title">
@@ -833,10 +828,6 @@
         </figure>
       </section>
 
-      <footer class="work-end">
-        <span>XTATION, 2026</span>
-        <a href="mailto:hello@xstation">hello@xstation</a>
-      </footer>
     </div>
 
     <script src="videos/gateway-hero/welcome.js"></script>
