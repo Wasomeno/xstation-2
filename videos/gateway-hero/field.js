@@ -4,7 +4,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 const NS = "http://www.w3.org/2000/svg";
 
 const SLAB_DURATION = 8;
-const DOCK_DURATION = 20;
+const DOCK_DURATION = 36;
 const WHISPER_DURATION = 18;
 const ORBIT_RENDER_SCALE = 0.8;
 // Give the orbit sequence a longer, quieter section of the pinned scroll.
@@ -12,10 +12,9 @@ const ORBIT_RENDER_SCALE = 0.8;
 export const FOCUS_START = 0.64;
 export const FOCUS_END = 0.98;
 export const DOCK_READY = 0.58;
-const FOCUS_ZOOM = 1.4;
+const FOCUS_ZOOM = 1.85;
 // GSAP's rotation property is in degrees. Every selected station rotates to the
-// left edge of its ring, then the dock shifts so that station lands on one
-// shared screen-space anchor beside the copy.
+// left edge of its ring while the enlarged dock remains locked in place.
 const FOCUS_TARGET_ANGLE = 180;
 const DEG_TO_RAD = Math.PI / 180;
 const FAR = -1880;
@@ -129,12 +128,14 @@ function heroPose(m) {
   return { x: m.w * 0.2, y: m.h * 0.02, scale: 0.96 * ORBIT_RENDER_SCALE };
 }
 
-function focusAnchor(m, scale) {
-  const nodeRadius = (m.compact ? 29 : 39) * scale;
-  const gutter = nodeRadius + (m.compact ? 18 : 28);
+function focusedStationPose(m, zoom = FOCUS_ZOOM) {
+  const pose = stationPose(m);
   return {
-    x: Math.min(m.w - gutter, Math.max(gutter, m.w * (m.compact ? 0.5 : 0.72))),
-    y: Math.min(m.h - gutter, Math.max(gutter, m.h * (m.compact ? 0.7 : 0.52))),
+    // The dock's CSS origin is 50vw / 48vh. Keep the focused center at the
+    // right edge so only the left half of the enlarged orbit remains visible.
+    x: m.w * (m.compact ? 0.48 : 0.52),
+    y: m.h * 0.04,
+    scale: pose.scale * zoom,
   };
 }
 
@@ -402,9 +403,6 @@ export function createField({ root, gsap, reduce }) {
     dockScale: 1,
     orbX: 0,
     orbY: 0,
-    originX: 0,
-    originY: 0,
-    focusPosition: 0,
     rotation: 0,
   };
   let focusMotionReady = false;
@@ -474,9 +472,6 @@ export function createField({ root, gsap, reduce }) {
       dockScale: pose.scale,
       orbX: pose.x,
       orbY: pose.y,
-      originX: 0,
-      originY: 0,
-      focusPosition: 0,
       rotation: nearestRotation(0, focusMotion.rotation),
       duration: 0.82,
       ease: "power3.inOut",
@@ -730,39 +725,22 @@ export function createField({ root, gsap, reduce }) {
     const activeRing = focused ? nodes[focusIndex]?.spec.ring : null;
 
     if (focused) {
-      const visualIndex = focusIndex;
-      const nextIndex = Math.min(nodes.length - 1, visualIndex + 1);
-      const current = nodes[visualIndex];
-      const next = nodes[nextIndex];
-      const local = focused && focusIndex !== nextIndex ? focusLocal : 0;
-      const easedLocal = local * local * (3 - 2 * local);
-      const focusX = current.x + (next.x - current.x) * easedLocal;
-      const focusY = current.y + (next.y - current.y) * easedLocal;
       const pose = stationPose(m);
-      const targetScale = pose.scale * focusZoom;
-      const dockScale = targetScale;
-      const motionRotation = focusRotationTarget;
-      const targetRotation = focusRotationTarget * DEG_TO_RAD;
-      const rotatedFocusX = focusX * Math.cos(targetRotation) - focusY * Math.sin(targetRotation);
-      const rotatedFocusY = focusX * Math.sin(targetRotation) + focusY * Math.cos(targetRotation);
-      const anchor = focusAnchor(m, targetScale);
-      // The dock is based at 50vw / 48vh. Offset the selected node's final
-      // vector so every ring lands on the exact same visible point.
-      const dockX = anchor.x - m.w * 0.5 - rotatedFocusX * targetScale;
-      const dockY = anchor.y - m.h * 0.48 - rotatedFocusY * targetScale;
+      const focusedPose = focusedStationPose(m, focusZoom);
+      // Focus framing is independent from the active node. This means changing
+      // stations can only rotate the orbital geometry; it cannot pan the dock.
+      const dockX = focusedPose.x;
+      const dockY = focusedPose.y;
+      const dockScale = focusedPose.scale;
       const orbX = dockX;
       const orbY = dockY;
-      const focusPosition = focused ? focusIndex + focusLocal : 0;
       const focusValues = {
         dockX,
         dockY,
         dockScale,
         orbX,
         orbY,
-        originX: focusX,
-        originY: focusY,
-        focusPosition,
-        rotation: motionRotation,
+        rotation: focusRotationTarget,
       };
 
       if (!focusMotionReady) {
@@ -784,9 +762,6 @@ export function createField({ root, gsap, reduce }) {
           dockScale: Number.isFinite(currentDockScale) ? currentDockScale : pose.scale,
           orbX: Number.isFinite(currentOrbX) ? currentOrbX : orbX,
           orbY: Number.isFinite(currentOrbY) ? currentOrbY : orbY,
-          originX: focusX,
-          originY: focusY,
-          focusPosition,
           rotation: focusMotion.rotation,
         });
         focusMotionReady = true;
@@ -917,6 +892,10 @@ export function createField({ root, gsap, reduce }) {
     if (orbitFrozen) return;
     const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
     if (idleTl) {
+      // setMode("pass") can run before passP reaches the dock range. Keep the
+      // timeline duration in sync here so the default hero orbit uses the
+      // slower dock cycle instead of retaining the earlier slab duration.
+      idleTl.duration(p < 0.55 ? SLAB_DURATION : DOCK_DURATION);
       idleTl.timeScale(p < 0.55 ? 1 + 2.2 * u : 1);
       if (focusFrozen) idleTl.pause();
       else if (idleTl.paused()) idleTl.play();
