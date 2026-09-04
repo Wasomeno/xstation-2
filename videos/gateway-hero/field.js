@@ -121,16 +121,16 @@ function metrics() {
 
 function stationPose(m) {
   if (m.compact) {
-    return { x: m.w * 0.2, y: m.h * 0.2, scale: 0.62 * ORBIT_RENDER_SCALE };
+    return { x: m.w * 0.22, y: m.h * 0.2, scale: 0.62 * ORBIT_RENDER_SCALE };
   }
-  return { x: m.w * 0.2, y: m.h * 0.01, scale: 0.96 * ORBIT_RENDER_SCALE };
+  return { x: m.w * 0.22, y: m.h * 0.01, scale: 0.96 * ORBIT_RENDER_SCALE };
 }
 
 function heroPose(m) {
   if (m.compact) {
-    return { x: m.w * 0.2, y: m.h * 0.18, scale: 0.62 * ORBIT_RENDER_SCALE };
+    return { x: m.w * 0.22, y: m.h * 0.18, scale: 0.62 * ORBIT_RENDER_SCALE };
   }
-  return { x: m.w * 0.2, y: m.h * 0.02, scale: 0.96 * ORBIT_RENDER_SCALE };
+  return { x: m.w * 0.22, y: m.h * 0.02, scale: 0.96 * ORBIT_RENDER_SCALE };
 }
 
 function focusedStationPose(m, zoom = FOCUS_ZOOM) {
