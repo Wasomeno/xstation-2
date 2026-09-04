@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="is-welcome">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -31,16 +31,16 @@
       }
 
       :root {
-        --navy: #091540;
-        --blue: #1b2cc1;
-        --peri: #7692ff;
-        --sky: #abd2fa;
-        --bg: color-mix(in srgb, var(--sky) 8%, #ffffff);
-        --ink: var(--navy);
-        --ivory: color-mix(in srgb, var(--sky) 22%, #ffffff);
-        --steel: color-mix(in srgb, var(--navy) 72%, var(--blue));
-        --dim: color-mix(in srgb, var(--navy) 50%, var(--peri));
-        --surface: color-mix(in srgb, var(--sky) 50%, #ffffff);
+        --navy: #092328;
+        --blue: #2a835f;
+        --peri: #8bbb92;
+        --sky: #8bbb92;
+        --bg: color-mix(in srgb, var(--sky) 10%, #f7faf7);
+        --ink: #16181b;
+        --ivory: #f3f4f3;
+        --steel: #4a5056;
+        --dim: #6b7178;
+        --surface: color-mix(in srgb, var(--sky) 28%, #f7faf7);
         --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --gold: var(--blue);
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -95,13 +95,27 @@
         overflow: hidden;
         isolation: isolate;
         pointer-events: none;
-        background: #ffffff;
+        background: var(--bg);
         transform: translateZ(0);
         transition: background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
       }
 
       html.is-station #field-stage {
-        background: color-mix(in srgb, var(--sky) 18%, #ffffff);
+        background: #ffffff;
+      }
+
+      html.is-welcome {
+        overflow: hidden;
+      }
+
+      html.is-welcome #field-stage {
+        background: color-mix(in srgb, var(--navy) 28%, var(--bg));
+      }
+
+      html.is-welcome #veil,
+      html.is-welcome #vignette,
+      html.is-welcome #edge-fade {
+        opacity: 0.12;
       }
 
       #field {
@@ -110,6 +124,10 @@
         perspective: 1100px;
         perspective-origin: 50% 48%;
         transform-style: preserve-3d;
+        pointer-events: auto;
+      }
+
+      html.is-welcome #field {
         pointer-events: none;
       }
 
@@ -136,8 +154,8 @@
           rgb(255 255 255 / 0.92) 0%,
           transparent 20%,
           transparent 58%,
-          color-mix(in srgb, var(--sky) 24%, transparent) 80%,
-          color-mix(in srgb, var(--sky) 42%, #ffffff) 100%
+          rgb(255 255 255 / 0.24) 80%,
+          #ffffff 100%
         );
       }
 
@@ -181,11 +199,11 @@
         inset: 0;
         display: flex;
         flex-direction: column;
-        justify-content: center;
+        justify-content: flex-start;
         align-items: center;
         width: 100%;
         height: 100%;
-        padding: 18svh 6vw 16svh;
+        padding: 11svh 6vw 0;
         gap: 0;
         box-sizing: border-box;
         pointer-events: none;
@@ -194,7 +212,7 @@
 
       #title {
         margin: 0;
-        max-width: min(26ch, 92vw);
+        max-width: min(28ch, 92vw);
         text-align: center;
         font-family: var(--sans);
         font-weight: 400;
@@ -206,6 +224,17 @@
 
       #title span {
         display: block;
+      }
+
+      @media (max-width: 767px) {
+        #title-layer {
+          padding: 12svh 1.1rem 0;
+        }
+
+        #title {
+          max-width: min(18ch, 92vw);
+          font-size: clamp(1.7rem, 7.4vw, 2.15rem);
+        }
       }
 
       #vignette {
@@ -257,13 +286,14 @@
       const lines = document.querySelectorAll("#title span");
       if (window.gsap && !reduce) {
         window.gsap.set("#site-nav", { autoAlpha: 0, y: -10 });
-        window.gsap.set(lines, { autoAlpha: 0, y: 28 });
-        const tl = window.gsap.timeline({ delay: 0.28 });
-        tl.to(lines, { autoAlpha: 1, y: 0, duration: 1.05, ease: "expo.out", stagger: 0.11 }, 0);
-        tl.to("#site-nav", { autoAlpha: 1, y: 0, duration: 0.8, ease: "power2.out" }, 0.18);
+        window.gsap.set(lines, { autoAlpha: 0, y: 28, scale: 0.96 });
+        const tl = window.gsap.timeline();
+        field.playWelcome();
+        tl.to(lines, { autoAlpha: 1, y: 0, scale: 1, duration: 0.72, ease: "expo.out", stagger: 0.08 }, 0.92);
+        tl.to("#site-nav", { autoAlpha: 1, y: 0, duration: 0.7, ease: "power2.out" }, 1.08);
+      } else {
+        field.startIdle();
       }
-
-      field.startIdle();
     </script>
   </body>
 </html>

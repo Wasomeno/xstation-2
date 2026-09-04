@@ -5,6 +5,8 @@
   width: 0;
   height: 0;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
 }
 
 .dock-svg {
@@ -54,6 +56,17 @@
   stroke-dasharray: none;
 }
 
+.dock-ring.is-focus {
+  stroke-opacity: 0.92;
+  stroke-width: 2px;
+  stroke-dasharray: 8 5;
+}
+
+.dock-ring.is-core.is-focus {
+  stroke-opacity: 0.72;
+  stroke-dasharray: none;
+}
+
 .dock-align {
   fill: none;
   stroke: var(--ink);
@@ -98,6 +111,14 @@
   box-shadow:
     0 0 0 1px var(--ink),
     0 14px 32px color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.dock-node.is-focus {
+  border-color: var(--blue);
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--sky) 30%, transparent),
+    0 0 0 1px var(--blue),
+    0 18px 38px color-mix(in srgb, var(--blue) 20%, transparent);
 }
 
 .dock-node-label {
@@ -145,11 +166,11 @@
 }
 
 .slab.is-steel {
-  color: var(--steel);
+  color: var(--navy);
 }
 
 .slab.is-dim {
-  color: var(--dim);
+  color: color-mix(in srgb, var(--navy) 58%, var(--peri));
 }
 
 .dock-orbs {
@@ -162,6 +183,8 @@
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
   transform-style: flat;
   will-change: transform;
 }

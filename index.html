@@ -31,19 +31,19 @@
       }
 
       :root {
-        --navy: #091540;
-        --blue: #1b2cc1;
-        --peri: #7692ff;
-        --sky: #abd2fa;
-        --bg: color-mix(in srgb, var(--sky) 8%, #ffffff);
-        --ink: var(--navy);
-        --ivory: color-mix(in srgb, var(--sky) 22%, #ffffff);
-        --steel: color-mix(in srgb, var(--navy) 72%, var(--blue));
-        --dim: color-mix(in srgb, var(--navy) 50%, var(--peri));
-        --surface: color-mix(in srgb, var(--sky) 50%, #ffffff);
+        --navy: #092328;
+        --blue: #2a835f;
+        --peri: #8bbb92;
+        --sky: #8bbb92;
+        --bg: color-mix(in srgb, var(--sky) 10%, #f7faf7);
+        --ink: #16181b;
+        --ivory: #f3f4f3;
+        --steel: #4a5056;
+        --dim: #6b7178;
+        --surface: color-mix(in srgb, var(--sky) 28%, #f7faf7);
         --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --gold: var(--blue);
-        --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --sans: "Geist", "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
       * {
@@ -67,6 +67,12 @@
         font-family: var(--sans);
       }
 
+      html.is-welcoming,
+      html.is-welcoming body {
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
       a {
         color: inherit;
         text-decoration: none;
@@ -74,7 +80,7 @@
 
       #pin-slot {
         position: relative;
-        height: calc(max(100svh, 720px) + 160svh);
+        height: calc(max(100svh, 720px) + 720svh);
       }
 
       #root {
@@ -120,6 +126,121 @@
         pointer-events: none;
       }
 
+      #welcome-bumper {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        overflow: hidden;
+        background: #ffffff;
+        cursor: default;
+        isolation: isolate;
+        touch-action: none;
+      }
+
+      .welcome-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: #ffffff;
+      }
+
+      .welcome-atmosphere {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 50% 48%, rgb(255 255 255 / 0.86) 0%, rgb(255 255 255 / 0.2) 19%, transparent 43%),
+          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, rgb(255 255 255 / 0.64) 100%),
+          linear-gradient(to bottom, rgb(255 255 255 / 0.9) 0%, transparent 20%, transparent 64%, #ffffff 100%);
+      }
+
+      .welcome-field {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        perspective: 1100px;
+        perspective-origin: 50% 48%;
+        transform-style: preserve-3d;
+        pointer-events: none;
+      }
+
+      .welcome-slab {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--slab-w);
+        height: var(--slab-h);
+        margin: 0;
+        color: var(--ink);
+        background: currentColor;
+        box-shadow:
+          0 0 14px color-mix(in srgb, currentColor 22%, transparent),
+          0 0 32px color-mix(in srgb, currentColor 10%, transparent);
+        backface-visibility: hidden;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      .welcome-slab.is-gold {
+        color: var(--gold);
+        box-shadow:
+          0 0 18px color-mix(in srgb, var(--gold) 48%, transparent),
+          0 0 44px color-mix(in srgb, var(--gold) 22%, transparent);
+      }
+
+      .welcome-slab.is-peri {
+        color: var(--peri);
+      }
+
+      .welcome-slab.is-steel {
+        color: var(--navy);
+      }
+
+      .welcome-slab.is-dim {
+        color: color-mix(in srgb, var(--navy) 58%, var(--peri));
+      }
+
+      .welcome-brand {
+        position: absolute;
+        top: 28px;
+        left: clamp(20px, 4vw, 56px);
+        z-index: 5;
+        color: var(--ink);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .welcome-title-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18svh 6vw 16svh;
+        pointer-events: none;
+      }
+
+      .welcome-title {
+        width: 100%;
+        max-width: min(22ch, 92vw);
+        margin: 0;
+        text-align: center;
+        font-family: var(--sans);
+        font-size: clamp(2.25rem, 3.8vw, 3.5rem);
+        font-weight: 400;
+        line-height: 1.12;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+      }
+
+      .welcome-title span {
+        display: block;
+        opacity: 0;
+        will-change: transform, opacity;
+      }
+
       html.is-station #field {
         pointer-events: auto;
       }
@@ -147,8 +268,8 @@
           rgb(255 255 255 / 0.92) 0%,
           transparent 20%,
           transparent 58%,
-          color-mix(in srgb, var(--sky) 24%, transparent) 80%,
-          color-mix(in srgb, var(--sky) 42%, #ffffff) 100%
+          rgb(255 255 255 / 0.24) 80%,
+          #ffffff 100%
         );
       }
 
@@ -179,7 +300,8 @@
         color: inherit;
       }
 
-      #brand em {
+      #brand em,
+      .welcome-brand em {
         font-family: var(--sans);
         font-style: normal;
         font-weight: 400;
@@ -196,7 +318,8 @@
       }
 
       @supports not (backdrop-filter: blur(8px)) {
-        #brand em {
+        #brand em,
+        .welcome-brand em {
           background: rgb(255 255 255 / 0.72);
         }
       }
@@ -223,7 +346,7 @@
         text-align: center;
         font-family: var(--sans);
         font-weight: 400;
-        font-size: clamp(36px, 5.2vw, 64px);
+        font-size: clamp(2.25rem, 3.8vw, 3.5rem);
         line-height: 1.12;
         letter-spacing: -0.03em;
         color: var(--ink);
@@ -373,7 +496,7 @@
         z-index: 22;
         display: flex;
         align-items: center;
-        width: min(52vw, 44rem);
+        width: min(47vw, 42rem);
         padding: 7.5rem 0 5rem clamp(20px, 4.2vw, 56px);
         box-sizing: border-box;
         pointer-events: none;
@@ -390,7 +513,8 @@
         margin: 0;
         font-family: var(--sans);
         font-weight: 400;
-        font-size: clamp(2.5rem, 5vw, 4.2rem);
+        max-width: min(15ch, 100%);
+        font-size: clamp(3rem, 5.5vw, 5.4rem);
         line-height: 1.08;
         letter-spacing: -0.04em;
         color: var(--ink);
@@ -422,10 +546,10 @@
         justify-content: center;
         min-height: 3rem;
         padding: 0 1.35rem;
-        border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+        border: 1px solid var(--blue);
         border-radius: 2px;
-        background: color-mix(in srgb, var(--ivory) 72%, transparent);
-        color: var(--ink);
+        background: transparent;
+        color: var(--blue);
         font-family: var(--sans);
         font-size: 18px;
         font-weight: 400;
@@ -441,8 +565,8 @@
       }
 
       .station-cta.is-primary {
-        background: var(--ink);
-        border-color: var(--ink);
+        background: var(--navy);
+        border-color: var(--navy);
         color: var(--ivory);
       }
 
@@ -451,14 +575,14 @@
       }
 
       .station-cta:focus-visible {
-        outline: 1px solid var(--ink);
+        outline: 1px solid var(--blue);
         outline-offset: 3px;
       }
 
       @media (hover: hover) and (pointer: fine) {
         .station-cta:hover {
-          background: var(--ink);
-          border-color: var(--ink);
+          background: var(--navy);
+          border-color: var(--navy);
           color: var(--ivory);
         }
 
@@ -469,10 +593,28 @@
       }
 
       @media (max-width: 767px) {
+        .welcome-brand {
+          top: 22px;
+        }
+
+        .welcome-title-layer {
+          padding: 12svh 1.1rem 0;
+        }
+
+        .welcome-title {
+          max-width: min(18ch, 92vw);
+          font-size: clamp(1.7rem, 7.4vw, 2.15rem);
+        }
+
         #hero-copy {
           width: 100%;
           align-items: flex-start;
           padding: 16svh 20px 0;
+        }
+
+        #hero-copy h2 {
+          max-width: 14ch;
+          font-size: clamp(2.2rem, 8.6vw, 3.5rem);
         }
 
         #hero-copy .doctrine-block {
@@ -488,6 +630,13 @@
           font-size: 1.2rem;
         }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        .welcome-slab,
+        .welcome-atmosphere {
+          display: none;
+        }
+      }
     </style>
     <link rel="stylesheet" href="videos/gateway-hero/field.css" />
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
@@ -495,6 +644,15 @@
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
   <body>
+    <div id="welcome-bumper" aria-hidden="true">
+      <div class="welcome-backdrop"></div>
+      <div class="welcome-atmosphere"></div>
+      <div class="welcome-field"></div>
+      <div class="welcome-brand"><em>XTATION</em></div>
+      <div class="welcome-title-layer">
+        <h1 class="welcome-title"><span>Your Gateway To</span><span>Intelligent Products</span></h1>
+      </div>
+    </div>
     <div id="field-stage">
       <div id="field"></div>
     </div>
@@ -506,11 +664,6 @@
     <div id="pin-slot">
       <div id="root">
         <section id="hero">
-          <div id="veil"></div>
-          <div id="edge-fade"></div>
-          <div id="title-layer">
-            <h1 id="title"><span>Your Gateway To</span><span>Intelligent Products</span></h1>
-          </div>
           <div id="hero-copy">
             <div class="doctrine-block">
               <h2 id="doctrine-title">Your Gateway to<br />Intelligent Products</h2>
@@ -523,7 +676,6 @@
               </div>
             </div>
           </div>
-          <div id="vignette"></div>
         </section>
       </div>
     </div>
@@ -539,21 +691,10 @@
           <p class="space-caption"><strong>BikinKonten</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Digital Marketing</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Digital Marketing</p>
             <h2 id="bikinkonten-title" class="js-enter-child">BikinKonten</h2>
             <p class="lede js-enter-child">Plan, create, and organize social media content for every brand from a single workspace. BikinKonten connects your brand references and content plans with AI-generated images and videos, making high-volume content production faster and easier to manage.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" aria-label="BikinKonten owner dashboard">
-                <img src="videos/gateway-hero/media/products/bikinkonten-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-library.jpg" aria-label="BikinKonten content library">
-                <img src="videos/gateway-hero/media/products/bikinkonten-library.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/bikinkonten-generator.jpg" aria-label="BikinKonten generator">
-                <img src="videos/gateway-hero/media/products/bikinkonten-generator.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -564,21 +705,10 @@
           <p class="space-caption"><strong>Lubna</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Digital Marketing</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Digital Marketing</p>
             <h2 id="lubna-title" class="js-enter-child">Lubna</h2>
             <p class="lede js-enter-child">Lubna is an AI chatbot assistant that helps teams plan, create, and publish branded social media content through a simple conversational workflow. Share a brief, and Lubna turns it into content ready for publishing, faster and with less manual work.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Lubna still 1">
-                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="Lubna still 2">
-                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="Lubna still 3">
-                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
 
         </div>
@@ -591,18 +721,7 @@
         <aside class="stage-card js-enter">
           <p class="field-mark js-enter-child">Technical Hiring</p>
           <h2 class="stage-mark js-enter-child" id="hireassess-title">HireAssess</h2>
-          <p class="js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
-          <div class="thumbs js-enter-child">
-            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-form.jpg" aria-label="HireAssess assessment form">
-              <img src="videos/gateway-hero/media/products/hireassess-form.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-            </button>
-            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-processing.jpg" aria-label="HireAssess processing a repository">
-              <img src="videos/gateway-hero/media/products/hireassess-processing.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-            </button>
-            <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/hireassess-results.jpg" aria-label="HireAssess results">
-              <img src="videos/gateway-hero/media/products/hireassess-results.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-            </button>
-          </div>
+          <p class="lede js-enter-child">HireAssess helps hiring teams assess technical candidates through their actual work and assessment responses. Analyze code from GitHub or GitLab repositories and evaluate technical skills at scale, making technical hiring faster, more consistent, and data-driven.</p>
         </aside>
       </section>
 
@@ -612,21 +731,10 @@
           <p class="space-caption"><strong>Arkiv</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Document Management</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Document Management</p>
             <h2 id="arkiv-title" class="js-enter-child">Arkiv</h2>
             <p class="lede js-enter-child">ARKIV gives teams a secure workspace to store, manage, share, and govern business documents in one place. With granular permissions, version control, approval workflows, and an AI assistant that helps find information across authorized files, ARKIV keeps your documents organized while giving your team control over who can access them.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" aria-label="Arkiv dashboard">
-                <img src="videos/gateway-hero/media/products/arkiv-dashboard.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-drive.jpg" aria-label="Arkiv My Drive">
-                <img src="videos/gateway-hero/media/products/arkiv-drive.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/products/arkiv-review.jpg" aria-label="Arkiv contract review">
-                <img src="videos/gateway-hero/media/products/arkiv-review.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
 
         </div>
@@ -638,21 +746,10 @@
           <p class="space-caption"><strong>CRM AI Agent</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Customer Chat</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Customer Chat</p>
             <h2 id="ainya-title" class="js-enter-child">CRM AI Agent</h2>
             <p class="lede js-enter-child">CRM AI Agent is a WhatsApp chatbot that answers customer questions about your products using your business knowledge. It gives prospects instant, consistent answers, helping your team engage more customers without responding to every question manually.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/aether.jpg" aria-label="CRM AI Agent still 1">
-                <img src="videos/gateway-hero/media/aether.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="CRM AI Agent still 2">
-                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="CRM AI Agent still 3">
-                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
 
         </div>
@@ -665,7 +762,7 @@
         <aside class="stage-card js-enter">
           <p class="field-mark js-enter-child">Software Development</p>
           <h2 class="stage-mark js-enter-child" id="codev-title">Codev</h2>
-          <p class="js-enter-child">Codev is an agent in the XTATION lineup.</p>
+          <p class="lede js-enter-child">Codev is an agent in the XTATION lineup.</p>
         </aside>
       </section>
 
@@ -675,21 +772,10 @@
           <p class="space-caption"><strong>CoFrame</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Product Prototyping</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Product Prototyping</p>
             <h2 id="coframe-title" class="js-enter-child">CoFrame</h2>
             <p class="lede js-enter-child">Prototyping turns ideas and requirements into interactive web prototypes through a simple AI-powered chat. Create and refine backoffice applications or landing pages conversationally, helping teams visualize and validate ideas before development.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/vista.jpg" aria-label="CoFrame still 1">
-                <img src="videos/gateway-hero/media/vista.jpg" alt="" width="1152" height="864" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/forge.jpg" aria-label="CoFrame still 2">
-                <img src="videos/gateway-hero/media/forge.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/thread.jpg" aria-label="CoFrame still 3">
-                <img src="videos/gateway-hero/media/thread.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
 
         </div>
@@ -701,21 +787,10 @@
           <p class="space-caption"><strong>Legal Due Diligent</strong></p>
         </div>
         <div class="space-panel js-enter">
-          <p class="field-mark js-enter-child">Legal Due Diligence</p>
           <div class="space-copy">
+            <p class="field-mark js-enter-child">Legal Due Diligence</p>
             <h2 id="due-diligent-title" class="js-enter-child">Legal Due Diligent</h2>
             <p class="lede js-enter-child">A legal due diligence product from the XTATION legal line.</p>
-            <div class="thumbs js-enter-child">
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/signal-still.jpg" aria-label="Legal Due Diligent still 1">
-                <img src="videos/gateway-hero/media/signal-still.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/prism.jpg" aria-label="Legal Due Diligent still 2">
-                <img src="videos/gateway-hero/media/prism.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-              <button class="thumb" type="button" data-src="videos/gateway-hero/media/harbor.jpg" aria-label="Legal Due Diligent still 3">
-                <img src="videos/gateway-hero/media/harbor.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async" />
-              </button>
-            </div>
           </div>
 
         </div>
@@ -728,7 +803,7 @@
         <aside class="stage-card js-enter">
           <p class="field-mark js-enter-child">Contract Review</p>
           <h2 class="stage-mark js-enter-child" id="review-kontrak-title">Review Kontrak</h2>
-          <p class="js-enter-child">A legal product for reviewing contracts.</p>
+          <p class="lede js-enter-child">A legal product for reviewing contracts.</p>
         </aside>
       </section>
 
@@ -774,24 +849,7 @@
       </footer>
     </div>
 
-    <div
-      id="look"
-      class="look"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="look-caption"
-      hidden
-    >
-      <button class="look-veil" type="button" tabindex="-1" aria-label="Close image"></button>
-      <figure class="look-frame">
-        <div class="look-media">
-          <img id="look-img" alt="" />
-        </div>
-        <figcaption id="look-caption" class="look-caption"></figcaption>
-      </figure>
-      <button class="look-close" type="button">Close</button>
-    </div>
-
+    <script src="videos/gateway-hero/welcome.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
   </body>
 </html>

@@ -6,6 +6,18 @@ const NS = "http://www.w3.org/2000/svg";
 const SLAB_DURATION = 8;
 const DOCK_DURATION = 20;
 const WHISPER_DURATION = 18;
+const ORBIT_RENDER_SCALE = 0.8;
+// Give the orbit sequence a longer, quieter section of the pinned scroll.
+// At six stations this makes each handoff take roughly twice as much wheel travel.
+export const FOCUS_START = 0.64;
+export const FOCUS_END = 0.98;
+export const DOCK_READY = 0.58;
+const FOCUS_ZOOM = 1.4;
+// GSAP's rotation property is in degrees. Every selected station rotates to the
+// left edge of its ring, then the dock shifts so that station lands on one
+// shared screen-space anchor beside the copy.
+const FOCUS_TARGET_ANGLE = 180;
+const DEG_TO_RAD = Math.PI / 180;
 const FAR = -1880;
 const NEAR = 620;
 const TRAVEL = NEAR - FAR;
@@ -105,9 +117,25 @@ function metrics() {
 
 function stationPose(m) {
   if (m.compact) {
-    return { x: 0, y: m.h * 0.2, scale: 0.54 };
+    return { x: m.w * 0.2, y: m.h * 0.2, scale: 0.62 * ORBIT_RENDER_SCALE };
   }
-  return { x: m.w * 0.24, y: m.h * 0.01, scale: 0.78 };
+  return { x: m.w * 0.2, y: m.h * 0.01, scale: 0.96 * ORBIT_RENDER_SCALE };
+}
+
+function heroPose(m) {
+  if (m.compact) {
+    return { x: m.w * 0.2, y: m.h * 0.18, scale: 0.62 * ORBIT_RENDER_SCALE };
+  }
+  return { x: m.w * 0.2, y: m.h * 0.02, scale: 0.96 * ORBIT_RENDER_SCALE };
+}
+
+function focusAnchor(m, scale) {
+  const nodeRadius = (m.compact ? 29 : 39) * scale;
+  const gutter = nodeRadius + (m.compact ? 18 : 28);
+  return {
+    x: Math.min(m.w - gutter, Math.max(gutter, m.w * (m.compact ? 0.5 : 0.72))),
+    y: Math.min(m.h - gutter, Math.max(gutter, m.h * (m.compact ? 0.7 : 0.52))),
+  };
 }
 
 function poseAt(theta, radius) {
@@ -151,17 +179,17 @@ function createOrbView(host, gsap) {
   scene.environment = envMap;
   envScene.dispose();
 
-  scene.add(new THREE.HemisphereLight(0xabd2fa, 0x091540, 0.85));
-  const key = new THREE.DirectionalLight(0xeaf3fe, 1.35);
+  scene.add(new THREE.HemisphereLight(0x8bbb92, 0x092328, 0.85));
+  const key = new THREE.DirectionalLight(0xe8f3ea, 1.35);
   key.position.set(-2.2, 3.4, 2.8);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x7692ff, 0.45);
+  const fill = new THREE.DirectionalLight(0x2a835f, 0.45);
   fill.position.set(2.8, 0.6, 1.6);
   scene.add(fill);
 
   const geo = new THREE.SphereGeometry(1, 96, 64);
   const mat = new THREE.MeshPhysicalMaterial({
-    color: 0xabd2fa,
+    color: 0x8bbb92,
     roughness: 0.12,
     metalness: 0.04,
     clearcoat: 1,
@@ -223,8 +251,10 @@ function noopController() {
     mode: "idle",
     startIdle() {},
     playEnter() {},
+    playWelcome() {},
     setMode() {},
     setProgress() {},
+    getFocus() { return -1; },
     pause() {},
     resumeWhisper() {},
     layout() {},
@@ -347,6 +377,14 @@ export function createField({ root, gsap, reduce }) {
 
   let hover = null;
   let orbitFrozen = false;
+  let focusIndex = -1;
+  let focusStrength = 0;
+  let focusLocal = 0;
+  let focusZoom = 1;
+  let focusRotationTarget = 0;
+  let focusFrozen = false;
+  let focusReturning = false;
+  let focusExitTween = null;
   const productsNode = nodes.find((node) => node.el.dataset.dock === "products") || null;
 
   let orbView = null;
@@ -356,6 +394,106 @@ export function createField({ root, gsap, reduce }) {
     } catch (err) {
       orbView = null;
     }
+  }
+
+  const focusMotion = {
+    dockX: 0,
+    dockY: 0,
+    dockScale: 1,
+    orbX: 0,
+    orbY: 0,
+    originX: 0,
+    originY: 0,
+    focusPosition: 0,
+    rotation: 0,
+  };
+  let focusMotionReady = false;
+  let focusSnapTween = null;
+  const focusTargets = Object.fromEntries(Object.keys(focusMotion).map((key) => [key, Number.NaN]));
+
+  function setFocusTargets(values) {
+    const changed = Object.entries(values).some(([key, value]) => {
+      return Math.abs(focusTargets[key] - value) >= 0.001 || !Number.isFinite(focusTargets[key]);
+    });
+    if (!changed) return;
+
+    if (focusSnapTween) focusSnapTween.kill();
+    Object.assign(focusTargets, values);
+    focusSnapTween = gsap.to(focusMotion, {
+      ...values,
+      duration: 0.92,
+      ease: "power3.inOut",
+      overwrite: true,
+      onUpdate: renderFocusMotion,
+      onComplete: () => {
+        focusSnapTween = null;
+        renderFocusMotion();
+      },
+    });
+  }
+
+  function releaseFocusMotion() {
+    if (focusSnapTween) focusSnapTween.kill();
+    focusSnapTween = null;
+    focusMotion.rotation = 0;
+    focusMotionReady = false;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
+    gsap.set(svg, { rotation: 0, transformOrigin: "50% 50%" });
+  }
+
+  function finishFocusExit() {
+    focusExitTween = null;
+    focusReturning = false;
+    focusStrength = 0;
+    focusLocal = 0;
+    setFocusIndex(-1);
+    releaseFocusMotion();
+    focusFrozen = false;
+    if (idleTl && (mode === "idle" || mode === "pass")) idleTl.play();
+    if (mode === "pass" && !orbitFrozen) layoutStation(passP);
+  }
+
+  function startFocusExit() {
+    if (focusReturning || !focusMotionReady) return;
+
+    focusReturning = true;
+    focusStrength = 0;
+    focusLocal = 0;
+    if (focusSnapTween) focusSnapTween.kill();
+    focusSnapTween = null;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
+
+    const pose = stationPose(m);
+    focusExitTween = gsap.to(focusMotion, {
+      dockX: pose.x,
+      dockY: pose.y,
+      dockScale: pose.scale,
+      orbX: pose.x,
+      orbY: pose.y,
+      originX: 0,
+      originY: 0,
+      focusPosition: 0,
+      rotation: nearestRotation(0, focusMotion.rotation),
+      duration: 0.82,
+      ease: "power3.inOut",
+      overwrite: true,
+      onUpdate: renderFocusMotion,
+      onComplete: finishFocusExit,
+    });
+  }
+
+  function cancelFocusExit() {
+    if (!focusReturning) return;
+    if (focusExitTween) focusExitTween.kill();
+    focusExitTween = null;
+    focusReturning = false;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
   }
 
   function layoutSlab(it, t, x = it.x, y = it.y, peak = it.peak) {
@@ -406,7 +544,7 @@ export function createField({ root, gsap, reduce }) {
   function hideSlabs() {
     for (let i = 0; i < slabs.length; i++) {
       const it = slabs[i];
-      gsap.set(it.el, { autoAlpha: 0 });
+      gsap.set(it.el, { autoAlpha: 0, scaleX: 1, scaleY: 1 });
       it.el.style.display = "none";
       it.el.style.willChange = "auto";
     }
@@ -479,16 +617,212 @@ export function createField({ root, gsap, reduce }) {
     }
   }
 
+  function setFocusFromProgress(p) {
+    // ScrollTrigger's snapped progress can settle a few floating-point ticks
+    // below the requested value (for example 0.639969 instead of 0.64).
+    const focusProgress = p + 0.0001;
+    const sequence = gsap.utils.clamp(0, 1, (focusProgress - FOCUS_START) / (FOCUS_END - FOCUS_START));
+
+    if (focusProgress < FOCUS_START) {
+      if (focusMotionReady && focusIndex >= 0) startFocusExit();
+      else if (!focusReturning) {
+        focusStrength = 0;
+        focusLocal = 0;
+        setFocusIndex(-1);
+        releaseFocusMotion();
+        if (focusFrozen) {
+          focusFrozen = false;
+          if (idleTl && (mode === "idle" || mode === "pass")) idleTl.play();
+        }
+      }
+      return;
+    }
+
+    cancelFocusExit();
+    focusFrozen = true;
+    if (idleTl) idleTl.pause();
+
+    if (sequence >= 1) {
+      setFocusIndex(STATION_NODES.length - 1);
+      focusStrength = 1;
+      focusLocal = 0;
+      focusZoom = FOCUS_ZOOM;
+      return;
+    }
+
+    // Snap points divide the focus range into N - 1 equal intervals. Mapping
+    // with round() makes every exact snap resolve to one exact station.
+    setFocusIndex(Math.round(sequence * (STATION_NODES.length - 1)));
+    focusLocal = 0;
+    focusStrength = 1;
+    // The first snap should already be fully zoomed, just like every later station.
+    focusZoom = FOCUS_ZOOM;
+  }
+
+  function renderFocusMotion() {
+    gsap.set(dock, {
+      x: focusMotion.dockX,
+      y: focusMotion.dockY,
+      scale: focusMotion.dockScale,
+      transformOrigin: "0 0",
+    });
+
+    gsap.set(svg, {
+      rotation: focusMotion.rotation,
+      transformOrigin: "50% 50%",
+    });
+
+    if (orbView && orbView.canvas) {
+      gsap.set(orbView.canvas, {
+        x: focusMotion.orbX,
+        y: focusMotion.orbY,
+        scale: focusMotion.dockScale,
+        transformOrigin: "50% 50%",
+      });
+    }
+
+    const angle = focusMotion.rotation * DEG_TO_RAD;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    nodes.forEach((node) => {
+      // Rotate node positions numerically so the labels never inherit the line spin.
+      const x = node.x * cos - node.y * sin;
+      const y = node.x * sin + node.y * cos;
+      gsap.set(node.el, {
+        x,
+        y,
+        rotation: 0,
+        transformOrigin: "50% 50%",
+      });
+    });
+
+  }
+
+  function nearestRotation(target, current) {
+    const delta = ((target - current + 180) % 360 + 360) % 360 - 180;
+    return current + delta;
+  }
+
+  function stationRotation(index) {
+    const station = STATION_NODES[index];
+    const speed = RING_SPIN[station.ring] || 1;
+    const angle = station.angle + state.t * Math.PI * 2 * speed;
+    return FOCUS_TARGET_ANGLE - (angle * 180) / Math.PI;
+  }
+
+  function setFocusIndex(nextIndex) {
+    if (nextIndex === focusIndex) return;
+    focusIndex = nextIndex;
+    if (nextIndex < 0) {
+      focusRotationTarget = 0;
+      return;
+    }
+
+    // Rotation is a selection event, not a continuously scrubbed value. Always
+    // rotate the selected station to the same side; mere viewport visibility is
+    // not enough because every selection must finish at the shared anchor.
+    const target = stationRotation(nextIndex);
+    focusRotationTarget = nearestRotation(target, focusMotion.rotation);
+  }
+
+  function applyFocusVisuals() {
+    const focused = focusIndex >= 0 && focusStrength > 0;
+    const activeRing = focused ? nodes[focusIndex]?.spec.ring : null;
+
+    if (focused) {
+      const visualIndex = focusIndex;
+      const nextIndex = Math.min(nodes.length - 1, visualIndex + 1);
+      const current = nodes[visualIndex];
+      const next = nodes[nextIndex];
+      const local = focused && focusIndex !== nextIndex ? focusLocal : 0;
+      const easedLocal = local * local * (3 - 2 * local);
+      const focusX = current.x + (next.x - current.x) * easedLocal;
+      const focusY = current.y + (next.y - current.y) * easedLocal;
+      const pose = stationPose(m);
+      const targetScale = pose.scale * focusZoom;
+      const dockScale = targetScale;
+      const motionRotation = focusRotationTarget;
+      const targetRotation = focusRotationTarget * DEG_TO_RAD;
+      const rotatedFocusX = focusX * Math.cos(targetRotation) - focusY * Math.sin(targetRotation);
+      const rotatedFocusY = focusX * Math.sin(targetRotation) + focusY * Math.cos(targetRotation);
+      const anchor = focusAnchor(m, targetScale);
+      // The dock is based at 50vw / 48vh. Offset the selected node's final
+      // vector so every ring lands on the exact same visible point.
+      const dockX = anchor.x - m.w * 0.5 - rotatedFocusX * targetScale;
+      const dockY = anchor.y - m.h * 0.48 - rotatedFocusY * targetScale;
+      const orbX = dockX;
+      const orbY = dockY;
+      const focusPosition = focused ? focusIndex + focusLocal : 0;
+      const focusValues = {
+        dockX,
+        dockY,
+        dockScale,
+        orbX,
+        orbY,
+        originX: focusX,
+        originY: focusY,
+        focusPosition,
+        rotation: motionRotation,
+      };
+
+      if (!focusMotionReady) {
+        const currentDockX = Number(gsap.getProperty(dock, "x"));
+        const currentDockY = Number(gsap.getProperty(dock, "y"));
+        const currentDockScale = Number(gsap.getProperty(dock, "scale"));
+        const currentOrbX = orbView?.canvas
+          ? Number(gsap.getProperty(orbView.canvas, "x"))
+          : currentDockX;
+        const currentOrbY = orbView?.canvas
+          ? Number(gsap.getProperty(orbView.canvas, "y"))
+          : currentDockY;
+        Object.assign(focusMotion, {
+          // Continue from the transform that is actually on screen. This also
+          // keeps a fast scroll jump continuous instead of assigning the final
+          // focused pose on its first frame.
+          dockX: Number.isFinite(currentDockX) ? currentDockX : dockX,
+          dockY: Number.isFinite(currentDockY) ? currentDockY : dockY,
+          dockScale: Number.isFinite(currentDockScale) ? currentDockScale : pose.scale,
+          orbX: Number.isFinite(currentOrbX) ? currentOrbX : orbX,
+          orbY: Number.isFinite(currentOrbY) ? currentOrbY : orbY,
+          originX: focusX,
+          originY: focusY,
+          focusPosition,
+          rotation: focusMotion.rotation,
+        });
+        focusMotionReady = true;
+        renderFocusMotion();
+      }
+
+      setFocusTargets(focusValues);
+      renderFocusMotion();
+    } else if (!focusReturning) {
+      releaseFocusMotion();
+    }
+
+    nodes.forEach((node, index) => {
+      node.el.classList.toggle("is-focus", focused && index === focusIndex);
+    });
+    Object.entries(ringEls).forEach(([name, ring]) => {
+      ring.classList.toggle("is-focus", name === activeRing);
+    });
+    dock.classList.toggle("is-focus-mode", focused);
+  }
+
   function layoutDock(t, gain, pose) {
     sizeRings();
-    gsap.set(dock, {
-      x: pose.x,
-      y: pose.y,
-      scale: pose.scale,
+    const dockProps = {
+      transformOrigin: "0 0",
       rotationX: 0,
+      rotation: 0,
       autoAlpha: gain,
       force3D: true,
-    });
+    };
+    if (!(focusIndex >= 0 && focusStrength > 0) && !focusReturning) {
+      dockProps.x = pose.x;
+      dockProps.y = pose.y;
+      dockProps.scale = pose.scale;
+    }
+    gsap.set(dock, dockProps);
     if (!orbitFrozen) gsap.set(svg, { autoAlpha: 1 });
 
     const live = gain > 0.55 && !orbitFrozen;
@@ -533,11 +867,16 @@ export function createField({ root, gsap, reduce }) {
     }
 
     layoutOrbs(t, gain, pose);
+    // layoutOrbs writes the ready canvas pose. Focus rendering runs last so
+    // both active and returning snap transitions retain sole transform ownership.
+    if (focusMotionReady) renderFocusMotion();
   }
 
   function layoutStation(p) {
     const dockIn = gsap.utils.clamp(0, 1, (p - 0.22) / 0.28);
-    const slide = gsap.utils.clamp(0, 1, (p - 0.36) / 0.34);
+    // The scrubbed setup ends at a stable, fully readable dock state. Focus is
+    // triggered later and owns its own non-scrubbed move-and-zoom animation.
+    const slide = gsap.utils.clamp(0, 1, (p - 0.36) / (DOCK_READY - 0.36));
     const easeSlide = slide * slide * (3 - 2 * slide);
     const pose = stationPose(m);
     const from = { x: 0, y: 0, scale: 1 };
@@ -546,6 +885,7 @@ export function createField({ root, gsap, reduce }) {
       y: from.y + (pose.y - from.y) * easeSlide,
       scale: from.scale + (pose.scale - from.scale) * easeSlide,
     });
+    applyFocusVisuals();
     gsap.set(root, { perspective: 1100 });
     if (p < 0.48) layoutSlabsPass(state.t, p);
     else hideSlabs();
@@ -572,12 +912,14 @@ export function createField({ root, gsap, reduce }) {
 
   function setProgress(p) {
     passP = p;
+    setFocusFromProgress(p);
     if (mode === "whisper" || mode === "paused") return;
     if (orbitFrozen) return;
     const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
     if (idleTl) {
       idleTl.timeScale(p < 0.55 ? 1 + 2.2 * u : 1);
-      if (idleTl.paused()) idleTl.play();
+      if (focusFrozen) idleTl.pause();
+      else if (idleTl.paused()) idleTl.play();
     }
     layoutStation(p);
   }
@@ -665,7 +1007,8 @@ export function createField({ root, gsap, reduce }) {
         idleTl.duration(passP < 0.55 ? SLAB_DURATION : DOCK_DURATION);
         const u = gsap.utils.clamp(0, 1, (passP - 0.18) / 0.54);
         idleTl.timeScale(passP < 0.55 ? 1 + 2.2 * u : 1);
-        if (idleTl.paused()) idleTl.play();
+      if (focusFrozen) idleTl.pause();
+      else if (idleTl.paused()) idleTl.play();
       }
       slabs.forEach((it) => {
         it.el.style.display = "";
@@ -709,6 +1052,14 @@ export function createField({ root, gsap, reduce }) {
       gsap.set(dock, { autoAlpha: 0 });
       layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
     }
+  }
+
+  function playWelcome() {
+    if (idleTl) idleTl.pause();
+    if (whisperTl) whisperTl.pause();
+    hideSlabs();
+    layoutDock(state.t, 1, heroPose(m));
+    gsap.set(root, { perspective: 1100 });
   }
 
   function onResize() {
@@ -761,10 +1112,11 @@ export function createField({ root, gsap, reduce }) {
 
   gsap.set(dock, { autoAlpha: 0, rotationX: 0, x: 0, y: 0, scale: 1, force3D: true });
   gsap.set(root, { perspective: 1100 });
-  if (!reduce) layoutSlabsIdle(0);
-  else {
+  if (!reduce) {
+    layoutSlabsIdle(0);
+  } else {
     hideSlabs();
-    gsap.set(dock, { autoAlpha: 0 });
+    layoutDock(0, 1, heroPose(m));
   }
 
   bindHover();
@@ -783,6 +1135,7 @@ export function createField({ root, gsap, reduce }) {
     playEnter() {
       this.startIdle();
     },
+    playWelcome,
     setMode,
     setProgress,
     freezeOrbit,
@@ -791,6 +1144,7 @@ export function createField({ root, gsap, reduce }) {
     showProductsNode,
     setCompanionsVisible,
     getProductsRect,
+    getFocus: () => focusStrength >= 0.9999 ? focusIndex : -1,
     recedeDock,
     pause() {
       setMode("paused");
@@ -812,6 +1166,8 @@ export function createField({ root, gsap, reduce }) {
       window.clearTimeout(resizeTimer);
       if (idleTl) idleTl.kill();
       if (whisperTl) whisperTl.kill();
+      if (focusSnapTween) focusSnapTween.kill();
+      if (focusExitTween) focusExitTween.kill();
       if (orbView) orbView.dispose();
       slabs.forEach((it) => {
         it.el.style.willChange = "auto";

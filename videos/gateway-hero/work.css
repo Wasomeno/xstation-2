@@ -64,8 +64,6 @@ html.lenis body {
 }
 
 .station-cta:focus-visible,
-.thumb:focus-visible,
-.look-close:focus-visible,
 .inquiry-qr:focus-visible {
   outline: 1px solid var(--ink);
   outline-offset: 4px;
@@ -152,11 +150,11 @@ html.lenis body {
 
 .space {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 1fr);
+  grid-template-columns: 1fr 1fr;
   min-height: 80dvh;
-  gap: 0.7rem;
+  gap: 0;
   padding: 0 var(--pad);
-  background: transparent;
+  background: #ffffff;
 }
 
 .space + .space,
@@ -167,7 +165,7 @@ html.lenis body {
 }
 
 .space.is-flip {
-  grid-template-columns: minmax(20rem, 1fr) minmax(0, 1.08fr);
+  grid-template-columns: 1fr 1fr;
 }
 
 .space.is-flip .space-stage {
@@ -252,55 +250,32 @@ html.lenis body {
 
 .space-panel,
 .stage-card {
-  background:
-    radial-gradient(
-      120% 70% at 0% 0%,
-      color-mix(in srgb, var(--navy) 6%, transparent) 0%,
-      color-mix(in srgb, var(--navy) 2%, transparent) 38%,
-      transparent 68%
-    ),
-    #f7f8fc;
-  border: 1px solid color-mix(in srgb, var(--navy) 6%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--navy) 8%, transparent),
-    0 16px 36px color-mix(in srgb, var(--navy) 4%, transparent);
+  background: none;
+  border: 0;
+  box-shadow: none;
   color: var(--ink);
 }
 
 .space-panel {
-  padding: 1.35rem 1.5rem 1.4rem;
+  padding: 1.7rem 1.75rem 1.8rem;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  align-content: center;
   min-height: 27.2rem;
 }
 
 .field-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.7rem;
-  margin: 0 0 1.1rem;
-  grid-row: 1;
-  grid-column: 1;
-  width: max-content;
+  margin: 0 0 0.4rem;
   font-family: var(--sans);
-  font-size: 0.9rem;
-  line-height: 1;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-
-.field-mark::before {
-  content: "";
-  width: 1.35rem;
-  height: 1px;
-  background: var(--gold);
+  font-size: clamp(1.12rem, 1.7vw, 1.4rem);
+  line-height: 1.2;
+  color: var(--gold);
+  letter-spacing: -0.02em;
 }
 
 .space-copy {
-  grid-row: 2;
-  grid-column: 1;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   min-width: 0;
   min-height: 0;
 }
@@ -314,10 +289,11 @@ html.lenis body {
 }
 
 .lede {
-  margin-top: 1rem;
-  max-width: 46ch;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  margin-top: 1.15rem;
+  max-width: 38ch;
+  font-size: clamp(1.12rem, 1.7vw, 1.38rem);
+  line-height: 1.48;
+  letter-spacing: -0.018em;
   color: var(--steel);
 }
 
@@ -353,145 +329,7 @@ html.lenis body {
 }
 
 .stage-card .field-mark {
-  margin-bottom: 0.85rem;
-}
-
-.thumbs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin-top: auto;
-  padding-top: 1.5rem;
-}
-
-.thumb {
-  aspect-ratio: 1.15 / 1;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--ink) 8%, var(--surface));
-  border: 0;
-  padding: 0;
-  cursor: zoom-in;
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.thumb:hover img {
-  transform: scale(1.04);
-}
-
-.thumb:active img {
-  transform: scale(0.98);
-}
-
-.look {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: clamp(4.5rem, 8vh, 5.5rem) clamp(1.15rem, 4vw, 2.75rem) clamp(1.5rem, 4vh, 2.4rem);
-  pointer-events: none;
-}
-
-.look:not([hidden]) {
-  pointer-events: auto;
-}
-
-.look[hidden] {
-  display: none;
-}
-
-html.is-looking,
-html.is-looking body {
-  overflow: hidden;
-}
-
-.look-veil,
-.look-media,
-.look-caption,
-.look-close {
-  opacity: 0;
-}
-
-.look-veil {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  padding: 0;
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
-  cursor: pointer;
-}
-
-.look-frame {
-  position: relative;
-  z-index: 1;
-  margin: 0;
-  display: grid;
-  justify-items: start;
-  gap: 0.85rem;
-  max-width: 100%;
-}
-
-.look-media {
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow:
-    0 0 0 1px var(--line),
-    0 24px 60px color-mix(in srgb, var(--ink) 12%, transparent);
-  transform-origin: 50% 50%;
-}
-
-.look.is-open .look-media {
-  will-change: transform;
-}
-
-.look-media img {
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: min(92vw, 70rem);
-  max-height: min(78dvh, 46rem);
-  object-fit: contain;
-}
-
-.look-caption {
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--steel);
-  max-width: 52ch;
-}
-
-.look-close {
-  position: absolute;
-  top: 28px;
-  right: clamp(20px, 4vw, 56px);
-  z-index: 2;
-  background: none;
-  border: 0;
-  padding: 0 0 0.1rem;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ink);
-  cursor: pointer;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.look-close:hover {
-  border-bottom-color: var(--ink);
-}
-
-.look-close:active {
-  transform: scale(0.98);
+  margin-bottom: 0.35rem;
 }
 
 .stage {
@@ -499,7 +337,8 @@ html.is-looking body {
   min-height: 80dvh;
   overflow: hidden;
   isolation: isolate;
-  background: var(--bg);
+  margin-inline: var(--pad);
+  background: #ffffff;
 }
 
 .stage-media {
@@ -556,8 +395,19 @@ html.is-looking body {
   left: var(--pad);
   bottom: var(--pad);
   z-index: 3;
-  width: min(28rem, calc(100% - 2 * var(--pad)));
-  padding: 1.35rem 1.4rem 1.3rem;
+  width: min(32rem, calc(100% - 2 * var(--pad)));
+  padding: 1.55rem 1.6rem 1.5rem;
+  color: var(--ivory);
+}
+
+.stage-card .field-mark {
+  color: var(--peri);
+}
+
+.stage-card .lede {
+  margin-top: 0.85rem;
+  max-width: 34ch;
+  color: color-mix(in srgb, var(--ivory) 84%, transparent);
 }
 
 .stage-mark {
@@ -576,17 +426,7 @@ html.is-looking body {
   max-width: 16ch;
 }
 
-.stage-card p {
-  margin-top: 0.7rem;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--steel);
-  max-width: 42ch;
-}
 
-.stage-card .thumbs {
-  padding-top: 1rem;
-}
 
 .clients {
   display: flex;
@@ -743,21 +583,10 @@ html.is-looking body {
     filter: none !important;
   }
 
-  .thumb img,
   .space-stage img.hero,
   .stage-media img,
-  .client-list img,
-  .look-media,
-  .look-caption,
-  .look-close {
+  .client-list img {
     transform: none !important;
-  }
-
-  .look-veil,
-  .look-media,
-  .look-caption,
-  .look-close {
-    transition: none !important;
   }
 
   .space-copy {
@@ -819,24 +648,6 @@ html.is-looking body {
 
   .doctrine-band {
     min-height: min(48vh, 22rem);
-  }
-
-  .thumbs {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .look {
-    padding: 4.5rem 0.85rem 1.4rem;
-  }
-
-  .look-media img {
-    max-width: 100%;
-    max-height: 68dvh;
-  }
-
-  .look-close {
-    top: 20px;
-    right: 16px;
   }
 
   .readout > span + span {
