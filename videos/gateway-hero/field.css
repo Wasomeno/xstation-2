@@ -1,335 +1,168 @@
-.dock {
+.glass-orbit-canvas {
   position: absolute;
-  left: 50%;
-  top: 48%;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-}
-
-.dock-svg {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 2400px;
-  height: 2400px;
-  margin: -1200px 0 0 -1200px;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.dock-ring {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1;
-  stroke-opacity: 0.3;
-  stroke-dasharray: 4 8;
-  vector-effect: non-scaling-stroke;
-  transition:
-    stroke-opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    stroke-width 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.dock-ring.is-core {
-  stroke-opacity: 0.4;
-  stroke-dasharray: none;
-}
-
-.dock-ring.is-mid {
-  stroke-opacity: 0.34;
-}
-
-.dock-ring.is-outer {
-  stroke-opacity: 0.26;
-}
-
-.dock-ring.is-hot {
-  stroke-opacity: 0.72;
-  stroke-width: 1.6;
-  stroke-dasharray: 6 5;
-}
-
-.dock-ring.is-core.is-hot {
-  stroke-opacity: 0.55;
-  stroke-dasharray: none;
-}
-
-.dock-ring.is-focus {
-  stroke-opacity: 0.92;
-  stroke-width: 2px;
-  stroke-dasharray: 8 5;
-}
-
-.dock-ring.is-core.is-focus {
-  stroke-opacity: 0.72;
-  stroke-dasharray: none;
-}
-
-.dock-spoke {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1;
-  stroke-opacity: 0.4;
-  stroke-dasharray: 2 7;
-  vector-effect: non-scaling-stroke;
-  transition:
-    stroke-opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1),
-    stroke-width 0.4s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.dock-spoke.is-hot,
-.is-orb-hot .dock-spoke {
-  stroke-opacity: 0.66;
-  stroke-width: 1.35;
-}
-
-.dock-align {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.2;
-  stroke-opacity: 0;
-  stroke-dasharray: 3 5;
-  vector-effect: non-scaling-stroke;
-  transition: stroke-opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.dock-align.is-hot {
-  stroke-opacity: 0.5;
-}
-
-.dock-node {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  width: 78px;
-  height: 78px;
-  margin: 0;
-  border-radius: 50%;
-  background: var(--ivory);
-  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, #fff 80%, transparent),
-    0 12px 28px color-mix(in srgb, var(--ink) 8%, transparent);
-  pointer-events: auto;
-  cursor: pointer;
-  transition:
-    border-color 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-    background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.dock-node:hover,
-.dock-node.is-hot {
-  border-color: var(--ink);
-  box-shadow:
-    0 0 0 1px var(--ink),
-    0 14px 32px color-mix(in srgb, var(--ink) 14%, transparent);
-}
-
-.dock-node.is-focus {
-  border-color: var(--blue);
-  box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--sky) 30%, transparent),
-    0 0 0 1px var(--blue),
-    0 18px 38px color-mix(in srgb, var(--blue) 20%, transparent);
-}
-
-.dock-node-label {
-  display: block;
-  max-width: 14ch;
-  padding: 0 6px;
-  text-align: center;
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
-  color: var(--ink);
-}
-
-.dock-node.is-conversation {
-  width: 146px;
-  height: 146px;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: drop-shadow(0 14px 18px color-mix(in srgb, var(--steel) 18%, transparent));
-}
-
-.dock-node.is-conversation:hover,
-.dock-node.is-conversation.is-hot {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--steel) 24%, transparent));
-}
-
-.dock-node.is-conversation.is-focus {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--blue) 34%, transparent));
-}
-
-.dock-node.is-conversation .dock-node-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.orbit-conversation-canvas {
-  position: relative;
-  z-index: 1;
+  inset: 0;
+  z-index: 3;
   display: block;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  opacity: var(--field-alpha, 0);
+  will-change: opacity, transform;
+}
+
+.glass-label-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+  opacity: var(--field-alpha, 0);
+}
+
+.dock-node.glass-label {
+  --pointer-length: 56px;
+  --pointer-angle: 0rad;
+  --label-shift-x: 72px;
+  --label-shift-y: 0px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  color: #304c45;
+  overflow: visible;
+  will-change: transform, opacity;
+}
+
+.dock-node-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: max-content;
+  max-width: 14ch;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.28;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  transform: translate(var(--label-shift-x), var(--label-shift-y)) translate(0, -50%);
+  transform-origin: 0 50%;
   transition:
-    opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dock-node.is-category-model {
-  isolation: isolate;
+.glass-label[data-side="left"] .dock-node-label {
+  text-align: right;
+  transform: translate(var(--label-shift-x), var(--label-shift-y)) translate(-100%, -50%);
+  transform-origin: 100% 50%;
 }
 
-.dock-node.is-category-model::before {
+.glass-label-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--pointer-length);
+  height: 1px;
+  transform: rotate(var(--pointer-angle));
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgb(27 94 74 / 0.9), rgb(27 94 74 / 0.08));
+  opacity: 0.88;
+}
+
+.glass-label-line::after {
   content: "";
   position: absolute;
-  z-index: 0;
-  inset: -24%;
+  left: -3px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--peri) 34%, transparent) 0%,
-    color-mix(in srgb, var(--blue) 18%, transparent) 38%,
-    transparent 72%
-  );
-  filter: blur(10px);
-  opacity: 0;
-  transform: scale(0.72) translateY(8%);
-  pointer-events: none;
-  transition:
-    opacity 0.62s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.84s cubic-bezier(0.16, 1, 0.3, 1);
+  background: #1b5e4a;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 3px rgb(132 198 165 / 0.16);
 }
 
-.dock-node.is-category-model.is-focus::before {
-  opacity: 0.92;
-  transform: scale(1) translateY(0);
+.glass-label.is-focus {
+  color: #0a3d30;
 }
 
-.dock-node.is-category-model.is-model-loading .orbit-category-model-canvas {
-  opacity: 0;
+.glass-label.is-focus .dock-node-label {
+  font-weight: 700;
+  text-shadow: 0 0 18px rgb(168 232 198 / 0.55);
 }
 
-.dock-node.is-category-model.is-model-ready .orbit-category-model-canvas {
+.glass-label.is-focus .glass-label-line {
   opacity: 1;
 }
 
-.orbit-category-model-canvas {
-  width: 125%;
-  height: 125%;
-  transform-origin: 50% 50%;
+.glass-label.is-muted .dock-node-label {
+  opacity: 0.42;
 }
 
-.dock-node.is-category-model.is-focus .orbit-category-model-canvas {
-  transform: scale(1.385);
-}
-
-.dock-node.is-conversation:not(.is-category-model):hover .orbit-conversation-canvas,
-.dock-node.is-conversation:not(.is-category-model).is-hot .orbit-conversation-canvas {
-  transform: scale(1.06) translateY(-2px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .orbit-conversation-canvas,
-  .dock-node.is-category-model::before {
-    transition: none;
-  }
-}
-
-.slab {
+.glass-orbit-fallback {
   position: absolute;
-  left: 50%;
+  right: 6vw;
   top: 50%;
-  margin: 0;
-  pointer-events: none;
-  will-change: transform;
-  transform-origin: 50% 50%;
-  transform-style: flat;
-  backface-visibility: hidden;
-  background: currentColor;
-  color: var(--ink);
-  box-shadow:
-    0 0 14px color-mix(in srgb, currentColor 22%, transparent),
-    0 0 32px color-mix(in srgb, currentColor 10%, transparent);
+  width: min(48vw, 680px);
+  aspect-ratio: 1;
+  border: 1px solid rgb(51 128 91 / 0.16);
+  border-radius: 50%;
+  transform: translateY(-50%);
 }
 
-.slab.is-gold {
-  color: var(--gold, var(--blue));
-  box-shadow:
-    0 0 16px color-mix(in srgb, var(--gold, var(--blue)) 45%, transparent),
-    0 0 36px color-mix(in srgb, var(--gold, var(--blue)) 22%, transparent);
-}
-
-.slab.is-peri {
-  color: var(--peri);
-  box-shadow:
-    0 0 16px color-mix(in srgb, var(--peri) 36%, transparent),
-    0 0 32px color-mix(in srgb, var(--peri) 16%, transparent);
-}
-
-.slab.is-steel {
-  color: var(--navy);
-}
-
-.slab.is-dim {
-  color: color-mix(in srgb, var(--navy) 58%, var(--peri));
-}
-
-.dock-orbs {
+.glass-orbit-fallback::before,
+.glass-orbit-fallback::after {
+  content: "";
   position: absolute;
-  left: 50%;
-  top: 48%;
-  z-index: 5;
-  margin: 0;
-  display: block;
-  background: transparent;
-  pointer-events: auto;
-  cursor: pointer;
-  opacity: 0;
-  visibility: hidden;
-  transform-style: flat;
-  will-change: transform;
+  inset: 13%;
+  border: 1px solid rgb(51 128 91 / 0.22);
+  border-radius: 50%;
+  transform: rotate(24deg) scaleY(0.46);
+}
+
+.glass-orbit-fallback::after {
+  transform: rotate(-18deg) scaleY(0.62);
+}
+
+.glass-orbit-fallback-core {
+  position: absolute;
+  inset: 31%;
+  border: 1px solid rgb(255 255 255 / 0.86);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 24%, #effff7 0%, #9cdbb9 42%, #6cb38e 100%);
+  box-shadow:
+    inset -18px -22px 36px rgb(27 94 74 / 0.16),
+    inset 12px 12px 24px rgb(255 255 255 / 0.72),
+    0 34px 80px rgb(58 139 99 / 0.2);
 }
 
 @media (max-width: 767px) {
-  .dock-node {
-    width: 58px;
-    height: 58px;
-  }
-
   .dock-node-label {
-    font-size: 9px;
-    max-width: 12ch;
+    max-width: 11ch;
+    font-size: 7px;
+    line-height: 1.2;
+    letter-spacing: 0.13em;
   }
 
-  .dock-node.is-conversation {
-    width: 112px;
-    height: 112px;
+  .glass-orbit-fallback {
+    right: 7vw;
+    top: 68%;
+    width: 86vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-orbit-canvas,
+  .dock-node.glass-label {
+    will-change: auto;
+  }
+
+  .dock-node-label,
+  .glass-label-line {
+    transition: none;
   }
 }

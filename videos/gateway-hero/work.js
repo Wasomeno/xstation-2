@@ -210,13 +210,12 @@ function setOrbitCopy(index, immediate = false) {
     return;
   }
 
-  const restoringDefault = index === -1;
   if (orbitCopyTl) orbitCopyTl.kill();
   orbitCopyTl = gsap.timeline({ defaults: { overwrite: "auto" } })
     .to([title, lead], {
       autoAlpha: 0,
-      y: 18,
-      duration: restoringDefault ? 0.18 : 0.46,
+      y: 14,
+      duration: 0.42,
       ease: "power2.inOut",
     })
     .call(() => {
@@ -224,13 +223,13 @@ function setOrbitCopy(index, immediate = false) {
     })
     .fromTo(
       [title, lead],
-      { autoAlpha: 0, y: -18 },
+      { autoAlpha: 0, y: 18 },
       {
         autoAlpha: 1,
         y: 0,
-        duration: restoringDefault ? 0.46 : 0.9,
+        duration: 0.72,
         ease: "power3.out",
-        stagger: 0.08,
+        stagger: 0.06,
       },
     );
 }
