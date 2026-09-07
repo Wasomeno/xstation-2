@@ -13,12 +13,14 @@
   }
 
   const slots = [
-    [-3, -1], [-3, 0], [-3, 1],
-    [-2, -1.5], [-2, -0.5], [-2, 0.5], [-2, 1.5],
-    [-1, -1.5], [-1, -0.5], [-1, 0.5], [-1, 1.5],
-    [1, -1.5], [1, -0.5], [1, 0.5], [1, 1.5],
-    [2, -1.5], [2, -0.5], [2, 0.5], [2, 1.5],
-    [3, -1], [3, 0], [3, 1],
+    [-4, -1], [-4, 0], [-4, 1],
+    [-3, -1.5], [-3, -0.5], [-3, 0.5], [-3, 1.5],
+    [-2, -2], [-2, -1], [-2, 0], [-2, 1], [-2, 2],
+    [-1, -2], [-1, -1], [-1, 0], [-1, 1], [-1, 2],
+    [1, -2], [1, -1], [1, 0], [1, 1], [1, 2],
+    [2, -2], [2, -1], [2, 0], [2, 1], [2, 2],
+    [3, -1.5], [3, -0.5], [3, 0.5], [3, 1.5],
+    [4, -1], [4, 0], [4, 1],
   ];
   const palette = ["ivory", "ivory", "steel", "peri", "gold", "gold", "dim", "peri"];
   const far = -1880;
@@ -50,7 +52,7 @@
     field?.appendChild(slab);
     return {
       element: slab,
-      phase: ((col + 3) * 0.11 + (row + 1.5) * 0.17 + index * 0.02) % 1,
+      phase: ((col + 4) * 0.09 + (row + 2) * 0.13 + index * 0.019) % 1,
       x,
       y,
       railX: Math.sign(col) * rail,
@@ -139,8 +141,7 @@
     timeline
       .to({}, { duration: 0.9 })
       .addPause("ready", waitForOrbit)
-      .to(bumper, { autoAlpha: 0, duration: 0.6, ease: "power2.inOut" })
-      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.55, ease: "power2.out" }, "<+=0.12");
+      .to(bumper, { autoAlpha: 0, duration: 0.6, ease: "power2.inOut" });
   } else {
     timeline
       .to(state, { fieldAlpha: 1, duration: 0.72, ease: "power2.out", onUpdate: renderField }, 0)
@@ -164,8 +165,7 @@
       .to(flight, { timeScale: 3.4, duration: 0.5, ease: "power2.in" }, "<")
       .to(state, { exit: 1, duration: 1.25, ease: "power3.in", onUpdate: renderField }, "<")
       .to(".welcome-atmosphere", { autoAlpha: 0, duration: 0.85, ease: "power2.in" }, "<+=0.24")
-      .to(bumper, { autoAlpha: 0, duration: 0.7, ease: "power2.inOut" }, "<+=0.38")
-      .to("#site-nav, #hero-copy", { autoAlpha: 1, duration: 0.9, stagger: 0.08, ease: "power3.out" }, "<+=0.12");
+      .to(bumper, { autoAlpha: 0, duration: 0.7, ease: "power2.inOut" }, "<+=0.38");
   }
 
   window.addEventListener("xstation:orbit-ready", releaseToOrbit);

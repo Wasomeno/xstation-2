@@ -1,0 +1,8 @@
+Model Information:
+* title:	Robot
+* source:	https://sketchfab.com/3d-models/robot-80a736ddac1044299b134cfcca87c7f9
+* author:	l0wpoly (https://sketchfab.com/l0wpoly)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works

@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -51,16 +53,15 @@ const SLAB_SLOTS = [
 
 const BASE_TILT = 0;
 const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
-// Every orbit marker now uses the shared 3D conversation scene. Keep this
-// semantic map intact: its labels still drive the six story transitions and
-// preserve what each marker represents even though text is visually hidden.
+// Keep the category and model mapping together so the orbit story order and
+// its visual shorthand cannot drift apart.
 const STATION_NODES = [
-  { label: "Marketing & Content", ring: "mid", angle: Math.PI / 2, accent: true },
-  { label: "Prototyping", ring: "inner", angle: 0.52, accent: false },
-  { label: "AI Agents", ring: "outer", angle: 0.06, accent: false },
-  { label: "Customer Engagement", ring: "mid", angle: -Math.PI / 2, accent: true },
-  { label: "Document Management", ring: "inner", angle: -2.45, accent: false },
-  { label: "Talent Assessment", ring: "outer", angle: Math.PI, accent: false },
+  { label: "Marketing & Content", model: "megaphone", ring: "mid", angle: Math.PI / 2, accent: true },
+  { label: "Prototyping", model: "retroComputer", ring: "inner", angle: 0.52, accent: false },
+  { label: "AI Agents", model: "robot", ring: "outer", angle: 0.06, accent: false },
+  { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 2, accent: true },
+  { label: "Document Management", model: "notebooks", ring: "inner", angle: -2.45, accent: false },
+  { label: "Talent Assessment", model: "kenneyCharacters", ring: "outer", angle: Math.PI, accent: false },
 ];
 
 function mulberry32(seed) {
@@ -737,6 +738,345 @@ function createConversationView(host, reduce, phase = 0, characterStyle = "stick
   };
 }
 
+const CATEGORY_MODEL_SOURCES = {
+  handshake: {
+    type: "gltf",
+    url: new URL("assets/models/handshake/scene.gltf", import.meta.url).href,
+    rotation: [-0.1, Math.PI / 2 - 0.3, -0.04],
+  },
+  retroComputer: {
+    type: "gltf",
+    url: new URL("assets/models/retro-computer/scene.gltf", import.meta.url).href,
+    rotation: [-0.08, -Math.PI / 2 + 0.34, 0],
+  },
+  kenneyCharacters: {
+    type: "fbx",
+    url: new URL("assets/models/kenney-characters/Model/characterMedium.fbx", import.meta.url).href,
+    ensemble: true,
+    rotation: [-0.04, -0.22, 0],
+  },
+  robot: {
+    type: "gltf",
+    url: new URL("assets/models/robot/scene.gltf", import.meta.url).href,
+    rotation: [-0.04, -0.28, 0],
+  },
+  megaphone: {
+    type: "gltf",
+    url: new URL("assets/models/megaphone/scene.gltf", import.meta.url).href,
+    rotation: [-0.1, Math.PI / 2 - 0.42, -0.04],
+  },
+  notebooks: {
+    type: "gltf",
+    url: new URL("assets/models/notebooks/scene.gltf", import.meta.url).href,
+    rotation: [0.04, -0.12, -0.02],
+  },
+};
+
+const categoryModelPromises = new Map();
+// Keep geometry inside the WebGL frustum. CSS enlarges the complete transparent
+// canvas for the remaining focus scale so wide models do not clip at its edges.
+const CATEGORY_MODEL_FOCUS_SCALE = 1.48;
+// Orbiting models stay quiet and neutral. Focus introduces the product greens,
+// ordered from broad surfaces to smaller trim so the active asset stays light.
+const MODEL_IDLE_SWATCHES = [0xd7dcda, 0xc7cecb, 0xb7bfbc, 0xa5aeaa];
+const MODEL_ACTIVE_SWATCHES = [0xc0e7c7, 0x9fdaa9, 0x72ca8f, 0x43ad78];
+
+function loadFbx(url) {
+  return new Promise((resolve, reject) => {
+    new FBXLoader().load(url, resolve, undefined, reject);
+  });
+}
+
+function loadCategoryModelSource(key) {
+  if (categoryModelPromises.has(key)) return categoryModelPromises.get(key);
+  const source = CATEGORY_MODEL_SOURCES[key];
+  let promise;
+
+  if (source.type === "fbx") {
+    promise = Promise.all([
+      loadFbx(source.url),
+      source.animationUrl ? loadFbx(source.animationUrl) : Promise.resolve(null),
+    ]).then(([model, animation]) => ({
+      scene: model,
+      animations: animation?.animations?.length ? animation.animations : model.animations || [],
+    }));
+  } else {
+    promise = new Promise((resolve, reject) => {
+      new GLTFLoader().load(source.url, resolve, undefined, reject);
+    }).then((gltf) => ({ scene: gltf.scene, animations: gltf.animations || [] }));
+  }
+
+  categoryModelPromises.set(key, promise);
+  return promise;
+}
+
+function fitModel(object, targetSize = 1.75) {
+  object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(object);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const largestSide = Math.max(size.x, size.y, size.z) || 1;
+  const scale = targetSize / largestSide;
+
+  object.scale.multiplyScalar(scale);
+  object.position.addScaledVector(center, -scale);
+  object.updateMatrixWorld(true);
+}
+
+function applyOrbitModelMaterials(object, offset = 0) {
+  const materialMap = new Map();
+  const materials = [];
+
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    child.castShadow = false;
+    child.receiveShadow = false;
+
+    const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    const greenMaterials = sourceMaterials.map((sourceMaterial, sourceIndex) => {
+      const cacheKey = sourceMaterial?.uuid || `${child.uuid}-${sourceIndex}`;
+      if (materialMap.has(cacheKey)) return materialMap.get(cacheKey);
+
+      const paletteIndex = (materials.length + offset) % MODEL_IDLE_SWATCHES.length;
+      const materialName = sourceMaterial?.name || "";
+      const hasGlow = /screen|display|emiss|part2|eye/i.test(materialName);
+      const material = new THREE.MeshStandardMaterial({
+        color: MODEL_IDLE_SWATCHES[paletteIndex],
+        roughness: hasGlow ? 0.28 : THREE.MathUtils.clamp(sourceMaterial?.roughness ?? 0.52, 0.32, 0.76),
+        metalness: hasGlow ? 0.08 : THREE.MathUtils.clamp(sourceMaterial?.metalness ?? 0.04, 0, 0.24),
+        transparent: false,
+        opacity: 1,
+        side: sourceMaterial?.side ?? THREE.FrontSide,
+      });
+      material.name = `xstation-orbit-${materialName || paletteIndex}`;
+      material.emissive.set(MODEL_IDLE_SWATCHES[paletteIndex]);
+      material.emissiveIntensity = hasGlow ? 0.035 : 0.006;
+      material.userData.idleColor = new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
+      material.userData.activeColor = new THREE.Color(MODEL_ACTIVE_SWATCHES[paletteIndex]);
+      material.userData.idleEmissive = hasGlow ? 0.035 : 0.006;
+      material.userData.activeEmissive = hasGlow ? 0.26 : 0.035;
+      materialMap.set(cacheKey, material);
+      materials.push(material);
+      return material;
+    });
+
+    child.material = Array.isArray(child.material) ? greenMaterials : greenMaterials[0];
+  });
+
+  return materials;
+}
+
+function buildCategoryModel(source, config) {
+  const materials = [];
+
+  if (!config.ensemble) {
+    const model = cloneSkeleton(source.scene);
+    materials.push(...applyOrbitModelMaterials(model));
+    fitModel(model);
+    const orientedModel = new THREE.Group();
+    orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
+    orientedModel.add(model);
+    return { model: orientedModel, materials };
+  }
+
+  const ensemble = new THREE.Group();
+  [-0.82, 0, 0.82].forEach((x, index) => {
+    const character = cloneSkeleton(source.scene);
+    materials.push(...applyOrbitModelMaterials(character));
+    fitModel(character, 1.72);
+    character.position.x = x;
+    character.position.y = index === 1 ? 0.08 : -0.08;
+    character.rotation.y = index === 1 ? 0 : index === 0 ? 0.22 : -0.22;
+    character.scale.multiplyScalar(index === 1 ? 1 : 0.88);
+    ensemble.add(character);
+
+  });
+  fitModel(ensemble, 1.75);
+  const orientedModel = new THREE.Group();
+  orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
+  orientedModel.add(ensemble);
+  return { model: orientedModel, materials };
+}
+
+function createCategoryModelView(host, reduce, modelKey) {
+  const config = CATEGORY_MODEL_SOURCES[modelKey];
+  const canvas = document.createElement("canvas");
+  canvas.className = "orbit-conversation-canvas orbit-category-model-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  host.classList.add("is-conversation", "is-category-model", "is-model-loading");
+  host.appendChild(canvas);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
+  });
+  if (!renderer.getContext()) {
+    canvas.remove();
+    host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
+    return null;
+  }
+
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(240, 240, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 30);
+  camera.position.set(0, 0.08, 6.2);
+  camera.lookAt(0, 0, 0);
+  scene.add(new THREE.HemisphereLight(0xf3f8f4, 0x092328, 2.35));
+  const keyLight = new THREE.DirectionalLight(0xf0f7f1, 3.1);
+  keyLight.position.set(-3.2, 4.6, 5.2);
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0x67b982, 2.15);
+  rimLight.position.set(4, 1.4, 3.2);
+  scene.add(rimLight);
+
+  const stage = new THREE.Group();
+  scene.add(stage);
+
+  const TWO_PI = Math.PI * 2;
+  const easeInOutCubic = (value) =>
+    value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
+  let model = null;
+  let materials = [];
+  let frame = 0;
+  let disposed = false;
+  let hovered = false;
+  let focused = host.classList.contains("is-focus");
+  let greenMix = focused ? 1 : 0;
+  let rotation = 0;
+  let scale = focused ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+  let lift = focused ? 0.1 : 0;
+  let tilt = focused ? -0.025 : 0;
+  let transition = null;
+  let previousFrameTime = window.performance.now() * 0.001;
+
+  function startTransition(kind) {
+    if (reduce) {
+      rotation = 0;
+      scale = focused ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+      lift = focused ? 0.1 : 0;
+      tilt = focused ? -0.025 : 0;
+      greenMix = focused ? 1 : 0;
+      transition = null;
+      return;
+    }
+
+    const targetScale = kind === "focus" ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+    let targetRotation = 0;
+    if (kind === "exit") targetRotation = Math.round(rotation / TWO_PI) * TWO_PI;
+    transition = {
+      kind,
+      startedAt: window.performance.now() * 0.001,
+      duration: kind === "focus" ? 0.92 : kind === "exit" ? 0.72 : 1.15,
+      fromRotation: rotation,
+      targetRotation,
+      fromScale: scale,
+      targetScale,
+      fromLift: lift,
+      targetLift: kind === "focus" ? 0.1 : 0,
+      fromTilt: tilt,
+      targetTilt: kind === "focus" ? -0.025 : 0,
+    };
+  }
+
+  function render() {
+    if (disposed) return;
+    const now = window.performance.now() * 0.001;
+    const delta = Math.min(Math.max(now - previousFrameTime, 0), 0.05);
+    previousFrameTime = now;
+    if (model && transition) {
+      const progress = THREE.MathUtils.clamp((now - transition.startedAt) / transition.duration, 0, 1);
+      const eased = easeInOutCubic(progress);
+      if (transition.kind === "exit") {
+        rotation = THREE.MathUtils.lerp(transition.fromRotation, transition.targetRotation, eased);
+      }
+      scale = THREE.MathUtils.lerp(transition.fromScale, transition.targetScale, eased);
+      lift = THREE.MathUtils.lerp(transition.fromLift, transition.targetLift, eased);
+      tilt = THREE.MathUtils.lerp(transition.fromTilt, transition.targetTilt, eased);
+      if (progress >= 1) transition = null;
+    }
+
+    if (model && focused && !reduce) rotation += (delta * TWO_PI) / 12;
+
+    stage.rotation.y = rotation;
+    stage.rotation.x = 0;
+    stage.rotation.z = tilt;
+    stage.position.y = lift;
+    stage.scale.setScalar(scale);
+
+    const colorTarget = focused ? 1 : 0;
+    if (reduce) {
+      greenMix = colorTarget;
+    } else {
+      const colorEase = 1 - Math.exp(-delta * (colorTarget > greenMix ? 5.2 : 7.5));
+      greenMix = THREE.MathUtils.lerp(greenMix, colorTarget, colorEase);
+      if (Math.abs(colorTarget - greenMix) < 0.001) greenMix = colorTarget;
+    }
+    materials.forEach((material) => {
+      material.color.lerpColors(material.userData.idleColor, material.userData.activeColor, greenMix);
+      material.emissive.copy(material.color);
+      material.emissiveIntensity = THREE.MathUtils.lerp(
+        material.userData.idleEmissive,
+        material.userData.activeEmissive,
+        greenMix,
+      );
+    });
+
+    renderer.render(scene, camera);
+    if (!reduce) frame = window.requestAnimationFrame(render);
+  }
+
+  loadCategoryModelSource(modelKey)
+    .then((source) => {
+      if (disposed) return;
+      const built = buildCategoryModel(source, config);
+      model = built.model;
+      materials = built.materials;
+      stage.add(model);
+      host.classList.remove("is-model-loading");
+      host.classList.add("is-model-ready");
+      if (focused) startTransition("focus");
+      if (reduce) render();
+    })
+    .catch((error) => {
+      console.warn(`Could not load ${modelKey} orbit model`, error);
+      host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
+      host.classList.add("is-model-error");
+      canvas.remove();
+    });
+
+  render();
+
+  return {
+    setHovered(next) {
+      hovered = Boolean(next);
+      if (reduce) render();
+    },
+    setFocused(next) {
+      const wasFocused = focused;
+      focused = Boolean(next);
+      if (model && focused !== wasFocused) startTransition(focused ? "focus" : "exit");
+      if (reduce) render();
+    },
+    dispose() {
+      disposed = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      materials.forEach((material) => material.dispose());
+      renderer.dispose();
+      canvas.remove();
+    },
+  };
+}
+
 function noopController() {
   return {
     items: [],
@@ -746,6 +1086,7 @@ function noopController() {
     playWelcome() {},
     setMode() {},
     setProgress() {},
+    setOrbitEntryProgress() {},
     getFocus() { return -1; },
     pause() {},
     resumeWhisper() {},
@@ -878,11 +1219,10 @@ export function createField({ root, gsap, reduce }) {
     return { el, spec, spoke: spokes[index], x: 0, y: 0 };
   });
 
-  const conversationViews = nodes.map((node, index) => {
+  const conversationViews = nodes.map((node) => {
     try {
       node.el.setAttribute("aria-label", node.spec.label);
-      const characterStyle = node.spec.label === "Talent Assessment" ? "upper-body" : "stick";
-      return createConversationView(node.el, reduce, index * 0.68, characterStyle);
+      return createCategoryModelView(node.el, reduce, node.spec.model);
     } catch (err) {
       return null;
     }
@@ -890,6 +1230,7 @@ export function createField({ root, gsap, reduce }) {
 
   let hover = null;
   let orbitFrozen = false;
+  let orbitEntryProgress = 1;
   let focusIndex = -1;
   let focusStrength = 0;
   let focusLocal = 0;
@@ -1322,22 +1663,29 @@ export function createField({ root, gsap, reduce }) {
 
   function layoutDock(t, gain, pose) {
     sizeRings();
+    const entryGain = orbitEntryProgress;
+    const visibleGain = gain * entryGain;
+    const entryPose = {
+      x: pose.x,
+      y: pose.y,
+      scale: pose.scale * (0.84 + 0.16 * entryGain),
+    };
     const dockProps = {
       transformOrigin: "0 0",
       rotationX: 0,
-      rotation: 0,
-      autoAlpha: gain,
+      rotation: -5 * (1 - entryGain),
+      autoAlpha: visibleGain,
       force3D: true,
     };
     if (!(focusIndex >= 0 && focusStrength > 0) && !focusReturning) {
-      dockProps.x = pose.x;
-      dockProps.y = pose.y;
-      dockProps.scale = pose.scale;
+      dockProps.x = entryPose.x;
+      dockProps.y = entryPose.y;
+      dockProps.scale = entryPose.scale;
     }
     gsap.set(dock, dockProps);
-    if (!orbitFrozen) gsap.set(svg, { autoAlpha: 1 });
+    if (!orbitFrozen) gsap.set(svg, { autoAlpha: entryGain });
 
-    const live = gain > 0.55 && !orbitFrozen;
+    const live = visibleGain > 0.55 && !orbitFrozen;
     const spin = t * Math.PI * 2;
     if (!orbitFrozen) {
       nodes.forEach((node) => {
@@ -1355,7 +1703,7 @@ export function createField({ root, gsap, reduce }) {
           rotationX: 0,
           rotationY: 0,
           rotationZ: 0,
-          autoAlpha: gain,
+          autoAlpha: visibleGain,
           force3D: true,
         });
       });
@@ -1380,7 +1728,7 @@ export function createField({ root, gsap, reduce }) {
       alignLine.setAttribute("y2", hover.y.toFixed(2));
     }
 
-    layoutOrbs(t, gain, pose);
+    layoutOrbs(t, visibleGain, entryPose);
     // layoutOrbs writes the ready canvas pose. Focus rendering runs last so
     // both active and returning snap transitions retain sole transform ownership.
     if (focusMotionReady) renderFocusMotion();
@@ -1440,6 +1788,16 @@ export function createField({ root, gsap, reduce }) {
       else if (idleTl.paused()) idleTl.play();
     }
     layoutStation(p);
+  }
+
+  function setOrbitEntryProgress(progress) {
+    orbitEntryProgress = gsap.utils.clamp(0, 1, progress);
+
+    if (mode === "pass") {
+      layoutStation(passP);
+    } else if (mode === "whisper") {
+      layoutDock(state.t, 1, stationPose(m));
+    }
   }
 
   function freezeOrbit() {
@@ -1656,6 +2014,7 @@ export function createField({ root, gsap, reduce }) {
     playWelcome,
     setMode,
     setProgress,
+    setOrbitEntryProgress,
     freezeOrbit,
     unfreezeOrbit,
     hideProductsNode,

@@ -62,6 +62,79 @@ function prepareOrbitHero(showInterface = true) {
   });
 }
 
+function bindHeroEntry() {
+  if (!gsap) return () => {};
+
+  const brand = document.getElementById("brand");
+  const titleLines = document.querySelectorAll("#doctrine-title .hero-title-line > span");
+  const lead = document.getElementById("doctrine-lead");
+  const actions = document.querySelectorAll(".station-actions .station-cta");
+  const animatedElements = [brand, ...titleLines, lead, ...actions].filter(Boolean);
+  const orbitEntry = { progress: reduce ? 1 : 0 };
+  let timeline = null;
+
+  field.setOrbitEntryProgress(orbitEntry.progress);
+
+  if (!reduce) {
+    gsap.set(brand, { autoAlpha: 0, y: -12 });
+    gsap.set(titleLines, {
+      autoAlpha: 0,
+      yPercent: 110,
+      rotate: 1.2,
+      transformOrigin: "0% 100%",
+    });
+    gsap.set(lead, { autoAlpha: 0, y: 22 });
+    gsap.set(actions, { autoAlpha: 0, y: 16, scale: 0.97 });
+  }
+
+  function reveal() {
+    gsap.set("#site-nav, #hero-copy", { autoAlpha: 1, y: 0 });
+
+    if (reduce) {
+      field.setOrbitEntryProgress(1);
+      gsap.set(animatedElements, { autoAlpha: 1, clearProps: "transform" });
+      return;
+    }
+
+    timeline = gsap.timeline({ defaults: { ease: "power3.out" } })
+      .to(orbitEntry, {
+        progress: 1,
+        duration: 1.18,
+        ease: "expo.out",
+        onUpdate: () => field.setOrbitEntryProgress(orbitEntry.progress),
+      }, 0)
+      .to(brand, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.12)
+      .to(titleLines, {
+        autoAlpha: 1,
+        yPercent: 0,
+        rotate: 0,
+        duration: 0.9,
+        stagger: 0.09,
+        ease: "expo.out",
+      }, 0.26)
+      .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.52)
+      .to(actions, {
+        autoAlpha: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.62,
+        stagger: 0.07,
+      }, 0.68);
+  }
+
+  const welcome = document.getElementById("welcome-bumper");
+  if (welcome) {
+    window.addEventListener("xstation:welcome-finished", reveal, { once: true });
+  } else {
+    reveal();
+  }
+
+  return () => {
+    window.removeEventListener("xstation:welcome-finished", reveal);
+    timeline?.kill();
+  };
+}
+
 function smooth() {
   if (reduce || shot || typeof window.Lenis !== "function") return null;
 
@@ -111,9 +184,13 @@ let orbitCopyTl = null;
 function applyOrbitCopy(story, title, lead) {
   title.replaceChildren();
   const lines = story.titleLines || [story.title];
-  lines.forEach((line, index) => {
-    if (index > 0) title.appendChild(document.createElement("br"));
-    title.appendChild(document.createTextNode(line));
+  lines.forEach((line) => {
+    const lineMask = document.createElement("span");
+    const lineText = document.createElement("span");
+    lineMask.className = "hero-title-line";
+    lineText.textContent = line;
+    lineMask.appendChild(lineText);
+    title.appendChild(lineMask);
   });
   lead.textContent = story.lead;
 }
@@ -213,6 +290,9 @@ function bindSpatialFold(orbitTl) {
 
   const isCompact = () => window.matchMedia("(max-width: 767px)").matches;
   const indexLines = document.querySelectorAll("#index-title .index-line > span");
+  const editorialBridge = document.querySelector(".editorial-bridge");
+  const editorialLines = document.querySelectorAll(".editorial-line > span");
+  const editorialSupport = document.querySelector(".editorial-support");
   let folded = false;
 
   function lockOrbit() {
@@ -280,10 +360,45 @@ function bindSpatialFold(orbitTl) {
     yPercent: 105,
   });
 
+  if (editorialBridge) {
+    gsap.set(editorialLines, {
+      autoAlpha: 0,
+      yPercent: 105,
+    });
+
+    gsap.set(editorialSupport, {
+      autoAlpha: 0,
+      y: 20,
+    });
+
+    ScrollTrigger.create({
+      id: "editorial-bridge-enter",
+      trigger: editorialBridge,
+      start: "top 76%",
+      once: true,
+      onEnter: () => {
+        gsap.timeline()
+          .to(editorialLines, {
+            autoAlpha: 1,
+            yPercent: 0,
+            duration: 0.78,
+            stagger: 0.1,
+            ease: "power3.out",
+          })
+          .to(editorialSupport, {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.58,
+            ease: "power2.out",
+          }, "-=0.34");
+      },
+    });
+  }
+
   ScrollTrigger.create({
     id: "products-title-enter",
-    trigger: "#work",
-    start: "top 82%",
+    trigger: "#index-title",
+    start: "top 86%",
     once: true,
     onEnter: () => {
       gsap.to(indexLines, {
@@ -382,8 +497,10 @@ const isShot = applyShot();
 if (gsap && !isShot) {
   if (ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
+  let cleanupHeroEntry = () => {};
   const ctx = gsap.context(() => {
     smooth();
+    cleanupHeroEntry = bindHeroEntry();
     const orbitTl = startOrbitAutoplay();
     bindSpatialFold(orbitTl);
     bindEnter();
@@ -393,7 +510,10 @@ if (gsap && !isShot) {
   if (ScrollTrigger) {
     window.addEventListener("load", () => ScrollTrigger.refresh());
   }
-  window.addEventListener("pagehide", () => ctx.revert());
+  window.addEventListener("pagehide", () => {
+    cleanupHeroEntry();
+    ctx.revert();
+  }, { once: true });
 } else if (!isShot) {
   smooth();
 }

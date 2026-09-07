@@ -173,6 +173,7 @@
       }
 
       .welcome-slab {
+        --slab-glow: var(--blue);
         position: absolute;
         left: 50%;
         top: 50%;
@@ -182,8 +183,9 @@
         color: var(--ink);
         background: currentColor;
         box-shadow:
-          0 0 14px color-mix(in srgb, currentColor 22%, transparent),
-          0 0 32px color-mix(in srgb, currentColor 10%, transparent);
+          0 0 7px color-mix(in srgb, var(--slab-glow) 76%, transparent),
+          0 0 24px color-mix(in srgb, var(--slab-glow) 48%, transparent),
+          0 0 58px color-mix(in srgb, var(--slab-glow) 24%, transparent);
         backface-visibility: hidden;
         transform-origin: 50% 50%;
         will-change: transform, opacity;
@@ -191,21 +193,26 @@
 
       .welcome-slab.is-gold {
         color: var(--gold);
+        --slab-glow: var(--gold);
         box-shadow:
-          0 0 18px color-mix(in srgb, var(--gold) 48%, transparent),
-          0 0 44px color-mix(in srgb, var(--gold) 22%, transparent);
+          0 0 9px color-mix(in srgb, var(--gold) 88%, transparent),
+          0 0 30px color-mix(in srgb, var(--gold) 62%, transparent),
+          0 0 72px color-mix(in srgb, var(--gold) 32%, transparent);
       }
 
       .welcome-slab.is-peri {
         color: var(--peri);
+        --slab-glow: var(--peri);
       }
 
       .welcome-slab.is-steel {
         color: var(--navy);
+        --slab-glow: var(--sky);
       }
 
       .welcome-slab.is-dim {
         color: color-mix(in srgb, var(--navy) 58%, var(--peri));
+        --slab-glow: color-mix(in srgb, var(--blue) 70%, var(--peri));
       }
 
       .welcome-title-layer {
@@ -507,12 +514,22 @@
       #hero-copy h2 {
         margin: 0;
         font-family: var(--sans);
-        font-weight: 400;
+        font-weight: 500;
         max-width: min(15ch, 100%);
         font-size: clamp(3rem, 5.5vw, 5.4rem);
         line-height: 1.08;
         letter-spacing: -0.04em;
         color: var(--ink);
+      }
+
+      #hero-copy .hero-title-line {
+        display: block;
+        overflow: hidden;
+      }
+
+      #hero-copy .hero-title-line > span {
+        display: block;
+        will-change: transform, opacity;
       }
 
       #hero-copy p {
@@ -536,15 +553,19 @@
       }
 
       .station-cta {
+        --cta-fill: color-mix(in srgb, var(--blue) 90%, var(--navy));
+        position: relative;
+        isolation: isolate;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        overflow: hidden;
         min-height: 3rem;
         padding: 0 1.35rem;
-        border: 1px solid var(--blue);
+        border: 1px solid var(--cta-fill);
         border-radius: 2px;
         background: transparent;
-        color: var(--blue);
+        color: var(--cta-fill);
         font-family: var(--sans);
         font-size: 18px;
         font-weight: 400;
@@ -554,15 +575,34 @@
         cursor: pointer;
         transition:
           color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
-          background-color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
           border-color 0.22s cubic-bezier(0.23, 1, 0.32, 1),
           transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+      }
+
+      .station-cta::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        z-index: 0;
+        background: var(--navy);
+        transform: scaleX(0);
+        transform-origin: right center;
+        transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .station-cta > span {
+        position: relative;
+        z-index: 1;
       }
 
       .station-cta.is-primary {
         background: var(--navy);
         border-color: var(--navy);
         color: var(--ivory);
+      }
+
+      .station-cta.is-primary::before {
+        background: var(--cta-fill);
       }
 
       .station-cta:active {
@@ -572,18 +612,38 @@
       .station-cta:focus-visible {
         outline: 1px solid var(--blue);
         outline-offset: 3px;
+        border-color: var(--navy);
+        color: var(--ivory);
+      }
+
+      .station-cta:focus-visible::before {
+        transform: scaleX(1);
+        transform-origin: left center;
+      }
+
+      .station-cta.is-primary:focus-visible {
+        border-color: var(--cta-fill);
       }
 
       @media (hover: hover) and (pointer: fine) {
         .station-cta:hover {
-          background: var(--navy);
           border-color: var(--navy);
           color: var(--ivory);
         }
 
         .station-cta.is-primary:hover {
-          background: var(--blue);
-          border-color: var(--blue);
+          border-color: var(--cta-fill);
+        }
+
+        .station-cta:hover::before {
+          transform: scaleX(1);
+          transform-origin: left center;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .station-cta::before {
+          transition-duration: 0.01ms;
         }
       }
 
@@ -656,13 +716,16 @@
         <section id="hero">
           <div id="hero-copy">
             <div class="doctrine-block">
-              <h2 id="doctrine-title">Your Gateway to<br />Intelligent Products</h2>
+              <h2 id="doctrine-title">
+                <span class="hero-title-line"><span>Your Gateway to</span></span>
+                <span class="hero-title-line"><span>Intelligent Products</span></span>
+              </h2>
               <p id="doctrine-lead">
                 Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
               </p>
               <div class="station-actions">
-                <a class="station-cta" href="#work">See Products</a>
-                <a class="station-cta is-primary" href="#contact">Book a Demo</a>
+                <a class="station-cta" href="#work"><span>See Products</span></a>
+                <a class="station-cta is-primary" href="#contact"><span>Book a Demo</span></a>
               </div>
             </div>
           </div>

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Handshake - Ramadhan Series
+* source:	https://sketchfab.com/3d-models/handshake-ramadhan-series-a784711be28440a1b0251cc21d904202
+* author:	Without texture 3d (https://sketchfab.com/without_texture)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Handshake - Ramadhan Series" (https://sketchfab.com/3d-models/handshake-ramadhan-series-a784711be28440a1b0251cc21d904202) by Without texture 3d (https://sketchfab.com/without_texture) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

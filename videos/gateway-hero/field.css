@@ -160,16 +160,22 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  filter: drop-shadow(0 16px 18px color-mix(in srgb, var(--navy) 15%, transparent));
+  filter: drop-shadow(0 14px 18px color-mix(in srgb, var(--steel) 18%, transparent));
 }
 
 .dock-node.is-conversation:hover,
-.dock-node.is-conversation.is-hot,
+.dock-node.is-conversation.is-hot {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--steel) 24%, transparent));
+}
+
 .dock-node.is-conversation.is-focus {
   border: 0;
   background: transparent;
   box-shadow: none;
-  filter: drop-shadow(0 18px 22px color-mix(in srgb, var(--blue) 24%, transparent));
+  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--blue) 34%, transparent));
 }
 
 .dock-node.is-conversation .dock-node-label {
@@ -185,16 +191,75 @@
 }
 
 .orbit-conversation-canvas {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.dock-node.is-conversation:hover .orbit-conversation-canvas,
-.dock-node.is-conversation.is-hot .orbit-conversation-canvas {
+.dock-node.is-category-model {
+  isolation: isolate;
+}
+
+.dock-node.is-category-model::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -24%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--peri) 34%, transparent) 0%,
+    color-mix(in srgb, var(--blue) 18%, transparent) 38%,
+    transparent 72%
+  );
+  filter: blur(10px);
+  opacity: 0;
+  transform: scale(0.72) translateY(8%);
+  pointer-events: none;
+  transition:
+    opacity 0.62s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.84s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dock-node.is-category-model.is-focus::before {
+  opacity: 0.92;
+  transform: scale(1) translateY(0);
+}
+
+.dock-node.is-category-model.is-model-loading .orbit-category-model-canvas {
+  opacity: 0;
+}
+
+.dock-node.is-category-model.is-model-ready .orbit-category-model-canvas {
+  opacity: 1;
+}
+
+.orbit-category-model-canvas {
+  width: 125%;
+  height: 125%;
+  transform-origin: 50% 50%;
+}
+
+.dock-node.is-category-model.is-focus .orbit-category-model-canvas {
+  transform: scale(1.385);
+}
+
+.dock-node.is-conversation:not(.is-category-model):hover .orbit-conversation-canvas,
+.dock-node.is-conversation:not(.is-category-model).is-hot .orbit-conversation-canvas {
   transform: scale(1.06) translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-conversation-canvas,
+  .dock-node.is-category-model::before {
+    transition: none;
+  }
 }
 
 .slab {
