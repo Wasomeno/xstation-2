@@ -6,6 +6,7 @@ import {
   advanceHoverProgress,
   GLASS_PROFILES,
   iconRenderProfile,
+  ORBIT_ROTATION_OFFSET,
   STATION_COLORS,
   STATION_GLASS_GEOMETRY,
   stationVisualScale,
@@ -412,9 +413,9 @@ export function createField({ root, gsap, reduce }) {
     edge: new THREE.LineBasicMaterial({ color: STATION_COLORS.edge, transparent: true, opacity: 0.42, depthWrite: false }),
     icon: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.icon, roughness: 0.16, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.08, specularIntensity: 0.55, envMapIntensity: 1.1 })),
     iconLight: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.iconAccent, roughness: 0.18, metalness: 0.025, clearcoat: 0.5, clearcoatRoughness: 0.1, specularIntensity: 0.5, envMapIntensity: 1 })),
-    orbit: new THREE.MeshStandardMaterial({ color: 0xdff8eb, roughness: 0.13, metalness: 0.04, transparent: true, opacity: 0.58, depthWrite: false, envMapIntensity: 1.75 }),
-    decorative: new THREE.MeshPhysicalMaterial({ color: 0xf3fff8, roughness: 0.028, metalness: 0, transmission: 0.96, thickness: 0.7, ior: 1.52, dispersion: 0.018, clearcoat: 1, clearcoatRoughness: 0.02, specularIntensity: 1, envMapIntensity: 2.1, attenuationColor: new THREE.Color(0x86d4ae), attenuationDistance: 1.6, transparent: true, opacity: 0.98 }),
-    decorativeCore: new THREE.MeshPhysicalMaterial({ color: 0x6fbf97, roughness: 0.18, metalness: 0, transmission: 0.42, thickness: 1.1, ior: 1.46, clearcoat: 0.6, envMapIntensity: 1.2, attenuationColor: new THREE.Color(0x2f7a58), attenuationDistance: 0.7 }),
+    orbit: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbit),
+    decorative: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationShell),
+    decorativeCore: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationCore),
   };
   const glassIdle = new THREE.Color(STATION_COLORS.glassIdle);
   const glassLive = new THREE.Color(STATION_COLORS.glassFocused);
@@ -428,10 +429,8 @@ export function createField({ root, gsap, reduce }) {
 
   const orbGroup = new THREE.Group();
   composition.add(orbGroup);
-  const orbVolume = new THREE.Mesh(new THREE.SphereGeometry(1.18, 48, 32), new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbVolume));
   const orbCore = new THREE.Mesh(new THREE.SphereGeometry(1.46, 64, 48), new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbCore));
   const orbShell = new THREE.Mesh(new THREE.SphereGeometry(1.68, 64, 48), new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbShell));
-  orbVolume.renderOrder = 2;
   orbCore.renderOrder = 2;
   orbShell.renderOrder = 2;
   const orbBubble = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 16), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 0.9, thickness: 0.35, ior: 1.38, transparent: true, opacity: 0.7, envMapIntensity: 1.4 }));
@@ -446,7 +445,7 @@ export function createField({ root, gsap, reduce }) {
   orbGlint.position.set(0.58, -0.48, 1.46);
   orbGlint.scale.set(0.34, 0.2, 1);
   orbGlint.renderOrder = 3;
-  orbGroup.add(orbVolume, orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
+  orbGroup.add(orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
   const shadowTexture = createShadowTexture();
   const orbShadow = new THREE.Mesh(
     new THREE.PlaneGeometry(4.8, 2.35),
@@ -465,15 +464,15 @@ export function createField({ root, gsap, reduce }) {
   composition.add(orbShadow, orbContact);
 
   const orbitSpecs = [
-    [3.75, 1.42, 0.12, 0.12, 0.15, 0.6],
-    [4.2, 1.78, 0.42, -0.16, -0.19, 0.48],
-    [3.5, 2.16, -0.34, 0.28, 0.22, 0.4],
+    [3.75, 1.42, 0.12, 0.12, 0.15, 0.98],
+    [4.2, 1.78, 0.42, -0.16, -0.19, 0.94],
+    [3.5, 2.16, -0.34, 0.28, 0.22, 0.9],
   ];
   const orbitMeshes = orbitSpecs.map(([rx, ry, x, y, z, opacity]) => {
     const material = materials.orbit.clone();
     material.opacity = opacity;
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(new EllipseCurve3(rx, ry), 64, 0.021, 5, true), material);
-    mesh.rotation.set(x, y, z);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(new EllipseCurve3(rx, ry), 96, 0.028, 8, true), material);
+    mesh.rotation.set(x, y, z + ORBIT_ROTATION_OFFSET);
     mesh.renderOrder = 1;
     composition.add(mesh);
     return mesh;
@@ -598,7 +597,6 @@ export function createField({ root, gsap, reduce }) {
     orbGroup.rotation.y = state.time * 0.07;
     orbGroup.rotation.x = Math.sin(state.time * 0.22) * 0.05;
     orbCore.scale.setScalar(1 + Math.sin(state.time * 0.72) * 0.01);
-    orbVolume.scale.setScalar(1 + Math.sin(state.time * 0.54 + 0.6) * 0.018);
     const shadowPulse = 1 + floatY * 0.35 + Math.sin(state.time * 0.72) * 0.02;
     orbShadow.position.set(0.1 + floatX, -1.78, 0.08 + floatZ * 0.25);
     orbContact.position.set(0.06 + floatX, -1.7, 0.18 + floatZ * 0.2);

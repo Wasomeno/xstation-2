@@ -61,6 +61,31 @@ test("green slab optics remain premium and translucent", () => {
   assert.ok(slab.attenuationDistance >= 0.8 && slab.attenuationDistance <= 3);
 });
 
+test("orbit tubes use clear crystal optics", () => {
+  const { orbit } = visuals.GLASS_PROFILES;
+  const [red, green, blue] = rgbChannels(orbit.color);
+
+  assert.equal(orbit.metalness, 0);
+  assert.equal(red, green);
+  assert.equal(green, blue);
+  assert.ok(orbit.transmission >= 0.78);
+  assert.ok(orbit.roughness <= 0.04);
+  assert.ok(orbit.thickness >= 0.08 && orbit.thickness <= 0.3);
+  assert.ok(orbit.opacity >= 0.9);
+  assert.equal(orbit.attenuationColor, 0xffffff);
+});
+
+test("floating decorations keep a green refractive shell with a subtle core", () => {
+  const { decorationShell, decorationCore } = visuals.GLASS_PROFILES;
+  const [shellRed, shellGreen, shellBlue] = rgbChannels(decorationShell.color);
+
+  assert.ok(shellGreen > shellRed && shellGreen > shellBlue);
+  assert.ok(decorationShell.transmission >= 0.94);
+  assert.ok(decorationShell.roughness <= 0.04);
+  assert.ok(decorationCore.transmission >= 0.78);
+  assert.ok(decorationCore.opacity <= 0.5);
+});
+
 test("orbiting station hover eases in and settles smoothly back", () => {
   const firstHoverFrame = advanceHoverProgress(0, true);
   assert.ok(firstHoverFrame > 0 && firstHoverFrame < 1);
@@ -74,17 +99,25 @@ test("orbiting station hover eases in and settles smoothly back", () => {
   assert.equal(advanceHoverProgress(settled, true, true), 0);
 });
 
-test("premium slab and layered orb remain clear refractive dielectrics", () => {
-  const { slab, orbCore, orbShell, orbVolume } = visuals.GLASS_PROFILES;
+test("premium slab and center orb remain clear refractive dielectrics", () => {
+  const { slab, orbCore, orbShell } = visuals.GLASS_PROFILES;
 
   for (const profile of [slab, orbCore, orbShell]) {
     assert.equal(profile.metalness, 0);
     assert.ok(profile.transmission >= 0.72);
     assert.ok(profile.clearcoat >= 0.9);
   }
-  assert.ok(orbVolume);
+  assert.ok(orbCore.transmission >= 0.96);
+  assert.ok(orbCore.attenuationDistance >= 2.5);
+  assert.ok(relativeLuminance(orbCore.color) < relativeLuminance(slab.color));
+  const [orbRed, orbGreen, orbBlue] = rgbChannels(orbCore.color);
+  assert.ok(orbGreen - (orbRed + orbBlue) * 0.5 >= 39);
   assert.ok(orbShell.transmission >= 0.99);
   assert.ok(orbShell.roughness <= 0.02);
+});
+
+test("orbit assembly rotates by exactly 90 degrees", () => {
+  assert.equal(visuals.ORBIT_ROTATION_OFFSET, Math.PI * 0.5);
 });
 
 test("premium slab geometry keeps a thick shell with smooth restrained bevels", () => {
