@@ -146,15 +146,26 @@ test("station layout follows all three tilted orbit paths with distinct depths",
   assert.deepEqual(orbitAssignments.toSorted(), [0, 0, 1, 1, 2, 2]);
 });
 
-test("orbit line rotation stays bounded through repeated zoom cycles", () => {
-  for (const path of ORBIT_PATHS) {
-    const rotations = Array.from({ length: 2001 }, (_, index) => orbitRotationAt(path, index * 5));
-    const minimum = Math.min(...rotations);
-    const maximum = Math.max(...rotations);
+test("orbit lines rotate continuously at distinct slow velocities", () => {
+  const velocities = ORBIT_PATHS.map((path) => path.rotationSpeed);
 
-    assert.ok(minimum >= path.rotationZ - path.sway - 1e-10);
-    assert.ok(maximum <= path.rotationZ + path.sway + 1e-10);
-    assert.ok(Math.max(Math.abs(minimum), Math.abs(maximum)) < Math.PI / 4);
+  assert.equal(new Set(velocities).size, ORBIT_PATHS.length);
+  assert.ok(velocities.some((velocity) => velocity < 0));
+  assert.ok(velocities.some((velocity) => velocity > 0));
+
+  for (const path of ORBIT_PATHS) {
+    assert.ok(Math.abs(path.rotationSpeed) >= 0.006);
+    assert.ok(Math.abs(path.rotationSpeed) <= 0.015);
+
+    const start = orbitRotationAt(path, 0);
+    const afterTwoMinutes = orbitRotationAt(path, 120);
+    const displacement = Math.atan2(
+      Math.sin(afterTwoMinutes - start),
+      Math.cos(afterTwoMinutes - start),
+    );
+
+    assert.ok(Math.abs(displacement) > 0.65);
+    assert.equal(Math.sign(displacement), Math.sign(path.rotationSpeed));
   }
 });
 

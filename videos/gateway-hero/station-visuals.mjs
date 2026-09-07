@@ -20,15 +20,17 @@ export const STATION_GLASS_GEOMETRY = Object.freeze({
 });
 
 export const ORBIT_ROTATION_OFFSET = Math.PI * 0.5;
+const TAU = Math.PI * 2;
 
 export const ORBIT_PATHS = Object.freeze([
-  Object.freeze({ radiusX: 3.75, radiusY: 1.42, rotationX: 0.12, rotationY: 0.12, rotationZ: 0.15, sway: 0.035, swaySpeed: 0.32, swayPhase: 0, opacity: 0.98 }),
-  Object.freeze({ radiusX: 4.2, radiusY: 1.78, rotationX: 0.42, rotationY: -0.16, rotationZ: -0.19, sway: 0.045, swaySpeed: 0.26, swayPhase: 1.9, opacity: 0.94 }),
-  Object.freeze({ radiusX: 3.5, radiusY: 2.16, rotationX: -0.34, rotationY: 0.28, rotationZ: 0.22, sway: 0.04, swaySpeed: 0.29, swayPhase: 3.7, opacity: 0.9 }),
+  Object.freeze({ radiusX: 3.75, radiusY: 1.42, rotationX: 0.12, rotationY: 0.12, rotationZ: 0.15, rotationSpeed: 0.012, sway: 0.035, swaySpeed: 0.32, swayPhase: 0, opacity: 0.98 }),
+  Object.freeze({ radiusX: 4.2, radiusY: 1.78, rotationX: 0.42, rotationY: -0.16, rotationZ: -0.19, rotationSpeed: -0.009, sway: 0.045, swaySpeed: 0.26, swayPhase: 1.9, opacity: 0.94 }),
+  Object.freeze({ radiusX: 3.5, radiusY: 2.16, rotationX: -0.34, rotationY: 0.28, rotationZ: 0.22, rotationSpeed: 0.007, sway: 0.04, swaySpeed: 0.29, swayPhase: 3.7, opacity: 0.9 }),
 ]);
 
 export function orbitRotationAt(path, time) {
-  return path.rotationZ + Math.sin(time * path.swaySpeed + path.swayPhase) * path.sway;
+  const continuousRotation = (time * path.rotationSpeed) % TAU;
+  return path.rotationZ + continuousRotation + Math.sin(time * path.swaySpeed + path.swayPhase) * path.sway;
 }
 
 export function orbitPointAt(path, angle, rotationZ = path.rotationZ) {

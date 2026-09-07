@@ -360,10 +360,21 @@ html.lenis body {
   max-width: 28ch;
 }
 
+.product-tagline {
+  margin-top: 0.85rem;
+  max-width: 28ch;
+  font-size: clamp(1.35rem, 2.1vw, 1.8rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.16;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
 .lede {
-  margin-top: 1.15rem;
+  margin-top: 0.9rem;
   max-width: 38ch;
-  font-size: clamp(1.12rem, 1.7vw, 1.38rem);
+  font-size: clamp(1rem, 1.35vw, 1.2rem);
   line-height: 1.48;
   letter-spacing: -0.018em;
   color: var(--steel);
