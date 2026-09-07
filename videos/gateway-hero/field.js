@@ -10,6 +10,7 @@ import {
   orbitRotationAt,
   ORBIT_PATHS,
   ORBIT_ROTATION_OFFSET,
+  ORBIT_SWAY,
   STATION_COLORS,
   STATION_GLASS_GEOMETRY,
   stationVisualScale,
@@ -21,7 +22,7 @@ export const FOCUS_END = 0.98;
 
 const TAU = Math.PI * 2;
 const FOCUS_DOCK = 2.72;
-const ORB_RENDER_ORDER = 20;
+const ORB_RENDER_ORDER = 2;
 const RENDER_INTERVAL = 1000 / 60 - 2;
 const ORBIT_TUBULAR_SEGMENTS = 80;
 const ORBIT_RADIAL_SEGMENTS = 8;
@@ -73,14 +74,14 @@ function nearestAngle(target, current) {
   return next;
 }
 
-function makeStroke(points, material, radius = 0.045, closed = false) {
-  const vectors = points.map(([x, y]) => new THREE.Vector3(x, y, 0.27));
+function makeStroke(points, material, radius = 0.045, closed = false, z = 0.27) {
+  const vectors = points.map(([x, y]) => new THREE.Vector3(x, y, z));
   const path = new THREE.CurvePath();
   for (let index = 0; index < vectors.length - 1; index += 1) {
     path.add(new THREE.LineCurve3(vectors[index], vectors[index + 1]));
   }
   if (closed) path.add(new THREE.LineCurve3(vectors[vectors.length - 1], vectors[0]));
-  const geometry = new THREE.TubeGeometry(path, Math.max(16, vectors.length * 5), radius, 6, false);
+  const geometry = new THREE.TubeGeometry(path, Math.max(16, vectors.length * 5), radius, 10, false);
   return new THREE.Mesh(geometry, material);
 }
 
@@ -104,10 +105,9 @@ function roundedRectPoints(width, height, radius, segments = 4) {
   ];
 }
 
-function makeDot(x, y, radius, material) {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 0.075, 20), material);
-  mesh.rotation.x = Math.PI * 0.5;
-  mesh.position.set(x, y, 0.27);
+function makeDot(x, y, radius, material, z = 0.27) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), material);
+  mesh.position.set(x, y, z);
   return mesh;
 }
 
@@ -174,35 +174,53 @@ function createGlassEnvironment(pmrem) {
   return target;
 }
 
-function createIcon(type, material, lightMaterial) {
+function createIcon(type, material, lightMaterial, depthMaterial) {
   const icon = new THREE.Group();
-  const stroke = (points, accent = false, radius = 0.045, closed = false) =>
-    icon.add(makeStroke(points, accent ? lightMaterial : material, radius, closed));
+  const stroke = (points, accent = false, radius = 0.045, closed = false) => {
+    const strokeMaterial = accent ? lightMaterial : material;
+    icon.add(makeStroke(points, depthMaterial, radius * 1.18, closed, 0.235));
+    icon.add(makeStroke(points, strokeMaterial, radius, closed, 0.31));
+    if (closed || points.length < 2) return;
+    [points[0], points[points.length - 1]].forEach(([x, y]) => {
+      const depthCap = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 12, 8), depthMaterial);
+      const faceCap = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.02, 12, 8), strokeMaterial);
+      depthCap.position.set(x, y, 0.235);
+      faceCap.position.set(x, y, 0.31);
+      icon.add(depthCap, faceCap);
+    });
+  };
+  const dot = (x, y, radius, dotMaterial) => {
+    icon.add(
+      makeDot(x, y, radius * 1.18, depthMaterial, 0.235),
+      makeDot(x, y, radius, dotMaterial, 0.31),
+    );
+  };
+
+  if (type === "code") {
+    stroke([[-0.18, 0.43], [-0.54, 0], [-0.18, -0.43]], false, 0.047);
+    stroke([[0.18, 0.43], [0.54, 0], [0.18, -0.43]], false, 0.047);
+    stroke([[0.14, 0.55], [-0.14, -0.55]], true, 0.035);
+  }
+
+  if (type === "robot") {
+    stroke(roundedRectPoints(1.02, 0.7, 0.16), false, 0.043, true);
+    stroke([[0, 0.35], [0, 0.56]], false, 0.036);
+    dot(0, 0.61, 0.06, material);
+    dot(-0.26, 0.08, 0.066, lightMaterial);
+    dot(0.26, 0.08, 0.066, lightMaterial);
+    stroke([[-0.2, -0.18], [0, -0.25], [0.2, -0.18]], true, 0.03);
+  }
+
+  if (type === "chat") {
+    const bubble = roundedRectPoints(1.05, 0.72, 0.17);
+    stroke([...bubble.slice(0, -4), [0.16, -0.36], [-0.14, -0.58], [-0.1, -0.34], ...bubble.slice(-4)], false, 0.043, true);
+    [-0.28, 0, 0.28].forEach((x) => dot(x, 0.04, 0.057, lightMaterial));
+  }
 
   if (type === "megaphone") {
     stroke([[-0.5, 0.22], [-0.16, 0.22], [0.42, 0.5], [0.42, -0.34], [-0.16, -0.06], [-0.5, -0.06]], false, 0.052);
     stroke([[-0.16, -0.06], [-0.04, -0.48], [0.18, -0.48], [0.08, -0.17]], false, 0.052);
     stroke([[0.58, 0.29], [0.7, 0.18], [0.72, 0.03], [0.65, -0.09]], true, 0.035);
-  }
-
-  if (type === "code") {
-    stroke([[-0.18, 0.43], [-0.54, 0], [-0.18, -0.43]], false, 0.055);
-    stroke([[0.18, 0.43], [0.54, 0], [0.18, -0.43]], false, 0.055);
-    stroke([[0.14, 0.55], [-0.14, -0.55]], true, 0.043);
-  }
-
-  if (type === "robot") {
-    stroke(roundedRectPoints(1.02, 0.7, 0.16), false, 0.05, true);
-    stroke([[0, 0.35], [0, 0.56]], false, 0.045);
-    icon.add(makeDot(0, 0.61, 0.065, material));
-    icon.add(makeDot(-0.26, 0.08, 0.07, lightMaterial), makeDot(0.26, 0.08, 0.07, lightMaterial));
-    stroke([[-0.2, -0.18], [0, -0.25], [0.2, -0.18]], true, 0.035);
-  }
-
-  if (type === "chat") {
-    const bubble = roundedRectPoints(1.05, 0.72, 0.17);
-    stroke([...bubble.slice(0, -4), [0.16, -0.36], [-0.14, -0.58], [-0.1, -0.34], ...bubble.slice(-4)], false, 0.05, true);
-    [-0.28, 0, 0.28].forEach((x) => icon.add(makeDot(x, 0.04, 0.06, lightMaterial)));
   }
 
   if (type === "document") {
@@ -213,12 +231,13 @@ function createIcon(type, material, lightMaterial) {
   }
 
   if (type === "people") {
-    icon.add(makeDot(-0.25, 0.25, 0.17, material), makeDot(0.29, 0.22, 0.14, lightMaterial));
-    stroke(arcPoints(-0.25, -0.48, 0.43, Math.PI * 0.12, Math.PI * 0.88, 14), false, 0.055);
-    stroke(arcPoints(0.29, -0.39, 0.34, Math.PI * 0.12, Math.PI * 0.88, 12), true, 0.046);
+    dot(-0.25, 0.25, 0.16, material);
+    dot(0.29, 0.22, 0.13, lightMaterial);
+    stroke(arcPoints(-0.25, -0.48, 0.43, Math.PI * 0.12, Math.PI * 0.88, 14), false, 0.046);
+    stroke(arcPoints(0.29, -0.39, 0.34, Math.PI * 0.12, Math.PI * 0.88, 12), true, 0.038);
   }
 
-  const buckets = new Map([[material, []], [lightMaterial, []]]);
+  const buckets = new Map([[depthMaterial, []], [material, []], [lightMaterial, []]]);
   [...icon.children].forEach((mesh) => {
     mesh.updateMatrix();
     const geometry = mesh.geometry.clone();
@@ -231,7 +250,12 @@ function createIcon(type, material, lightMaterial) {
     if (!geometries.length) return;
     const geometry = mergeGeometries(geometries, false);
     geometries.forEach((item) => item.dispose());
-    if (geometry) icon.add(new THREE.Mesh(geometry, bucketMaterial));
+    if (geometry) {
+      const mesh = new THREE.Mesh(geometry, bucketMaterial);
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      icon.add(mesh);
+    }
   });
   return icon;
 }
@@ -299,7 +323,7 @@ function createStation(spec, index, materials, geometries) {
   slab.renderOrder = 4;
   const edge = new THREE.LineSegments(geometries.edge, materials.edge.clone());
   edge.renderOrder = 7;
-  const icon = createIcon(spec.icon, materials.icon, materials.iconLight);
+  const icon = createIcon(spec.icon, materials.icon, materials.iconLight, materials.iconDepth);
   icon.scale.setScalar(0.82);
   icon.position.z = 0.13;
   icon.renderOrder = 8;
@@ -415,7 +439,8 @@ export function createField({ root, gsap, reduce }) {
   renderer.transmissionResolutionScale = 0.72;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(-8, 8, 5.5, -5.5, 0.1, 100);
+  // Preserve the graphic scale while giving tilted orbit planes a readable depth falloff.
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
   camera.position.set(0, 0, 16);
   camera.lookAt(0, 0, 0);
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -436,14 +461,16 @@ export function createField({ root, gsap, reduce }) {
     glass: new THREE.MeshPhysicalMaterial({ ...GLASS_PROFILES.slab, side: THREE.DoubleSide }),
     halo: new THREE.MeshBasicMaterial({ color: STATION_COLORS.halo, transparent: true, opacity: 0.08, depthWrite: false }),
     edge: new THREE.LineBasicMaterial({ color: STATION_COLORS.edge, transparent: true, opacity: 0.42, depthWrite: false }),
-    icon: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.icon, roughness: 0.16, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.08, specularIntensity: 0.55, envMapIntensity: 1.1 })),
-    iconLight: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.iconAccent, roughness: 0.18, metalness: 0.025, clearcoat: 0.5, clearcoatRoughness: 0.1, specularIntensity: 0.5, envMapIntensity: 1 })),
+    iconDepth: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: 0x02271e, roughness: 0.2, metalness: 0.02, clearcoat: 0.5, clearcoatRoughness: 0.08, specularIntensity: 0.55, specularColor: 0x7bc59f, envMapIntensity: 0.9 })),
+    icon: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.icon, roughness: 0.11, metalness: 0.035, clearcoat: 0.82, clearcoatRoughness: 0.045, specularIntensity: 0.78, specularColor: 0xd9ffeb, envMapIntensity: 1.45 })),
+    iconLight: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.iconAccent, roughness: 0.13, metalness: 0.025, clearcoat: 0.76, clearcoatRoughness: 0.055, specularIntensity: 0.72, specularColor: 0xd9ffeb, envMapIntensity: 1.3 })),
     orbit: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbit),
     orbitFilament: new THREE.LineBasicMaterial({
-      color: 0x58b97e,
+      color: 0x2f875b,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.36,
       depthWrite: false,
+      depthTest: true,
       toneMapped: false,
     }),
     decorative: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationShell),
@@ -454,7 +481,7 @@ export function createField({ root, gsap, reduce }) {
 
   const composition = new THREE.Group();
   scene.add(composition);
-  const atmosphere = new THREE.Mesh(new THREE.CircleGeometry(3.55, 48), new THREE.MeshBasicMaterial({ color: 0xb8efd0, transparent: true, opacity: 0.075, depthWrite: false }));
+  const atmosphere = new THREE.Mesh(new THREE.CircleGeometry(3.55, 48), new THREE.MeshBasicMaterial({ color: 0xe3e7e5, transparent: true, opacity: 0.04, depthWrite: false }));
   atmosphere.position.z = -2.5;
   atmosphere.scale.y = 0.8;
   composition.add(atmosphere);
@@ -462,25 +489,40 @@ export function createField({ root, gsap, reduce }) {
   const orbGroup = new THREE.Group();
   composition.add(orbGroup);
   const orbGeometry = new THREE.SphereGeometry(1, 40, 28);
+  const orbDepth = new THREE.Mesh(
+    orbGeometry,
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      colorWrite: false,
+      depthTest: true,
+      depthWrite: true,
+    }),
+  );
+  orbDepth.scale.setScalar(1.48);
+  orbDepth.renderOrder = 1;
   const orbCore = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbCore));
   const orbShell = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbShell));
-  orbCore.scale.setScalar(1.46);
-  orbShell.scale.setScalar(1.68);
+  orbCore.scale.setScalar(1.32);
+  orbShell.scale.setScalar(1.52);
+  orbCore.material.depthTest = true;
+  orbCore.material.depthWrite = false;
+  orbShell.material.depthTest = true;
+  orbShell.material.depthWrite = false;
   orbCore.renderOrder = ORB_RENDER_ORDER;
   orbShell.renderOrder = ORB_RENDER_ORDER + 1;
   const orbBubble = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 0.9, thickness: 0.35, ior: 1.38, transparent: true, opacity: 0.7, envMapIntensity: 1.4, depthTest: false, depthWrite: false }));
   orbBubble.position.set(-0.38, 0.46, 0.42);
   orbBubble.renderOrder = ORB_RENDER_ORDER + 2;
   const highlightTexture = createHighlightTexture();
-  const orbHighlight = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  const orbHighlight = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.54, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   orbHighlight.position.set(-0.62, 0.7, 1.62);
   orbHighlight.scale.set(0.78, 0.42, 1);
   orbHighlight.renderOrder = ORB_RENDER_ORDER + 3;
-  const orbGlint = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  const orbGlint = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.28, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   orbGlint.position.set(0.58, -0.48, 1.46);
   orbGlint.scale.set(0.34, 0.2, 1);
   orbGlint.renderOrder = ORB_RENDER_ORDER + 3;
-  orbGroup.add(orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
+  orbGroup.add(orbDepth, orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
   const shadowTexture = createShadowTexture();
   const orbShadow = new THREE.Mesh(
     new THREE.PlaneGeometry(4.8, 2.35),
@@ -498,24 +540,31 @@ export function createField({ root, gsap, reduce }) {
   orbContact.renderOrder = 0;
   composition.add(orbShadow, orbContact);
 
-  const orbitMeshes = ORBIT_PATHS.map((path) => {
+  const orbitGroup = new THREE.Group();
+  orbitGroup.rotation.order = "ZYX";
+  orbitGroup.rotation.z = ORBIT_ROTATION_OFFSET;
+  composition.add(orbitGroup);
+  ORBIT_PATHS.forEach((path) => {
     const material = materials.orbit.clone();
     material.opacity = path.opacity;
     const curve = new EllipseCurve3(path.radiusX, path.radiusY);
     const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, ORBIT_TUBULAR_SEGMENTS, 0.045, ORBIT_RADIAL_SEGMENTS, true), material);
+    mesh.rotation.order = "ZYX";
+    const filamentMaterial = materials.orbitFilament.clone();
+    filamentMaterial.opacity = path.filamentOpacity;
     const filamentPoints = Array.from(
       { length: ORBIT_TUBULAR_SEGMENTS },
       (_, index) => curve.getPoint(index / ORBIT_TUBULAR_SEGMENTS),
     );
     const filament = new THREE.LineLoop(
       new THREE.BufferGeometry().setFromPoints(filamentPoints),
-      materials.orbitFilament,
+      filamentMaterial,
     );
-    filament.renderOrder = 2;
+    filament.renderOrder = 7;
     mesh.add(filament);
-    mesh.rotation.set(path.rotationX, path.rotationY, path.rotationZ + ORBIT_ROTATION_OFFSET);
-    mesh.renderOrder = 1;
-    composition.add(mesh);
+    mesh.rotation.set(path.rotationX, path.rotationY, path.rotationZ);
+    mesh.renderOrder = 6;
+    orbitGroup.add(mesh);
     return mesh;
   });
 
@@ -566,6 +615,7 @@ export function createField({ root, gsap, reduce }) {
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2(4, 4);
   const stationSlabs = stations.map((station) => station.slab);
+  const orbitPosition = new THREE.Vector3();
 
   function baseScale() {
     return compact ? 0.62 : Math.min(1.02, Math.max(0.82, width / 1500));
@@ -577,13 +627,11 @@ export function createField({ root, gsap, reduce }) {
     compact = width < 768;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? 0.85 : 1));
     renderer.setSize(width, height, false);
-    const viewHeight = compact ? 12.4 : 10.8;
-    const viewWidth = viewHeight * (width / height);
-    camera.left = -viewWidth * 0.5;
-    camera.right = viewWidth * 0.5;
-    camera.top = viewHeight * 0.5;
-    camera.bottom = -viewHeight * 0.5;
+    camera.fov = compact ? 42 : 36;
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    const viewHeight = compact ? 12.4 : 10.4;
+    const viewWidth = viewHeight * (width / height);
     composition.position.set((compact ? 0.08 : 0.5) * viewWidth * 0.5, (compact ? -0.48 : -0.01) * viewHeight * 0.5, 0);
     composition.scale.setScalar(baseScale());
     kick();
@@ -602,7 +650,11 @@ export function createField({ root, gsap, reduce }) {
     station.root.userData.hoverProgress = hoverProgress;
     const pathDrift = reduce ? 0 : Math.sin(state.time * 0.82 + station.index * 1.37) * 0.025 * (1 - lift * 0.55);
     const orbitPath = ORBIT_PATHS[station.spec.orbit];
-    const [orbitX, orbitY, orbitZ] = orbitPointAt(orbitPath, angle + pathDrift, orbitMeshes[station.spec.orbit].rotation.z);
+    const localOrbit = orbitPointAt(orbitPath, angle + pathDrift);
+    orbitPosition.set(localOrbit[0], localOrbit[1], localOrbit[2]).applyEuler(orbitGroup.rotation);
+    const orbitX = orbitPosition.x;
+    const orbitY = orbitPosition.y;
+    const orbitZ = orbitPosition.z;
     const showX = compact ? -1.9 : -3.32;
     const showY = compact ? 2.65 : 2.42;
     const showZ = compact ? 2.05 : 2.35;
@@ -656,7 +708,7 @@ export function createField({ root, gsap, reduce }) {
     orbGroup.position.set(floatX, floatY, floatZ);
     orbGroup.rotation.y = state.time * 0.07;
     orbGroup.rotation.x = Math.sin(state.time * 0.22) * 0.05;
-    orbCore.scale.setScalar(1.46 * (1 + Math.sin(state.time * 0.72) * 0.01));
+    orbCore.scale.setScalar(1.32 * (1 + Math.sin(state.time * 0.72) * 0.01));
     const shadowPulse = 1 + floatY * 0.35 + Math.sin(state.time * 0.72) * 0.02;
     orbShadow.position.set(0.1 + floatX, -1.78, 0.08 + floatZ * 0.25);
     orbContact.position.set(0.06 + floatX, -1.7, 0.18 + floatZ * 0.2);
@@ -665,9 +717,9 @@ export function createField({ root, gsap, reduce }) {
     orbShadow.material.opacity = 0.92 - floatY * 0.55;
     orbContact.material.opacity = 0.7 - floatY * 0.4;
     orbBubble.position.set(-0.38 + Math.sin(state.time * 0.4) * 0.04, 0.46, 0.42);
-    ORBIT_PATHS.forEach((path, index) => {
-      orbitMeshes[index].rotation.z = orbitRotationAt(path, state.time);
-    });
+    orbitGroup.rotation.x = Math.sin(state.time * ORBIT_SWAY.speed) * ORBIT_SWAY.rotationX;
+    orbitGroup.rotation.y = Math.cos(state.time * ORBIT_SWAY.speed * 0.9) * ORBIT_SWAY.rotationY;
+    orbitGroup.rotation.z = orbitRotationAt(null, state.time);
     stations.forEach(updateStation);
     decoratives.forEach((object) => {
       const { base, baseRotation, baseScale: decorationScale, glint, motion, phase } = object.userData;

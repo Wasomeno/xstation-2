@@ -3,7 +3,7 @@ import test from "node:test";
 
 import * as visuals from "./station-visuals.mjs";
 
-const { advanceHoverProgress, orbitPointAt, orbitRotationAt, ORBIT_PATHS, STATION_COLORS, stationVisualScale } = visuals;
+const { advanceHoverProgress, orbitPointAt, orbitRotationAt, ORBIT_PATHS, ORBIT_ROTATION_SPEED, ORBIT_SWAY, STATION_COLORS, stationVisualScale } = visuals;
 
 function relativeLuminance(hex) {
   const channels = [16, 8, 0].map((shift) => ((hex >> shift) & 0xff) / 255);
@@ -61,17 +61,17 @@ test("green slab optics remain premium and translucent", () => {
   assert.ok(slab.attenuationDistance >= 0.8 && slab.attenuationDistance <= 3);
 });
 
-test("orbit tubes use clear crystal optics", () => {
+test("orbit tubes use legible mint optics", () => {
   const { orbit } = visuals.GLASS_PROFILES;
   const [red, green, blue] = rgbChannels(orbit.color);
 
   assert.equal(orbit.metalness, 0);
   assert.ok(green > red && green > blue);
-  assert.ok(Math.min(red, green, blue) >= 0xe0);
-  assert.ok(orbit.transmission >= 0.9);
-  assert.ok(orbit.roughness <= 0.02);
-  assert.ok(orbit.thickness >= 0.08 && orbit.thickness <= 0.3);
-  assert.ok(orbit.opacity >= 0.9);
+  assert.ok(Math.min(red, green, blue) >= 0xa0);
+  assert.ok(orbit.transmission >= 0.1 && orbit.transmission <= 0.35);
+  assert.ok(orbit.roughness >= 0.05 && orbit.roughness <= 0.14);
+  assert.ok(orbit.thickness >= 0.08 && orbit.thickness <= 0.2);
+  assert.ok(orbit.opacity >= 0.75 && orbit.opacity <= 0.9);
   assert.notEqual(orbit.attenuationColor, 0xffffff);
 });
 
@@ -128,45 +128,62 @@ test("premium slab and center orb remain clear refractive dielectrics", () => {
   assert.equal(orbShell.depthWrite, false);
 });
 
-test("orbit assembly rotates by exactly 90 degrees", () => {
-  assert.equal(visuals.ORBIT_ROTATION_OFFSET, Math.PI * 0.5);
+test("orbit assembly keeps its authored broad horizontal orientation", () => {
+  assert.equal(visuals.ORBIT_ROTATION_OFFSET, 0);
 });
 
-test("station layout follows all three tilted orbit paths with distinct depths", () => {
-  const step = Math.PI * 2 / 6;
-  const orbitAssignments = [2, 1, 0, 2, 1, 0];
-  const points = orbitAssignments.map((orbitIndex, index) => {
-    const path = ORBIT_PATHS[orbitIndex];
-    return orbitPointAt(path, 2.72 - step * index);
+test("orbit planes retain distinct depth envelopes", () => {
+  const depthRanges = ORBIT_PATHS.map((path) => {
+    const depths = Array.from({ length: 96 }, (_, index) => orbitPointAt(path, (Math.PI * 2 * index) / 96)[2]);
+    return [Math.min(...depths), Math.max(...depths)];
   });
-  const depths = points.map((point) => point[2]);
 
-  assert.equal(new Set(depths.map((depth) => depth.toFixed(3))).size, 6);
-  assert.ok(Math.max(...depths) - Math.min(...depths) > 1.5);
-  assert.deepEqual(orbitAssignments.toSorted(), [0, 0, 1, 1, 2, 2]);
+  assert.ok(depthRanges.every(([min, max]) => max - min > 0.3));
+  assert.equal(new Set(depthRanges.map(([min, max]) => `${min.toFixed(2)}:${max.toFixed(2)}`)).size, 2);
 });
 
-test("orbit lines rotate continuously at distinct slow velocities", () => {
-  const velocities = ORBIT_PATHS.map((path) => path.rotationSpeed);
+test("orbit lines share one slow rotational cadence", () => {
+  assert.ok(ORBIT_ROTATION_SPEED >= 0.006 && ORBIT_ROTATION_SPEED <= 0.015);
+  const start = orbitRotationAt(ORBIT_PATHS[0], 0);
+  const afterTwoMinutes = orbitRotationAt(ORBIT_PATHS[2], 120);
+  const displacement = Math.atan2(
+    Math.sin(afterTwoMinutes - start),
+    Math.cos(afterTwoMinutes - start),
+  );
 
-  assert.equal(new Set(velocities).size, ORBIT_PATHS.length);
-  assert.ok(velocities.some((velocity) => velocity < 0));
-  assert.ok(velocities.some((velocity) => velocity > 0));
+  assert.ok(Math.abs(displacement) > 0.65);
+  assert.equal(Math.sign(displacement), Math.sign(ORBIT_ROTATION_SPEED));
+  assert.equal(ORBIT_SWAY.rotationX, 0.012);
+  assert.equal(ORBIT_SWAY.rotationY, 0.018);
+});
 
-  for (const path of ORBIT_PATHS) {
-    assert.ok(Math.abs(path.rotationSpeed) >= 0.006);
-    assert.ok(Math.abs(path.rotationSpeed) <= 0.015);
+test("orbit paths share one geometric family", () => {
+  assert.equal(new Set(ORBIT_PATHS.map((path) => path.radiusX)).size, 1);
+  assert.equal(new Set(ORBIT_PATHS.map((path) => path.radiusY)).size, 1);
+  assert.ok(ORBIT_PATHS.every((path) => path.radiusX >= 3.5 && path.radiusX <= 3.9));
+  assert.ok(ORBIT_PATHS.every((path) => path.radiusY >= 1.45 && path.radiusY <= 1.75));
+});
 
-    const start = orbitRotationAt(path, 0);
-    const afterTwoMinutes = orbitRotationAt(path, 120);
-    const displacement = Math.atan2(
-      Math.sin(afterTwoMinutes - start),
-      Math.cos(afterTwoMinutes - start),
-    );
+test("orbit planes have deliberate 3D separation", () => {
+  const xTilts = ORBIT_PATHS.map((path) => path.rotationX);
+  const yTilts = ORBIT_PATHS.map((path) => path.rotationY);
 
-    assert.ok(Math.abs(displacement) > 0.65);
-    assert.equal(Math.sign(displacement), Math.sign(path.rotationSpeed));
-  }
+  assert.ok(Math.max(...xTilts) - Math.min(...xTilts) >= 0.7);
+  assert.ok(Math.max(...yTilts) - Math.min(...yTilts) >= 0.5);
+});
+
+test("orbit rails use distinct visual strengths", () => {
+  const tubeOpacities = ORBIT_PATHS.map((path) => path.opacity);
+  const filamentOpacities = ORBIT_PATHS.map((path) => path.filamentOpacity);
+
+  assert.ok(Math.max(...tubeOpacities) - Math.min(...tubeOpacities) >= 0.2);
+  assert.ok(Math.max(...filamentOpacities) - Math.min(...filamentOpacities) >= 0.1);
+});
+
+test("orbit paths have no independent local motion", () => {
+  assert.ok(ORBIT_PATHS.every((path) => path.rotationZ === 0));
+  assert.ok(ORBIT_PATHS.every((path) => !("rotationSpeed" in path)));
+  assert.ok(ORBIT_PATHS.every((path) => !("sway" in path)));
 });
 
 test("premium slab geometry keeps a thick shell with smooth restrained bevels", () => {

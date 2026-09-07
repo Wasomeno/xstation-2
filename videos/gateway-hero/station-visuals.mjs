@@ -19,18 +19,24 @@ export const STATION_GLASS_GEOMETRY = Object.freeze({
   curveSegments: 14,
 });
 
-export const ORBIT_ROTATION_OFFSET = Math.PI * 0.5;
+// Keep the family’s major axis broad in the hero frame; depth comes from plane tilt.
+export const ORBIT_ROTATION_OFFSET = 0;
+export const ORBIT_ROTATION_SPEED = 0.008;
+export const ORBIT_SWAY = Object.freeze({
+  rotationX: 0.012,
+  rotationY: 0.018,
+  speed: 0.18,
+});
 const TAU = Math.PI * 2;
 
 export const ORBIT_PATHS = Object.freeze([
-  Object.freeze({ radiusX: 3.75, radiusY: 1.42, rotationX: 0.12, rotationY: 0.12, rotationZ: 0.15, rotationSpeed: 0.012, sway: 0.035, swaySpeed: 0.32, swayPhase: 0, opacity: 0.98 }),
-  Object.freeze({ radiusX: 4.2, radiusY: 1.78, rotationX: 0.42, rotationY: -0.16, rotationZ: -0.19, rotationSpeed: -0.009, sway: 0.045, swaySpeed: 0.26, swayPhase: 1.9, opacity: 0.94 }),
-  Object.freeze({ radiusX: 3.5, radiusY: 2.16, rotationX: -0.34, rotationY: 0.28, rotationZ: 0.22, rotationSpeed: 0.007, sway: 0.04, swaySpeed: 0.29, swayPhase: 3.7, opacity: 0.9 }),
+  Object.freeze({ radiusX: 3.7, radiusY: 1.6, rotationX: 0.08, rotationY: 0.04, rotationZ: 0, opacity: 0.86, filamentOpacity: 0.34 }),
+  Object.freeze({ radiusX: 3.7, radiusY: 1.6, rotationX: -0.4, rotationY: 0.28, rotationZ: 0, opacity: 0.62, filamentOpacity: 0.18 }),
+  Object.freeze({ radiusX: 3.7, radiusY: 1.6, rotationX: 0.4, rotationY: -0.28, rotationZ: 0, opacity: 0.76, filamentOpacity: 0.26 }),
 ]);
 
-export function orbitRotationAt(path, time) {
-  const continuousRotation = (time * path.rotationSpeed) % TAU;
-  return path.rotationZ + continuousRotation + Math.sin(time * path.swaySpeed + path.swayPhase) * path.sway;
+export function orbitRotationAt(_path, time) {
+  return (ORBIT_ROTATION_OFFSET + time * ORBIT_ROTATION_SPEED) % TAU;
 }
 
 export function orbitPointAt(path, angle, rotationZ = path.rotationZ) {
@@ -70,22 +76,22 @@ export const GLASS_PROFILES = Object.freeze({
     opacity: 0.97,
   }),
   orbit: Object.freeze({
-    color: 0xe8fff0,
-    roughness: 0.014,
+    color: 0xb9efd0,
+    roughness: 0.08,
     metalness: 0,
-    transmission: 0.94,
-    thickness: 0.2,
-    ior: 1.46,
-    dispersion: 0.018,
-    clearcoat: 1,
-    clearcoatRoughness: 0.004,
-    specularIntensity: 1,
-    specularColor: 0xffffff,
-    envMapIntensity: 3.25,
-    attenuationColor: 0x58c47d,
-    attenuationDistance: 2.2,
+    transmission: 0.24,
+    thickness: 0.12,
+    ior: 1.38,
+    dispersion: 0.006,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.08,
+    specularIntensity: 0.72,
+    specularColor: 0xdffff0,
+    envMapIntensity: 1.25,
+    attenuationColor: 0x3d9666,
+    attenuationDistance: 1.45,
     transparent: true,
-    opacity: 0.98,
+    opacity: 0.82,
     depthWrite: false,
   }),
   decorationShell: Object.freeze({
