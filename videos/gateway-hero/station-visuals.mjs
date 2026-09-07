@@ -21,6 +21,33 @@ export const STATION_GLASS_GEOMETRY = Object.freeze({
 
 export const ORBIT_ROTATION_OFFSET = Math.PI * 0.5;
 
+export const ORBIT_PATHS = Object.freeze([
+  Object.freeze({ radiusX: 3.75, radiusY: 1.42, rotationX: 0.12, rotationY: 0.12, rotationZ: 0.15, sway: 0.035, swaySpeed: 0.32, swayPhase: 0, opacity: 0.98 }),
+  Object.freeze({ radiusX: 4.2, radiusY: 1.78, rotationX: 0.42, rotationY: -0.16, rotationZ: -0.19, sway: 0.045, swaySpeed: 0.26, swayPhase: 1.9, opacity: 0.94 }),
+  Object.freeze({ radiusX: 3.5, radiusY: 2.16, rotationX: -0.34, rotationY: 0.28, rotationZ: 0.22, sway: 0.04, swaySpeed: 0.29, swayPhase: 3.7, opacity: 0.9 }),
+]);
+
+export function orbitRotationAt(path, time) {
+  return path.rotationZ + Math.sin(time * path.swaySpeed + path.swayPhase) * path.sway;
+}
+
+export function orbitPointAt(path, angle, rotationZ = path.rotationZ) {
+  const pointX = Math.cos(angle) * path.radiusX;
+  const pointY = Math.sin(angle) * path.radiusY;
+  const cosX = Math.cos(path.rotationX);
+  const sinX = Math.sin(path.rotationX);
+  const cosY = Math.cos(path.rotationY);
+  const sinY = Math.sin(path.rotationY);
+  const cosZ = Math.cos(rotationZ);
+  const sinZ = Math.sin(rotationZ);
+
+  return [
+    cosY * cosZ * pointX - cosY * sinZ * pointY,
+    (cosX * sinZ + sinX * cosZ * sinY) * pointX + (cosX * cosZ - sinX * sinZ * sinY) * pointY,
+    (sinX * sinZ - cosX * cosZ * sinY) * pointX + (sinX * cosZ + cosX * sinZ * sinY) * pointY,
+  ];
+}
+
 export const GLASS_PROFILES = Object.freeze({
   slab: Object.freeze({
     color: STATION_COLORS.glassIdle,
@@ -41,62 +68,64 @@ export const GLASS_PROFILES = Object.freeze({
     opacity: 0.97,
   }),
   orbit: Object.freeze({
-    color: 0xd8d8d8,
-    roughness: 0.028,
+    color: 0xe8fff0,
+    roughness: 0.014,
     metalness: 0,
-    transmission: 0.9,
-    thickness: 0.14,
+    transmission: 0.94,
+    thickness: 0.2,
+    ior: 1.46,
+    dispersion: 0.018,
+    clearcoat: 1,
+    clearcoatRoughness: 0.004,
+    specularIntensity: 1,
+    specularColor: 0xffffff,
+    envMapIntensity: 3.25,
+    attenuationColor: 0x58c47d,
+    attenuationDistance: 2.2,
+    transparent: true,
+    opacity: 0.98,
+    depthWrite: false,
+  }),
+  decorationShell: Object.freeze({
+    color: 0xb7efc5,
+    roughness: 0.012,
+    metalness: 0,
+    transmission: 0.94,
+    thickness: 0.62,
     ior: 1.5,
-    dispersion: 0.012,
+    dispersion: 0.022,
     clearcoat: 1,
     clearcoatRoughness: 0.008,
     specularIntensity: 1,
     specularColor: 0xffffff,
-    envMapIntensity: 2.8,
-    attenuationColor: 0xffffff,
-    attenuationDistance: 12,
+    envMapIntensity: 3.1,
+    attenuationColor: 0x46b96d,
+    attenuationDistance: 0.95,
     transparent: true,
-    opacity: 0.96,
-    depthWrite: false,
-  }),
-  decorationShell: Object.freeze({
-    color: 0xb8efd2,
-    roughness: 0.025,
-    metalness: 0,
-    transmission: 0.97,
-    thickness: 0.62,
-    ior: 1.5,
-    dispersion: 0.018,
-    clearcoat: 1,
-    clearcoatRoughness: 0.018,
-    specularIntensity: 1,
-    specularColor: 0xf2fff8,
-    envMapIntensity: 2.25,
-    attenuationColor: 0x72c79d,
-    attenuationDistance: 2.2,
-    transparent: true,
-    opacity: 0.94,
+    opacity: 0.98,
     depthWrite: false,
   }),
   decorationCore: Object.freeze({
-    color: 0x58af82,
-    roughness: 0.12,
+    color: 0x3da866,
+    roughness: 0.04,
     metalness: 0,
-    transmission: 0.82,
-    thickness: 0.52,
-    ior: 1.42,
-    clearcoat: 0.8,
-    clearcoatRoughness: 0.08,
-    specularIntensity: 0.8,
-    envMapIntensity: 1.35,
-    attenuationColor: 0x2f7a58,
-    attenuationDistance: 1.4,
+    transmission: 0.78,
+    thickness: 0.72,
+    ior: 1.46,
+    dispersion: 0.016,
+    clearcoat: 1,
+    clearcoatRoughness: 0.018,
+    specularIntensity: 1,
+    specularColor: 0xffffff,
+    envMapIntensity: 2.1,
+    attenuationColor: 0x1e7041,
+    attenuationDistance: 0.85,
     transparent: true,
-    opacity: 0.42,
+    opacity: 0.44,
     depthWrite: false,
   }),
   orbCore: Object.freeze({
-    color: 0xb5e6c9,
+    color: 0x91e6a1,
     roughness: 0.018,
     metalness: 0,
     transmission: 0.965,
@@ -108,11 +137,15 @@ export const GLASS_PROFILES = Object.freeze({
     specularIntensity: 1,
     specularColor: 0xf1fff8,
     envMapIntensity: 2.35,
-    attenuationColor: 0x6fbd92,
+    attenuationColor: 0x59bd75,
     attenuationDistance: 3.2,
+    transparent: true,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
   }),
   orbShell: Object.freeze({
-    color: 0xe1f7eb,
+    color: 0xb4f7bc,
     roughness: 0.008,
     metalness: 0,
     transmission: 0.998,
@@ -126,6 +159,8 @@ export const GLASS_PROFILES = Object.freeze({
     envMapIntensity: 2.5,
     transparent: true,
     opacity: 0.94,
+    depthTest: false,
+    depthWrite: false,
   }),
 });
 

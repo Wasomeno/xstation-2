@@ -310,6 +310,15 @@ function bindSpatialFold(orbitTl) {
     orbitTl.restart();
   }
 
+  function hideOrbitCanvas() {
+    field.setPresentationVisible(false);
+  }
+
+  function showFrozenOrbitCanvas() {
+    field.setPresentationVisible(true);
+    lockOrbit();
+  }
+
   gsap.timeline({
     defaults: { ease: "none" },
     scrollTrigger: {
@@ -320,7 +329,8 @@ function bindSpatialFold(orbitTl) {
       scrub: 0.8,
       invalidateOnRefresh: true,
       onEnter: lockOrbit,
-      onEnterBack: lockOrbit,
+      onLeave: hideOrbitCanvas,
+      onEnterBack: showFrozenOrbitCanvas,
       onLeaveBack: releaseOrbit,
     },
   })
@@ -350,7 +360,7 @@ function bindSpatialFold(orbitTl) {
       ease: "power2.inOut",
     }, 0.08)
     .to(".dock-svg", {
-      autoAlpha: 0.62,
+      "--fold-alpha": 0.62,
       duration: 0.5,
     }, 0.25);
 

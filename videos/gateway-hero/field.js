@@ -6,6 +6,9 @@ import {
   advanceHoverProgress,
   GLASS_PROFILES,
   iconRenderProfile,
+  orbitPointAt,
+  orbitRotationAt,
+  ORBIT_PATHS,
   ORBIT_ROTATION_OFFSET,
   STATION_COLORS,
   STATION_GLASS_GEOMETRY,
@@ -18,14 +21,19 @@ export const FOCUS_END = 0.98;
 
 const TAU = Math.PI * 2;
 const FOCUS_DOCK = 2.72;
+const ORB_RENDER_ORDER = 20;
+const RENDER_INTERVAL = 1000 / 60 - 2;
+const ORBIT_TUBULAR_SEGMENTS = 80;
+const ORBIT_RADIAL_SEGMENTS = 8;
+const DECORATION_SPIN_SPEED_MULTIPLIER = 1.69;
 const STATION_STEP = TAU / 6;
 const STATIONS = [
-  { label: "Marketing & Content", icon: "megaphone", angle: FOCUS_DOCK, radius: 1.02 },
-  { label: "Prototyping", icon: "code", angle: FOCUS_DOCK - STATION_STEP, radius: 1 },
-  { label: "AI Agents", icon: "robot", angle: FOCUS_DOCK - STATION_STEP * 2, radius: 1.02 },
-  { label: "Customer Engagement", icon: "chat", angle: FOCUS_DOCK - STATION_STEP * 3, radius: 0.98 },
-  { label: "Document Management", icon: "document", angle: FOCUS_DOCK - STATION_STEP * 4, radius: 1.04 },
-  { label: "Talent Assessment", icon: "people", angle: FOCUS_DOCK - STATION_STEP * 5, radius: 1 },
+  { label: "Marketing & Content", icon: "megaphone", angle: FOCUS_DOCK, orbit: 2 },
+  { label: "Prototyping", icon: "code", angle: FOCUS_DOCK - STATION_STEP, orbit: 1 },
+  { label: "AI Agents", icon: "robot", angle: FOCUS_DOCK - STATION_STEP * 2, orbit: 0 },
+  { label: "Customer Engagement", icon: "chat", angle: FOCUS_DOCK - STATION_STEP * 3, orbit: 2 },
+  { label: "Document Management", icon: "document", angle: FOCUS_DOCK - STATION_STEP * 4, orbit: 1 },
+  { label: "Talent Assessment", icon: "people", angle: FOCUS_DOCK - STATION_STEP * 5, orbit: 0 },
 ];
 
 const DECORATIONS = [
@@ -261,7 +269,7 @@ function getGlowSpriteTexture() {
   return glowSpriteTexture;
 }
 
-function createStation(spec, index, materials) {
+function createStation(spec, index, materials, geometries) {
   const root = new THREE.Group();
   const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
     map: getGlowSpriteTexture(),
@@ -276,28 +284,20 @@ function createStation(spec, index, materials) {
   bloom.scale.set(2.15, 2.15, 1);
   bloom.renderOrder = 3;
   const glow = new THREE.Mesh(
-    createRoundedPanelGeometry(2.02, 2.02, 0.04, 0.3, 0.02),
+    geometries.glow,
     new THREE.MeshBasicMaterial({ color: STATION_COLORS.glow, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
   );
   glow.position.z = -0.08;
   glow.renderOrder = 3;
-  const halo = new THREE.Mesh(createRoundedPanelGeometry(2.1, 2.1, 0.08, 0.3, 0.035), materials.halo.clone());
+  const halo = new THREE.Mesh(geometries.halo, materials.halo.clone());
   halo.position.z = -0.04;
   const slab = new THREE.Mesh(
-    createRoundedPanelGeometry(
-      STATION_GLASS_GEOMETRY.width,
-      STATION_GLASS_GEOMETRY.height,
-      STATION_GLASS_GEOMETRY.depth,
-      STATION_GLASS_GEOMETRY.radius,
-      STATION_GLASS_GEOMETRY.bevelSize,
-      STATION_GLASS_GEOMETRY.bevelSegments,
-      STATION_GLASS_GEOMETRY.curveSegments,
-    ),
+    geometries.slab,
     materials.glass.clone(),
   );
   slab.name = `glass-slab-${index}`;
   slab.renderOrder = 4;
-  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry, 28), materials.edge.clone());
+  const edge = new THREE.LineSegments(geometries.edge, materials.edge.clone());
   edge.renderOrder = 7;
   const icon = createIcon(spec.icon, materials.icon, materials.iconLight);
   icon.scale.setScalar(0.82);
@@ -319,29 +319,60 @@ function createStation(spec, index, materials) {
   return { root, slab, icon, bloom, glow, halo, edge, spec, index };
 }
 
-function createDecoration(spec, materials) {
+function createDecoration(spec, materials, geometryCache) {
   const [type, x, y, z, scale, phase] = spec;
-  let geometry;
-  if (type === "sphere") geometry = new THREE.SphereGeometry(1, 32, 22);
-  if (type === "tetra") geometry = new THREE.TetrahedronGeometry(1, 0);
-  if (type === "cube") geometry = new RoundedBoxGeometry(1.25, 1.25, 1.25, 4, 0.18);
-  if (type === "capsule") geometry = new THREE.CapsuleGeometry(0.52, 0.68, 6, 14);
-  if (type === "cylinder") geometry = new THREE.CylinderGeometry(0.72, 0.72, 1.05, 28, 1, false, 0, Math.PI * 2);
+  if (!geometryCache.has(type)) {
+    let geometry;
+    if (type === "sphere") geometry = new THREE.SphereGeometry(1, 20, 14);
+    if (type === "tetra") geometry = new THREE.TetrahedronGeometry(1, 0);
+    if (type === "cube") geometry = new RoundedBoxGeometry(1.25, 1.25, 1.25, 3, 0.18);
+    if (type === "capsule") geometry = new THREE.CapsuleGeometry(0.52, 0.68, 4, 10);
+    if (type === "cylinder") geometry = new THREE.CylinderGeometry(0.72, 0.72, 1.05, 18, 1, false, 0, Math.PI * 2);
+    geometryCache.set(type, geometry);
+  }
+  const geometry = geometryCache.get(type);
   const group = new THREE.Group();
-  const shell = new THREE.Mesh(geometry, materials.decorative.clone());
+  const shell = new THREE.Mesh(geometry, materials.decorative);
   shell.renderOrder = 0;
   group.add(shell);
   if (type !== "sphere") {
-    const inner = new THREE.Mesh(geometry, materials.decorativeCore.clone());
+    const inner = new THREE.Mesh(geometry, materials.decorativeCore);
     inner.scale.setScalar(0.52);
     inner.renderOrder = 0;
     group.add(inner);
   }
+  const glint = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: getGlowSpriteTexture(),
+    color: 0xc8ffda,
+    transparent: true,
+    opacity: 0.34 + Math.cos(phase) * 0.06,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  }));
+  glint.position.set(-0.3 + Math.sin(phase) * 0.05, 0.34, 0.68);
+  glint.scale.set(0.52, 0.28, 1);
+  glint.renderOrder = 2;
+  group.add(glint);
   const depth = Math.min(-1.85, z);
   group.position.set(x, y, depth);
   group.scale.setScalar(scale);
   group.rotation.set(phase * 0.2, phase * 0.34, phase * 0.15);
   group.userData.base = new THREE.Vector3(x, y, depth);
+  group.userData.baseRotation = group.rotation.clone();
+  group.userData.baseScale = scale;
+  group.userData.glint = glint;
+  group.userData.motion = {
+    radiusX: 0.07 + (phase % 0.7) * 0.045,
+    radiusY: 0.08 + (phase % 0.5) * 0.06,
+    radiusZ: 0.035 + (phase % 0.4) * 0.025,
+    speed: 0.2 + (phase % 0.8) * 0.08,
+    angularVelocity: new THREE.Vector3(
+      Math.sin(phase * 3.7 + 0.4) * (0.026 + phase * 0.006) * DECORATION_SPIN_SPEED_MULTIPLIER,
+      Math.cos(phase * 2.9 + 0.7) * (0.044 + phase * 0.008) * DECORATION_SPIN_SPEED_MULTIPLIER,
+      Math.sin(phase * 4.3 + 1.2) * (0.018 + phase * 0.005) * DECORATION_SPIN_SPEED_MULTIPLIER,
+    ),
+  };
   group.userData.phase = phase;
   return group;
 }
@@ -355,6 +386,7 @@ function createFallback(root) {
   return {
     items: [], mode: "pass", startIdle() {}, playEnter() {}, playWelcome() {}, setMode() {},
     setProgress() {}, setOrbitEntryProgress() {}, freezeOrbit() {}, unfreezeOrbit() {},
+    setPresentationVisible() {},
     hideProductsNode() {}, showProductsNode() {}, setCompanionsVisible() {},
     getProductsRect() { return null; }, getFocus() { return -1; }, recedeDock() {},
     pause() {}, resumeWhisper() {}, layout() {}, destroy() { fallback.remove(); },
@@ -376,11 +408,11 @@ export function createField({ root, gsap, reduce }) {
     return createFallback(root);
   }
   renderer.setClearColor(0xffffff, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
-  renderer.transmissionResolutionScale = 0.88;
+  renderer.transmissionResolutionScale = 0.72;
 
   const scene = new THREE.Scene();
   const camera = new THREE.OrthographicCamera(-8, 8, 5.5, -5.5, 0.1, 100);
@@ -398,14 +430,7 @@ export function createField({ root, gsap, reduce }) {
   const side = new THREE.RectAreaLight(0xb5ffd4, 10, 3.4, 6.8);
   side.position.set(7, 0.2, 6.8);
   side.lookAt(0, 0, 0);
-  const spec = new THREE.DirectionalLight(0xffffff, 2.4);
-  spec.position.set(-3.8, 7.4, 10);
-  const spark = new THREE.PointLight(0xe7fff4, 18, 16, 1.8);
-  spark.position.set(-1.6, 1.8, 4.6);
-  const rim = new THREE.RectAreaLight(0xd9ffeb, 7, 2.4, 7.2);
-  rim.position.set(5.8, 3.2, -5.4);
-  rim.lookAt(0, 0, 0);
-  scene.add(key, side, spec, spark, rim, new THREE.HemisphereLight(0xf7fffb, 0x1f4b3a, 0.85));
+  scene.add(key, side, new THREE.HemisphereLight(0xf7fffb, 0x1f4b3a, 1.05));
 
   const materials = {
     glass: new THREE.MeshPhysicalMaterial({ ...GLASS_PROFILES.slab, side: THREE.DoubleSide }),
@@ -414,6 +439,13 @@ export function createField({ root, gsap, reduce }) {
     icon: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.icon, roughness: 0.16, metalness: 0.04, clearcoat: 0.55, clearcoatRoughness: 0.08, specularIntensity: 0.55, envMapIntensity: 1.1 })),
     iconLight: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.iconAccent, roughness: 0.18, metalness: 0.025, clearcoat: 0.5, clearcoatRoughness: 0.1, specularIntensity: 0.5, envMapIntensity: 1 })),
     orbit: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbit),
+    orbitFilament: new THREE.LineBasicMaterial({
+      color: 0x58b97e,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      toneMapped: false,
+    }),
     decorative: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationShell),
     decorativeCore: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationCore),
   };
@@ -422,29 +454,32 @@ export function createField({ root, gsap, reduce }) {
 
   const composition = new THREE.Group();
   scene.add(composition);
-  const atmosphere = new THREE.Mesh(new THREE.CircleGeometry(3.55, 96), new THREE.MeshBasicMaterial({ color: 0xb8efd0, transparent: true, opacity: 0.075, depthWrite: false }));
+  const atmosphere = new THREE.Mesh(new THREE.CircleGeometry(3.55, 48), new THREE.MeshBasicMaterial({ color: 0xb8efd0, transparent: true, opacity: 0.075, depthWrite: false }));
   atmosphere.position.z = -2.5;
   atmosphere.scale.y = 0.8;
   composition.add(atmosphere);
 
   const orbGroup = new THREE.Group();
   composition.add(orbGroup);
-  const orbCore = new THREE.Mesh(new THREE.SphereGeometry(1.46, 64, 48), new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbCore));
-  const orbShell = new THREE.Mesh(new THREE.SphereGeometry(1.68, 64, 48), new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbShell));
-  orbCore.renderOrder = 2;
-  orbShell.renderOrder = 2;
-  const orbBubble = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 16), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 0.9, thickness: 0.35, ior: 1.38, transparent: true, opacity: 0.7, envMapIntensity: 1.4 }));
+  const orbGeometry = new THREE.SphereGeometry(1, 40, 28);
+  const orbCore = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbCore));
+  const orbShell = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbShell));
+  orbCore.scale.setScalar(1.46);
+  orbShell.scale.setScalar(1.68);
+  orbCore.renderOrder = ORB_RENDER_ORDER;
+  orbShell.renderOrder = ORB_RENDER_ORDER + 1;
+  const orbBubble = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 0.9, thickness: 0.35, ior: 1.38, transparent: true, opacity: 0.7, envMapIntensity: 1.4, depthTest: false, depthWrite: false }));
   orbBubble.position.set(-0.38, 0.46, 0.42);
-  orbBubble.renderOrder = 2;
+  orbBubble.renderOrder = ORB_RENDER_ORDER + 2;
   const highlightTexture = createHighlightTexture();
-  const orbHighlight = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.72, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  const orbHighlight = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   orbHighlight.position.set(-0.62, 0.7, 1.62);
   orbHighlight.scale.set(0.78, 0.42, 1);
-  orbHighlight.renderOrder = 3;
-  const orbGlint = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  orbHighlight.renderOrder = ORB_RENDER_ORDER + 3;
+  const orbGlint = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   orbGlint.position.set(0.58, -0.48, 1.46);
   orbGlint.scale.set(0.34, 0.2, 1);
-  orbGlint.renderOrder = 3;
+  orbGlint.renderOrder = ORB_RENDER_ORDER + 3;
   orbGroup.add(orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
   const shadowTexture = createShadowTexture();
   const orbShadow = new THREE.Mesh(
@@ -463,28 +498,49 @@ export function createField({ root, gsap, reduce }) {
   orbContact.renderOrder = 0;
   composition.add(orbShadow, orbContact);
 
-  const orbitSpecs = [
-    [3.75, 1.42, 0.12, 0.12, 0.15, 0.98],
-    [4.2, 1.78, 0.42, -0.16, -0.19, 0.94],
-    [3.5, 2.16, -0.34, 0.28, 0.22, 0.9],
-  ];
-  const orbitMeshes = orbitSpecs.map(([rx, ry, x, y, z, opacity]) => {
+  const orbitMeshes = ORBIT_PATHS.map((path) => {
     const material = materials.orbit.clone();
-    material.opacity = opacity;
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(new EllipseCurve3(rx, ry), 96, 0.028, 8, true), material);
-    mesh.rotation.set(x, y, z + ORBIT_ROTATION_OFFSET);
+    material.opacity = path.opacity;
+    const curve = new EllipseCurve3(path.radiusX, path.radiusY);
+    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, ORBIT_TUBULAR_SEGMENTS, 0.045, ORBIT_RADIAL_SEGMENTS, true), material);
+    const filamentPoints = Array.from(
+      { length: ORBIT_TUBULAR_SEGMENTS },
+      (_, index) => curve.getPoint(index / ORBIT_TUBULAR_SEGMENTS),
+    );
+    const filament = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(filamentPoints),
+      materials.orbitFilament,
+    );
+    filament.renderOrder = 2;
+    mesh.add(filament);
+    mesh.rotation.set(path.rotationX, path.rotationY, path.rotationZ + ORBIT_ROTATION_OFFSET);
     mesh.renderOrder = 1;
     composition.add(mesh);
     return mesh;
   });
 
+  const stationGeometries = {
+    glow: createRoundedPanelGeometry(2.02, 2.02, 0.04, 0.3, 0.02),
+    halo: createRoundedPanelGeometry(2.1, 2.1, 0.08, 0.3, 0.035),
+    slab: createRoundedPanelGeometry(
+      STATION_GLASS_GEOMETRY.width,
+      STATION_GLASS_GEOMETRY.height,
+      STATION_GLASS_GEOMETRY.depth,
+      STATION_GLASS_GEOMETRY.radius,
+      STATION_GLASS_GEOMETRY.bevelSize,
+      STATION_GLASS_GEOMETRY.bevelSegments,
+      STATION_GLASS_GEOMETRY.curveSegments,
+    ),
+  };
+  stationGeometries.edge = new THREE.EdgesGeometry(stationGeometries.slab, 28);
   const stations = STATIONS.map((spec, index) => {
-    const station = createStation(spec, index, materials);
+    const station = createStation(spec, index, materials, stationGeometries);
     composition.add(station.root);
     return station;
   });
+  const decorationGeometries = new Map();
   const decoratives = DECORATIONS.map((spec) => {
-    const object = createDecoration(spec, materials);
+    const object = createDecoration(spec, materials, decorationGeometries);
     composition.add(object);
     return object;
   });
@@ -498,12 +554,18 @@ export function createField({ root, gsap, reduce }) {
   let frozen = false;
   let destroyed = false;
   let inView = true;
+  let pageVisible = !document.hidden;
+  let presentationVisible = true;
   let looping = false;
   let pointerMoved = false;
   let focusTween = null;
   let resizeTimer = 0;
+  let staticRaf = 0;
+  let lastRenderTime = 0;
+  let lastAlpha = -1;
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2(4, 4);
+  const stationSlabs = stations.map((station) => station.slab);
 
   function baseScale() {
     return compact ? 0.62 : Math.min(1.02, Math.max(0.82, width / 1500));
@@ -513,7 +575,7 @@ export function createField({ root, gsap, reduce }) {
     width = Math.max(1, window.innerWidth);
     height = Math.max(1, window.innerHeight);
     compact = width < 768;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? 1 : 1.25));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? 0.85 : 1));
     renderer.setSize(width, height, false);
     const viewHeight = compact ? 12.4 : 10.8;
     const viewWidth = viewHeight * (width / height);
@@ -524,11 +586,11 @@ export function createField({ root, gsap, reduce }) {
     camera.updateProjectionMatrix();
     composition.position.set((compact ? 0.08 : 0.5) * viewWidth * 0.5, (compact ? -0.48 : -0.01) * viewHeight * 0.5, 0);
     composition.scale.setScalar(baseScale());
-    render();
+    kick();
   }
 
   function stationAngle(station) {
-    return station.spec.angle + state.focusRotation + state.time * 0.018;
+    return station.spec.angle + state.focusRotation;
   }
 
   function updateStation(station) {
@@ -538,11 +600,9 @@ export function createField({ root, gsap, reduce }) {
     const hovered = station.index === state.hoverIndex;
     const hoverProgress = advanceHoverProgress(station.root.userData.hoverProgress || 0, hovered && !active, reduce);
     station.root.userData.hoverProgress = hoverProgress;
-    const radius = station.spec.radius;
-    const float = reduce ? 0 : Math.sin(state.time * 0.82 + station.index * 1.37) * 0.085 * (1 - lift * 0.55);
-    const orbitX = Math.cos(angle) * 3.62 * radius;
-    const orbitY = Math.sin(angle) * 2.82 * radius + float;
-    const orbitZ = Math.cos(angle) * 0.72;
+    const pathDrift = reduce ? 0 : Math.sin(state.time * 0.82 + station.index * 1.37) * 0.025 * (1 - lift * 0.55);
+    const orbitPath = ORBIT_PATHS[station.spec.orbit];
+    const [orbitX, orbitY, orbitZ] = orbitPointAt(orbitPath, angle + pathDrift, orbitMeshes[station.spec.orbit].rotation.z);
     const showX = compact ? -1.9 : -3.32;
     const showY = compact ? 2.65 : 2.42;
     const showZ = compact ? 2.05 : 2.35;
@@ -562,13 +622,10 @@ export function createField({ root, gsap, reduce }) {
     station.root.rotation.x *= hoverTiltEase;
     station.root.rotation.y *= hoverTiltEase;
     station.root.rotation.z *= 1 - hoverProgress * 0.42;
-    const depthScale = 0.94 + (Math.cos(angle) + 1) * 0.055 * (1 - lift);
+    const depth = clamp01((orbitZ + 1.5) / 3);
+    const orbitDepthScale = 0.9 + depth * 0.18;
+    const depthScale = orbitDepthScale + (1 - orbitDepthScale) * lift;
     station.root.scale.setScalar(stationVisualScale({ depthScale, lift, hoverProgress }));
-    let others = 0;
-    stations.forEach((item) => {
-      if (item !== station) others = Math.max(others, item.root.userData.lift || 0);
-    });
-    const dim = 1 - others * 0.42;
     station.root.visible = state.companions > 0.02;
     station.slab.material.color.lerpColors(glassIdle, glassLive, lift);
     station.slab.material.envMapIntensity = 2.2 - lift * 0.55;
@@ -588,7 +645,10 @@ export function createField({ root, gsap, reduce }) {
     composition.scale.setScalar(baseScale() * (0.86 + state.entry * 0.14) * (1 - state.recede * 0.13));
     const alpha = state.entry * (1 - state.recede);
     composition.visible = alpha > 0.002;
-    canvas.style.setProperty("--field-alpha", String(alpha));
+    if (alpha !== lastAlpha) {
+      canvas.style.setProperty("--field-alpha", String(alpha));
+      lastAlpha = alpha;
+    }
     const orbFloat = reduce ? 0 : 1;
     const floatX = Math.sin(state.time * 0.41 + 0.6) * 0.09 * orbFloat;
     const floatY = (Math.sin(state.time * 0.58) * 0.18 + Math.sin(state.time * 0.27 + 1.1) * 0.07) * orbFloat;
@@ -596,7 +656,7 @@ export function createField({ root, gsap, reduce }) {
     orbGroup.position.set(floatX, floatY, floatZ);
     orbGroup.rotation.y = state.time * 0.07;
     orbGroup.rotation.x = Math.sin(state.time * 0.22) * 0.05;
-    orbCore.scale.setScalar(1 + Math.sin(state.time * 0.72) * 0.01);
+    orbCore.scale.setScalar(1.46 * (1 + Math.sin(state.time * 0.72) * 0.01));
     const shadowPulse = 1 + floatY * 0.35 + Math.sin(state.time * 0.72) * 0.02;
     orbShadow.position.set(0.1 + floatX, -1.78, 0.08 + floatZ * 0.25);
     orbContact.position.set(0.06 + floatX, -1.7, 0.18 + floatZ * 0.2);
@@ -605,33 +665,54 @@ export function createField({ root, gsap, reduce }) {
     orbShadow.material.opacity = 0.92 - floatY * 0.55;
     orbContact.material.opacity = 0.7 - floatY * 0.4;
     orbBubble.position.set(-0.38 + Math.sin(state.time * 0.4) * 0.04, 0.46, 0.42);
-    orbitMeshes[0].rotation.z = 0.15 + state.time * 0.018;
-    orbitMeshes[1].rotation.z = -0.19 - state.time * 0.014;
-    orbitMeshes[2].rotation.z = 0.22 + state.time * 0.011;
+    ORBIT_PATHS.forEach((path, index) => {
+      orbitMeshes[index].rotation.z = orbitRotationAt(path, state.time);
+    });
     stations.forEach(updateStation);
     decoratives.forEach((object) => {
-      const { base, phase } = object.userData;
-      const drift = reduce ? 0 : Math.sin(state.time * 0.48 + phase) * 0.1;
-      object.position.set(base.x + drift * 0.18, base.y + drift, base.z);
-      object.rotation.x += reduce ? 0 : 0.0014 + phase * 0.00008;
-      object.rotation.y += reduce ? 0 : 0.0018 + phase * 0.00007;
+      const { base, baseRotation, baseScale: decorationScale, glint, motion, phase } = object.userData;
+      const motionAmount = reduce ? 0 : 1;
+      const theta = state.time * motion.speed + phase;
+      const pulse = Math.sin(theta * 1.7 + phase * 0.4);
+      object.position.set(
+        base.x + Math.cos(theta) * motion.radiusX * motionAmount,
+        base.y + Math.sin(theta * 1.18) * motion.radiusY * motionAmount,
+        base.z + Math.cos(theta * 0.83) * motion.radiusZ * motionAmount,
+      );
+      object.rotation.set(
+        baseRotation.x + (state.time * motion.angularVelocity.x + Math.sin(theta) * 0.045) * motionAmount,
+        baseRotation.y + (state.time * motion.angularVelocity.y + Math.cos(theta * 0.76) * 0.055) * motionAmount,
+        baseRotation.z + (state.time * motion.angularVelocity.z + Math.sin(theta * 0.62) * 0.04) * motionAmount,
+      );
+      object.scale.setScalar(decorationScale * (1 + pulse * 0.035 * motionAmount));
+      glint.position.set(
+        -0.3 + Math.sin(theta * 1.45) * 0.12 * motionAmount,
+        0.34 + Math.cos(theta * 1.2) * 0.08 * motionAmount,
+        0.68,
+      );
+      glint.material.opacity = 0.32 + (pulse + 1) * 0.08;
     });
     if (pointerMoved && !reduce && pointer.x <= 1) {
       raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(stations.map((station) => station.slab), false);
+      const hits = raycaster.intersectObjects(stationSlabs, false);
       state.hoverIndex = hits.length ? stations.findIndex((station) => station.slab === hits[0].object) : -1;
     }
     pointerMoved = false;
   }
 
   function shouldAnimate() {
-    return !destroyed && !frozen && inView && state.mode !== "paused" && !reduce;
+    return !destroyed && !frozen && inView && pageVisible && presentationVisible && state.mode !== "paused" && !reduce;
   }
 
-  function render() {
-    if (destroyed) return;
+  function syncCanvasVisibility() {
+    canvas.style.display = presentationVisible && inView && pageVisible ? "block" : "none";
+  }
+
+  function render(now = performance.now()) {
+    if (destroyed || !presentationVisible || !pageVisible) return;
     updateScene();
     renderer.render(scene, camera);
+    lastRenderTime = now;
   }
 
   function stopLoop() {
@@ -640,35 +721,75 @@ export function createField({ root, gsap, reduce }) {
     raf = 0;
   }
 
+  function cancelStaticRender() {
+    if (staticRaf) window.cancelAnimationFrame(staticRaf);
+    staticRaf = 0;
+  }
+
+  function requestRender() {
+    if (destroyed || looping || staticRaf || !presentationVisible || !pageVisible) return;
+    const drawWhenReady = (now) => {
+      if (destroyed || looping || !presentationVisible || !pageVisible) {
+        staticRaf = 0;
+        return;
+      }
+      if (now - lastRenderTime < RENDER_INTERVAL) {
+        staticRaf = window.requestAnimationFrame(drawWhenReady);
+        return;
+      }
+      staticRaf = 0;
+      render(now);
+    };
+    staticRaf = window.requestAnimationFrame(drawWhenReady);
+  }
+
   function frame(now) {
     if (destroyed) {
       stopLoop();
       return;
     }
-    const delta = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
-    lastTime = now;
-    if (shouldAnimate()) state.time += delta;
-    render();
-    if (shouldAnimate()) raf = window.requestAnimationFrame(frame);
-    else stopLoop();
+    if (!shouldAnimate()) {
+      stopLoop();
+      requestRender();
+      return;
+    }
+    if (now - lastRenderTime >= RENDER_INTERVAL) {
+      const delta = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
+      lastTime = now;
+      state.time += delta;
+      render(now);
+    }
+    raf = window.requestAnimationFrame(frame);
   }
 
   function startLoop() {
     if (destroyed || looping || !shouldAnimate()) return;
     looping = true;
     lastTime = performance.now();
+    cancelStaticRender();
     raf = window.requestAnimationFrame(frame);
   }
 
   function kick() {
-    if (looping) return;
-    render();
     if (shouldAnimate()) startLoop();
-    else stopLoop();
+    else requestRender();
   }
 
   function onTweenUpdate() {
-    if (!looping) render();
+    if (!looping) requestRender();
+  }
+
+  function setPresentationVisible(visible) {
+    if (presentationVisible === visible) return;
+    presentationVisible = visible;
+    syncCanvasVisibility();
+    if (visible) {
+      lastTime = performance.now();
+      kick();
+    } else {
+      stopLoop();
+      cancelStaticRender();
+    }
   }
 
   function setFocusIndex(index) {
@@ -690,7 +811,9 @@ export function createField({ root, gsap, reduce }) {
       return;
     }
     const dock = compact ? 2.85 : FOCUS_DOCK;
-    const target = nearestAngle(dock - STATIONS[index].angle - state.time * 0.018, state.focusRotation);
+    const orbitPath = ORBIT_PATHS[STATIONS[index].orbit];
+    const orbitRotation = orbitRotationAt(orbitPath, state.time);
+    const target = nearestAngle(dock - STATIONS[index].angle - orbitRotation, state.focusRotation);
     focusTween = gsap.to(state, { focusRotation: target, focusStrength: 1, duration, ease: "power3.inOut", overwrite: true, onUpdate: onTweenUpdate });
   }
 
@@ -721,6 +844,7 @@ export function createField({ root, gsap, reduce }) {
   }
 
   function onPointerMove(event) {
+    if (!presentationVisible || !inView) return;
     const nx = event.clientX / width * 2 - 1;
     const ny = -(event.clientY / height * 2 - 1);
     state.pointerTargetX = nx;
@@ -741,16 +865,31 @@ export function createField({ root, gsap, reduce }) {
     resizeTimer = window.setTimeout(resize, 40);
   }
 
+  function handleVisibilityChange() {
+    pageVisible = !document.hidden;
+    syncCanvasVisibility();
+    if (pageVisible) {
+      lastTime = performance.now();
+      kick();
+    } else {
+      stopLoop();
+      cancelStaticRender();
+    }
+  }
+
+  const visibilityTarget = document.getElementById("pin-slot") || root;
   const visibility = new IntersectionObserver((entries) => {
     inView = entries.some((entry) => entry.isIntersecting);
+    syncCanvasVisibility();
     if (inView) kick();
     else stopLoop();
   }, { threshold: 0.02 });
-  visibility.observe(root);
+  visibility.observe(visibilityTarget);
 
   window.addEventListener("resize", handleResize);
   window.addEventListener("pointermove", onPointerMove, { passive: true });
   document.documentElement.addEventListener("pointerleave", onPointerLeave);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   resize();
   kick();
 
@@ -763,8 +902,9 @@ export function createField({ root, gsap, reduce }) {
     setMode,
     setProgress,
     setOrbitEntryProgress,
-    freezeOrbit() { frozen = true; render(); stopLoop(); },
+    freezeOrbit() { frozen = true; stopLoop(); requestRender(); },
     unfreezeOrbit() { frozen = false; lastTime = performance.now(); kick(); },
+    setPresentationVisible,
     hideProductsNode() {},
     showProductsNode() {},
     setCompanionsVisible,
@@ -783,13 +923,19 @@ export function createField({ root, gsap, reduce }) {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", onPointerMove);
       document.documentElement.removeEventListener("pointerleave", onPointerLeave);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cancelStaticRender();
       focusTween?.kill();
       stations.forEach((station) => gsap.killTweensOf(station.root.userData));
+      const geometries = new Set();
+      const sceneMaterials = new Set();
       scene.traverse((object) => {
-        object.geometry?.dispose?.();
-        if (Array.isArray(object.material)) object.material.forEach((material) => material.dispose());
-        else object.material?.dispose?.();
+        if (object.geometry) geometries.add(object.geometry);
+        if (Array.isArray(object.material)) object.material.forEach((material) => sceneMaterials.add(material));
+        else if (object.material) sceneMaterials.add(object.material);
       });
+      geometries.forEach((geometry) => geometry.dispose());
+      sceneMaterials.forEach((material) => material.dispose());
       environmentTarget.dispose();
       highlightTexture.dispose();
       shadowTexture.dispose();

@@ -1,4 +1,5 @@
 .glass-orbit-canvas {
+  --fold-alpha: 1;
   position: absolute;
   inset: 0;
   z-index: 3;
@@ -6,7 +7,7 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: var(--field-alpha, 0);
+  opacity: calc(var(--field-alpha, 0) * var(--fold-alpha, 1));
   will-change: opacity, transform;
 }
 
@@ -133,7 +134,7 @@
   inset: 31%;
   border: 1px solid rgb(255 255 255 / 0.86);
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 24%, #effff7 0%, #9cdbb9 42%, #6cb38e 100%);
+  background: radial-gradient(circle at 32% 24%, #effff7 0%, #7ddb94 42%, #56b371 100%);
   box-shadow:
     inset -18px -22px 36px rgb(27 94 74 / 0.16),
     inset 12px 12px 24px rgb(255 255 255 / 0.72),
