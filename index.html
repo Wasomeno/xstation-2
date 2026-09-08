@@ -37,18 +37,17 @@
       }
 
       :root {
-        --navy: #092328;
-        --blue: #2a835f;
-        --peri: #8bbb92;
-        --sky: #8bbb92;
-        --bg: color-mix(in srgb, var(--sky) 10%, #f7faf7);
-        --ink: #16181b;
-        --ivory: #f3f4f3;
-        --steel: #4a5056;
-        --dim: #6b7178;
-        --surface: color-mix(in srgb, var(--sky) 28%, #f7faf7);
-        --line: color-mix(in srgb, var(--ink) 16%, transparent);
-        --gold: var(--blue);
+        --deep-forest: #083B28;
+        --signal: #1C855C;
+ --sage: #90B0A0;
+ --mist: #C8D8C8;
+ --page: #F7F8F5;
+        --ink: #122225;
+        --paper: #F7F8F5;
+        --slate: #3C4C49;
+        --muted: #3C4C49;
+        --surface: color-mix(in srgb, var(--mist) 28%, #F7F8F5);
+ --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --sans: "Geist", "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
         --section-join: 22vh;
       }
@@ -69,7 +68,7 @@
         min-height: 100%;
         max-width: 100%;
         overflow-x: hidden;
-        background: var(--bg);
+        background: var(--page);
         color: var(--ink);
         font-family: var(--sans);
       }
@@ -121,7 +120,7 @@
       }
 
       /* html.is-station #field-stage {
-        background: color-mix(in srgb, var(--sky) 18%, #ffffff);
+        background: color-mix(in srgb, var(--mist) 18%, #ffffff);
       } */
 
       #field {
@@ -173,7 +172,7 @@
       }
 
       .welcome-slab {
-        --slab-glow: var(--blue);
+        --slab-glow: var(--signal);
         position: absolute;
         left: 50%;
         top: 50%;
@@ -192,27 +191,27 @@
       }
 
       .welcome-slab.is-gold {
-        color: var(--gold);
-        --slab-glow: var(--gold);
+        color: var(--signal);
+        --slab-glow: var(--signal);
         box-shadow:
-          0 0 9px color-mix(in srgb, var(--gold) 88%, transparent),
-          0 0 30px color-mix(in srgb, var(--gold) 62%, transparent),
-          0 0 72px color-mix(in srgb, var(--gold) 32%, transparent);
+          0 0 9px color-mix(in srgb, var(--signal) 88%, transparent),
+          0 0 30px color-mix(in srgb, var(--signal) 62%, transparent),
+          0 0 72px color-mix(in srgb, var(--signal) 32%, transparent);
       }
 
       .welcome-slab.is-peri {
-        color: var(--peri);
-        --slab-glow: var(--peri);
+        color: var(--sage);
+        --slab-glow: var(--sage);
       }
 
       .welcome-slab.is-steel {
-        color: var(--navy);
-        --slab-glow: var(--sky);
+        color: var(--deep-forest);
+        --slab-glow: var(--mist);
       }
 
       .welcome-slab.is-dim {
-        color: color-mix(in srgb, var(--navy) 58%, var(--peri));
-        --slab-glow: color-mix(in srgb, var(--blue) 70%, var(--peri));
+        color: color-mix(in srgb, var(--deep-forest) 58%, var(--sage));
+        --slab-glow: color-mix(in srgb, var(--signal) 70%, var(--sage));
       }
 
       .welcome-title-layer {
@@ -390,7 +389,7 @@
         padding: 0 0 2.4rem;
         border: 0;
         background: transparent;
-        color: var(--steel);
+        color: var(--slate);
         font-family: var(--sans);
         font-size: 15px;
         font-weight: 400;
@@ -570,7 +569,7 @@
         font-size: clamp(1.2rem, 1.75vw, 1.5rem);
         line-height: 1.5;
         letter-spacing: -0.01em;
-        color: var(--steel);
+        color: var(--slate);
       }
 
       .station-actions {
@@ -583,7 +582,7 @@
       }
 
       .station-cta {
-        --cta-fill: color-mix(in srgb, var(--blue) 90%, var(--navy));
+        --cta-fill: color-mix(in srgb, var(--signal) 90%, var(--deep-forest));
         position: relative;
         isolation: isolate;
         display: inline-flex;
@@ -614,7 +613,7 @@
         position: absolute;
         inset: -1px;
         z-index: 0;
-        background: var(--navy);
+        background: var(--deep-forest);
         transform: scaleX(0);
         transform-origin: right center;
         transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1);
@@ -626,9 +625,9 @@
       }
 
       .station-cta.is-primary {
-        background: var(--navy);
-        border-color: var(--navy);
-        color: var(--ivory);
+        background: var(--deep-forest);
+        border-color: var(--deep-forest);
+        color: var(--paper);
       }
 
       .station-cta.is-primary::before {
@@ -640,10 +639,10 @@
       }
 
       .station-cta:focus-visible {
-        outline: 1px solid var(--blue);
+        outline: 1px solid var(--signal);
         outline-offset: 3px;
-        border-color: var(--navy);
-        color: var(--ivory);
+        border-color: var(--deep-forest);
+        color: var(--paper);
       }
 
       .station-cta:focus-visible::before {
@@ -657,8 +656,8 @@
 
       @media (hover: hover) and (pointer: fine) {
         .station-cta:hover {
-          border-color: var(--navy);
-          color: var(--ivory);
+          border-color: var(--deep-forest);
+          color: var(--paper);
         }
 
         .station-cta.is-primary:hover {
@@ -807,21 +806,54 @@
       }
     </style>
     <style id="xstation-option-one-tokens">
+      /* Three light directions built from the supplied palette. */
       :root {
-        --navy: #083B28;
-        --blue: #1C855C;
-        --peri: #90B0A0;
-        --sky: #C8D8C8;
-        --bg: #F7F8F5;
+        --deep-forest: #002010;
+        --signal: #1C855C;
+        --sage: #90B0A0;
+        --mist: #C8D8C8;
+        --page: #F7F8F5;
         --ink: #122225;
-        --ivory: #F7F8F5;
-        --steel: #3C4C49;
-        --dim: #3C4C49;
-        --surface: color-mix(in srgb, var(--sky) 34%, var(--bg));
-        --line: color-mix(in srgb, var(--steel) 20%, transparent);
-        --gold: var(--blue);
-        --deep: #002010;
-        --forest-soft: #084828;
+        --paper: #F7F8F5;
+        --slate: #3C4C49;
+        --muted: #3C4C49;
+        --surface: color-mix(in srgb, var(--mist) 46%, var(--page));
+        --line: color-mix(in srgb, var(--forest) 24%, transparent);
+        --deepest: #002010;
+        --forest: #083B28;
+        --accent-readable: #002010;
+        --dark-surface: #084828;
+        --dark-surface-strong: #002010;
+        --button-fill: #002010;
+        --button-hover: #083B28;
+        --atmosphere: #DCE8E1;
+      }
+
+      :root #field-stage,
+      :root #welcome-bumper,
+      :root .welcome-backdrop {
+        background: var(--page);
+      }
+
+      :root #field-stage::before {
+        background:
+          radial-gradient(ellipse 38% 58% at 72% 50%, color-mix(in srgb, var(--atmosphere) 90%, transparent) 0%, color-mix(in srgb, var(--page) 42%, transparent) 42%, transparent 74%),
+          linear-gradient(90deg, var(--page) 0%, color-mix(in srgb, var(--page) 94%, var(--mist)) 46%, var(--page) 100%);
+      }
+
+      :root .welcome-atmosphere {
+        background:
+          radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--paper) 86%, transparent) 0%, color-mix(in srgb, var(--paper) 20%, transparent) 19%, transparent 43%),
+          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, color-mix(in srgb, var(--paper) 64%, transparent) 100%),
+          linear-gradient(to bottom, color-mix(in srgb, var(--paper) 90%, transparent) 0%, transparent 20%, transparent 64%, var(--page) 100%);
+      }
+
+      :root #edge-fade {
+        background: linear-gradient(to bottom, color-mix(in srgb, var(--paper) 92%, transparent) 0%, transparent 20%, transparent 58%, color-mix(in srgb, var(--paper) 24%, transparent) 80%, var(--page) 100%);
+      }
+
+      :root #vignette {
+        background: linear-gradient(90deg, color-mix(in srgb, var(--paper) 18%, transparent), transparent 42%, color-mix(in srgb, var(--paper) 20%, transparent));
       }
     </style>
     <link rel="stylesheet" href="videos/gateway-hero/field.css" />

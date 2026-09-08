@@ -91,7 +91,7 @@ html.lenis body {
 }
 
 .doctrine-band {
-  --node: var(--blue);
+  --node: var(--signal);
   position: relative;
   margin: clamp(3.5rem, 8vh, 6rem) var(--pad) 0;
   overflow: hidden;
@@ -129,7 +129,7 @@ html.lenis body {
 }
 
 .editorial-bridge {
-  --bridge-bg: color-mix(in srgb, var(--sky) 22%, #ffffff);
+  --bridge-bg: color-mix(in srgb, var(--mist) 22%, #ffffff);
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -174,7 +174,7 @@ html.lenis body {
 }
 
 .editorial-statement em {
-  color: var(--blue);
+  color: var(--signal);
   font-style: normal;
 }
 
@@ -185,7 +185,7 @@ html.lenis body {
   font-weight: 400;
   letter-spacing: -0.015em;
   line-height: 1.45;
-  color: var(--steel);
+  color: var(--slate);
   will-change: transform, opacity;
 }
 
@@ -229,7 +229,7 @@ html.lenis body {
   border-radius: 0.22em;
   background:
     linear-gradient(135deg, rgb(255 255 255 / 0.14), transparent 58%),
-    color-mix(in srgb, var(--sky) 34%, #f7faf7);
+    color-mix(in srgb, var(--mist) 34%, var(--page));
   color: var(--ink);
   font-weight: 400;
   backdrop-filter: blur(14px) saturate(135%);
@@ -279,7 +279,7 @@ html.lenis body {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: var(--navy);
+  background: var(--deep-forest);
   border: 0;
 }
 
@@ -299,7 +299,7 @@ html.lenis body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--navy) 72%, transparent) 100%);
+  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--deep-forest) 72%, transparent) 100%);
   pointer-events: none;
 }
 
@@ -308,7 +308,7 @@ html.lenis body {
   background: radial-gradient(
     ellipse 78% 62% at 50% 48%,
     transparent 52%,
-    color-mix(in srgb, var(--navy) 38%, transparent) 100%
+    color-mix(in srgb, var(--deep-forest) 38%, transparent) 100%
   );
 }
 
@@ -332,7 +332,7 @@ html.lenis body {
   font-family: var(--sans);
   font-size: clamp(1.12rem, 1.7vw, 1.4rem);
   line-height: 1.2;
-  color: var(--gold);
+  color: var(--signal);
   letter-spacing: -0.02em;
 }
 
@@ -369,7 +369,7 @@ html.lenis body {
   font-size: clamp(1rem, 1.35vw, 1.2rem);
   line-height: 1.48;
   letter-spacing: -0.018em;
-  color: var(--steel);
+  color: var(--slate);
 }
 
 .readout {
@@ -385,7 +385,7 @@ html.lenis body {
 .readout .k {
   display: block;
   font-size: 0.72rem;
-  color: var(--dim);
+  color: var(--muted);
   margin-bottom: 0.15rem;
 }
 
@@ -428,7 +428,7 @@ html.lenis body {
 }
 
 .stage.is-app {
-  background: var(--navy);
+  background: var(--deep-forest);
 }
 
 .stage.is-app .stage-media {
@@ -452,7 +452,7 @@ html.lenis body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--navy) 20%, transparent) 0%, color-mix(in srgb, var(--navy) 55%, transparent) 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--deep-forest) 20%, transparent) 0%, color-mix(in srgb, var(--deep-forest) 55%, transparent) 100%);
   pointer-events: none;
 }
 
@@ -461,7 +461,7 @@ html.lenis body {
   background: radial-gradient(
     ellipse 70% 58% at 50% 42%,
     transparent 48%,
-    color-mix(in srgb, var(--navy) 42%, transparent) 100%
+    color-mix(in srgb, var(--deep-forest) 42%, transparent) 100%
   );
 }
 
@@ -475,17 +475,17 @@ html.lenis body {
   color: var(--ink);
   background: #ffffff;
   border: 1px solid var(--line);
-  box-shadow: 0 18px 48px color-mix(in srgb, var(--navy) 10%, transparent);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--deep-forest) 10%, transparent);
 }
 
 .stage-card .field-mark {
-  color: var(--gold);
+  color: var(--signal);
 }
 
 .stage-card .lede {
   margin-top: 0.85rem;
   max-width: 34ch;
-  color: var(--steel);
+  color: var(--slate);
 }
 
 .stage-mark {
@@ -616,7 +616,7 @@ html.lenis body {
   max-width: 34ch;
   font-size: 1rem;
   line-height: 1.5;
-  color: var(--steel);
+  color: var(--slate);
 }
 
 .inquiry-code {
@@ -661,8 +661,8 @@ html.lenis body {
   width: 100%;
   height: 100%;
   padding: 7%;
-  background: color-mix(in srgb, var(--blue) 18%, white);
-  border: 1px solid color-mix(in srgb, var(--blue) 42%, white);
+  background: color-mix(in srgb, var(--signal) 18%, white);
+  border: 1px solid color-mix(in srgb, var(--signal) 42%, white);
   border-radius: 1rem;
   opacity: 1;
   transition: opacity 0.25s ease;
@@ -700,7 +700,7 @@ html.lenis body {
 .site-footer-meta {
   justify-self: end;
   font-size: 0.78rem;
-  color: var(--dim);
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -932,9 +932,9 @@ html.lenis body {
   padding: 0.62rem 1rem 0.65rem 0.78rem;
   font-size: clamp(0.96rem, 1.35vw, 1.18rem);
   font-weight: 400;
-  color: var(--blue);
+  color: var(--signal);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--sky) 25%, #ffffff);
+  background: color-mix(in srgb, var(--mist) 25%, #ffffff);
 }
 
 .field-mark > span {
@@ -942,8 +942,8 @@ html.lenis body {
   width: 0.72rem;
   height: 0.72rem;
   border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--blue) 12%, transparent);
+  background: var(--signal);
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--signal) 12%, transparent);
 }
 
 .space-panel h2 {
@@ -965,7 +965,7 @@ html.lenis body {
 
 .product-tagline span {
   display: block;
-  color: var(--blue);
+  color: var(--signal);
 }
 
 .lede {
@@ -1018,4 +1018,76 @@ html.lenis body {
     margin-top: 1.35rem;
   }
 
+}
+
+/* All three directions stay light. The variant changes surface temperature
+   and dark-surface emphasis; media and 3D assets retain a stable green mark. */
+#work-root,
+.space,
+.stage,
+.clients,
+.inquiry,
+.site-footer {
+  background-color: var(--page);
+}
+
+#work-root {
+  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--page) 78%, transparent) 15vh, var(--page) 22vh);
+}
+
+.space.is-app,
+.stage.is-app {
+  background: var(--dark-surface);
+}
+
+.space-stage::after {
+  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--dark-surface-strong) 72%, transparent) 100%);
+}
+
+.space.is-app .space-stage::after {
+  background: radial-gradient(ellipse 78% 62% at 50% 48%, transparent 52%, color-mix(in srgb, var(--dark-surface-strong) 38%, transparent) 100%);
+}
+
+.stage::after {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--dark-surface) 20%, transparent) 0%, color-mix(in srgb, var(--dark-surface-strong) 55%, transparent) 100%);
+}
+
+.stage.is-app::after {
+  background: radial-gradient(ellipse 70% 58% at 50% 42%, transparent 48%, color-mix(in srgb, var(--dark-surface-strong) 42%, transparent) 100%);
+}
+
+.field-mark,
+.product-tagline span,
+.editorial-statement em {
+  color: var(--accent-readable);
+}
+
+.station-cta {
+  --cta-fill: var(--button-fill);
+}
+
+.station-cta:hover,
+.station-cta:focus-visible {
+  border-color: var(--button-hover);
+}
+
+/* Project sections are intentionally neutral: no green or tinted section
+   fills behind the product content. The media artwork remains unchanged. */
+#work-root,
+#work-root > section,
+#work-root .space,
+#work-root .space-stage,
+#work-root .space-panel,
+#work-root .stage,
+#work-root .clients,
+#work-root .inquiry,
+#work-root .site-footer {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+#work-root .space.is-app,
+#work-root .stage.is-app,
+#work-root .space.is-app .space-stage {
+  background-color: #ffffff !important;
 }

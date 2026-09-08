@@ -463,18 +463,18 @@ function createConversationView(host, reduce, phase = 0, characterStyle = "stick
     opacity: 0.12,
     depthWrite: false,
   });
-  const inactivePalette = {
-    dark: new THREE.Color(0x3c4c49),
-    light: new THREE.Color(0x90b0a0),
-    bubble: new THREE.Color(0xc8d8c8),
-    dot: new THREE.Color(0x3c4c49),
-  };
-  const focusedPalette = {
-    dark: new THREE.Color(0x083b28),
-    light: new THREE.Color(0x1c855c),
-    bubble: new THREE.Color(0xc8d8c8),
-    dot: new THREE.Color(0x1c855c),
-  };
+const inactivePalette = {
+  dark: new THREE.Color(0x3c4c49),
+  light: new THREE.Color(0x90b0a0),
+  bubble: new THREE.Color(0xc8d8c8),
+  dot: new THREE.Color(0x3c4c49),
+};
+const focusedPalette = {
+  dark: new THREE.Color(0x083b28),
+  light: new THREE.Color(0x1c855c),
+  bubble: new THREE.Color(0x083b28),
+  dot: new THREE.Color(0x1c855c),
+};
 
   const capsuleGeometry = new THREE.CapsuleGeometry(0.075, 0.5, 6, 12);
   const torsoGeometry = new THREE.CapsuleGeometry(0.11, 0.58, 6, 12);
@@ -752,31 +752,80 @@ const CATEGORY_MODEL_SOURCES = {
     type: "fbx",
     url: new URL("assets/models/handshake/icon.fbx", import.meta.url).href,
     rotation: [-0.1, -0.18, 0.025],
+    activeMaterialColors: {
+    "color - red": 0x083b28,
+      "color - blue": 0xb7c9b9,
+    },
   },
   retroComputer: {
-    type: "fbx",
-    url: new URL("assets/models/retro-computer/icon.fbx", import.meta.url).href,
-    rotation: [-0.12, 0.2, -0.03],
+    type: "gltf",
+    url: new URL("assets/models/prototyping/final-proto.glb", import.meta.url).href,
+    // The frame needs its own fit because the square silhouette reads much
+    // larger than the other station assets at the shared focus scale.
+    targetSize: 1.08,
+    // Elevated three-quarter view: top and side planes are visible while the
+    // front opening remains the visual anchor.
+    rotation: [-0.2, 0.58, -0.06],
+    activeMaterialColors: {
+      white: 0x90b0a0,
+    },
   },
   talentAssessment: {
     type: "gltf",
     url: new URL("assets/models/kenney-characters/1.glb", import.meta.url).href,
-    rotation: [-0.1, -0.24, 0.02],
+    // Add a restrained perspective turn so the card has visible depth while
+    // its assessment controls remain easy to read.
+    rotation: [-0.16, -0.5, -0.06],
+    // Focused card treatment: emerald outer panel, pale mint controls, and
+    // a deep forest check/detail layer.
+    activeMaterialColors: {
+      white: 0xc8d8c8,
+      green: 0x083b28,
+      default: 0x1c855c,
+    },
   },
   robot: {
     type: "gltf",
-    url: new URL("assets/models/robot/scene.gltf", import.meta.url).href,
-    rotation: [-0.04, -0.28, 0],
+    url: new URL(
+      "assets/models/ai-agents/futuristic-flying-animated-robot.glb",
+      import.meta.url,
+    ).href,
+    rotation: [-0.08, -0.2, -0.018],
+    // Preserve the reference's pale mint shell, deep face/ear panels, and
+    // brighter emerald interface details when the station is focused.
+    activeMaterialColors: {
+      white_glossy: 0xc8d8c8,
+      blue_light: 0x1c855c,
+      black_matt: 0x002010,
+    },
   },
   marketing: {
     type: "gltf",
     url: new URL("assets/models/marketing/14811211.glb", import.meta.url).href,
-    rotation: [-0.1, Math.PI / 2 - 0.42, -0.04],
+    // Hold a gentle three-quarter view so the horn, barrel, rear cap, and
+    // handle all stay legible when the focused orbit model enlarges.
+    rotation: [-0.1, Math.PI / 2 + 0.08, -0.04],
+    // The megaphone source uses Indonesian material names. Map those parts
+    // directly to the mint shell and layered forest greens in the reference.
+    activeMaterialColors: {
+      "biru matang": 0x06382a,
+      putih: 0xc8d8c8,
+      kuning: 0x0f7650,
+      hitam: 0x032c20,
+    },
   },
   documentManagement: {
     type: "gltf",
     url: new URL("assets/models/document-management/doc-mgmt.glb", import.meta.url).href,
     rotation: [-0.1, 0.18, -0.025],
+    // Focused document tray treatment: deep forest housing and rear handle
+    // plates, with warm cream trays, dividers, and handle faces.
+    activeMaterialColors: {
+      "biru terang": 0x0b2f23,
+      "biru gelap": 0xe7e9df,
+      "kuning gelap": 0x123b2d,
+      "kuning terang": 0xe7e9df,
+    },
   },
 };
 
@@ -788,7 +837,9 @@ const CATEGORY_MODEL_RENDER_SIZE = 512;
 const CATEGORY_MODEL_PIXEL_RATIO = 2.5;
 // Orbiting models stay quiet and neutral. Focus introduces the product greens,
 // ordered from broad surfaces to smaller trim so the active asset stays light.
-const MODEL_IDLE_SWATCHES = [0xf7f8f5, 0xc8d8c8, 0x90b0a0, 0x3c4c49];
+// Category models stay quiet and neutral around the orbit; focused models
+// still transition to their own active green palettes below.
+const MODEL_IDLE_SWATCHES = [0xf1f2ef, 0xd4d7d3, 0xa7ada8, 0x6f7772];
 const MODEL_ACTIVE_SWATCHES = [0xc8d8c8, 0x90b0a0, 0x1c855c, 0x084828];
 
 function loadFbx(url) {
@@ -845,7 +896,11 @@ function prepareOrbitModelGeometry(mesh) {
   mesh.geometry = smoothedGeometry;
 }
 
-function applyOrbitModelMaterials(object, offset = 0) {
+function applyOrbitModelMaterials(
+  object,
+  offset = 0,
+  activeMaterialColors = null,
+) {
   const materialMap = new Map();
   const materials = [];
 
@@ -872,14 +927,18 @@ function applyOrbitModelMaterials(object, offset = 0) {
         sourceMetalness >= 0.25 ||
         /chrome|metal|steel|silver|hardware|rim|disc|frame|border|case/i.test(normalizedMaterialName)
       );
-      const idleColor = isDarkSurface
-        ? new THREE.Color(0x083b28)
-        : isAccentSurface
-          ? new THREE.Color(0x90b0a0)
-          : isLightSurface
-            ? new THREE.Color(0xc8d8c8)
-            : new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
-      const activeColor = isDarkSurface
+      const idleColor = new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
+      const configuredActiveColor = activeMaterialColors?.[normalizedMaterialName]
+        ?? (isDarkSurface
+          ? activeMaterialColors?.dark
+          : isAccentSurface
+            ? activeMaterialColors?.accent
+            : isLightSurface
+              ? activeMaterialColors?.light
+              : activeMaterialColors?.default);
+      const activeColor = configuredActiveColor
+        ? new THREE.Color(configuredActiveColor)
+        : isDarkSurface
         ? new THREE.Color(0x084828)
         : isAccentSurface
           ? new THREE.Color(0x1c855c)
@@ -922,8 +981,10 @@ function buildCategoryModel(source, config) {
 
   if (!config.ensemble) {
     const model = cloneSkeleton(source.scene);
-    materials.push(...applyOrbitModelMaterials(model));
-    fitModel(model);
+    materials.push(
+      ...applyOrbitModelMaterials(model, 0, config.activeMaterialColors),
+    );
+    fitModel(model, config.targetSize || 1.75);
     const orientedModel = new THREE.Group();
     orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
     orientedModel.add(model);

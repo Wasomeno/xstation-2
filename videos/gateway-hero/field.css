@@ -111,7 +111,7 @@
   height: 78px;
   margin: 0;
   border-radius: 50%;
-  background: var(--ivory);
+  background: var(--paper);
   border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   box-shadow:
     0 1px 0 color-mix(in srgb, #fff 80%, transparent),
@@ -133,11 +133,11 @@
 }
 
 .dock-node.is-focus {
-  border-color: var(--blue);
+  border-color: var(--signal);
   box-shadow:
-    0 0 0 8px color-mix(in srgb, var(--sky) 30%, transparent),
-    0 0 0 1px var(--blue),
-    0 18px 38px color-mix(in srgb, var(--blue) 20%, transparent);
+    0 0 0 8px color-mix(in srgb, var(--mist) 30%, transparent),
+    0 0 0 1px var(--signal),
+    0 18px 38px color-mix(in srgb, var(--signal) 20%, transparent);
 }
 
 .dock-node-label {
@@ -161,7 +161,7 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  filter: drop-shadow(0 14px 18px color-mix(in srgb, var(--steel) 18%, transparent));
+  filter: drop-shadow(0 14px 18px color-mix(in srgb, var(--slate) 18%, transparent));
 }
 
 .dock-node.is-conversation:hover,
@@ -169,14 +169,14 @@
   border: 0;
   background: transparent;
   box-shadow: none;
-  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--steel) 24%, transparent));
+  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--slate) 24%, transparent));
 }
 
 .dock-node.is-conversation.is-focus {
   border: 0;
   background: transparent;
   box-shadow: none;
-  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--blue) 34%, transparent));
+  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--signal) 34%, transparent));
 }
 
 .dock-node.is-conversation .dock-node-label {
@@ -260,25 +260,25 @@
 }
 
 .slab.is-gold {
-  color: var(--gold, var(--blue));
+  color: var(--signal);
   box-shadow:
-    0 0 16px color-mix(in srgb, var(--gold, var(--blue)) 45%, transparent),
-    0 0 36px color-mix(in srgb, var(--gold, var(--blue)) 22%, transparent);
+    0 0 16px color-mix(in srgb, var(--signal) 45%, transparent),
+    0 0 36px color-mix(in srgb, var(--signal) 22%, transparent);
 }
 
 .slab.is-peri {
-  color: var(--peri);
+  color: var(--sage);
   box-shadow:
-    0 0 16px color-mix(in srgb, var(--peri) 36%, transparent),
-    0 0 32px color-mix(in srgb, var(--peri) 16%, transparent);
+    0 0 16px color-mix(in srgb, var(--sage) 36%, transparent),
+    0 0 32px color-mix(in srgb, var(--sage) 16%, transparent);
 }
 
 .slab.is-steel {
-  color: var(--navy);
+  color: var(--deep-forest);
 }
 
 .slab.is-dim {
-  color: color-mix(in srgb, var(--navy) 58%, var(--peri));
+  color: color-mix(in srgb, var(--deep-forest) 58%, var(--sage));
 }
 
 .dock-orbs {

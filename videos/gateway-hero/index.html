@@ -31,18 +31,17 @@
       }
 
       :root {
-        --navy: #092328;
-        --blue: #2a835f;
-        --peri: #8bbb92;
-        --sky: #8bbb92;
-        --bg: color-mix(in srgb, var(--sky) 10%, #f7faf7);
-        --ink: #16181b;
-        --ivory: #f3f4f3;
-        --steel: #4a5056;
-        --dim: #6b7178;
-        --surface: color-mix(in srgb, var(--sky) 28%, #f7faf7);
-        --line: color-mix(in srgb, var(--ink) 16%, transparent);
-        --gold: var(--blue);
+        --deep-forest: #083B28;
+        --signal: #1C855C;
+ --sage: #90B0A0;
+ --mist: #C8D8C8;
+ --page: #F7F8F5;
+        --ink: #122225;
+        --paper: #F7F8F5;
+        --slate: #3C4C49;
+        --muted: #3C4C49;
+        --surface: color-mix(in srgb, var(--mist) 28%, #F7F8F5);
+ --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
@@ -62,7 +61,7 @@
         height: 100%;
         max-width: 100%;
         overflow: hidden;
-        background: var(--bg);
+        background: var(--page);
         color: var(--ink);
         font-family: var(--sans);
       }
@@ -78,7 +77,7 @@
         height: 100svh;
         min-height: 720px;
         overflow: hidden;
-        background: var(--bg);
+        background: var(--page);
       }
 
       #hero {
@@ -95,7 +94,7 @@
         overflow: hidden;
         isolation: isolate;
         pointer-events: none;
-        background: var(--bg);
+        background: var(--page);
         transform: translateZ(0);
         transition: background-color 0.7s cubic-bezier(0.32, 0.72, 0, 1);
       }
@@ -109,7 +108,7 @@
       }
 
       html.is-welcome #field-stage {
-        background: color-mix(in srgb, var(--navy) 28%, var(--bg));
+        background: color-mix(in srgb, var(--deep-forest) 28%, var(--page));
       }
 
       html.is-welcome #veil,
@@ -252,20 +251,19 @@
     </style>
     <style id="xstation-option-one-tokens">
       :root {
-        --navy: #083B28;
-        --blue: #1C855C;
-        --peri: #90B0A0;
-        --sky: #C8D8C8;
-        --bg: #F7F8F5;
+        --deep-forest: #083B28;
+        --signal: #1C855C;
+        --sage: #90B0A0;
+        --mist: #C8D8C8;
+        --page: #F7F8F5;
         --ink: #122225;
-        --ivory: #F7F8F5;
-        --steel: #3C4C49;
-        --dim: #3C4C49;
-        --surface: color-mix(in srgb, var(--sky) 34%, var(--bg));
-        --line: color-mix(in srgb, var(--steel) 20%, transparent);
-        --gold: var(--blue);
-        --deep: #002010;
-        --forest-soft: #084828;
+        --paper: #F7F8F5;
+        --slate: #3C4C49;
+        --muted: #3C4C49;
+        --surface: color-mix(in srgb, var(--mist) 34%, var(--page));
+        --line: color-mix(in srgb, var(--slate) 20%, transparent);
+        --deepest: #002010;
+        --forest: #084828;
       }
     </style>
     <link rel="stylesheet" href="field.css" />
