@@ -70,7 +70,7 @@ const STATION_NODES = [
   { label: "Prototyping", model: "retroComputer", ring: "inner", angle: 0.52, accent: false },
   { label: "AI Agents", model: "robot", ring: "outer", angle: 0.06, accent: false },
   { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 2, accent: true },
-  { label: "Document Management", model: "notebooks", ring: "inner", angle: -2.45, accent: false },
+  { label: "Document Management", model: "documentManagement", ring: "inner", angle: -2.45, accent: false },
   { label: "Talent Assessment", model: "talentAssessment", ring: "outer", angle: Math.PI, accent: false },
 ];
 
@@ -195,17 +195,17 @@ function createOrbView(host, gsap) {
   scene.environment = envMap;
   envScene.dispose();
 
-  scene.add(new THREE.HemisphereLight(0x8bbb92, 0x092328, 0.85));
+  scene.add(new THREE.HemisphereLight(0x90b0a0, 0x002010, 0.85));
   const key = new THREE.DirectionalLight(0xe8f3ea, 1.35);
   key.position.set(-2.2, 3.4, 2.8);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x2a835f, 0.45);
+  const fill = new THREE.DirectionalLight(0x1c855c, 0.45);
   fill.position.set(2.8, 0.6, 1.6);
   scene.add(fill);
 
   const geo = new THREE.SphereGeometry(1, 96, 64);
   const mat = new THREE.MeshPhysicalMaterial({
-    color: 0x8bbb92,
+    color: 0x083b28,
     roughness: 0.12,
     metalness: 0.04,
     clearcoat: 1,
@@ -430,50 +430,50 @@ function createConversationView(host, reduce, phase = 0, characterStyle = "stick
   camera.position.set(0, 1.2, 7.5);
   camera.lookAt(0, 1.12, 0);
 
-  scene.add(new THREE.HemisphereLight(0xf7faf7, 0x092328, 2.4));
+  scene.add(new THREE.HemisphereLight(0xf7f8f5, 0x002010, 2.4));
   const key = new THREE.DirectionalLight(0xffffff, 3.2);
   key.position.set(-3, 5, 6);
   scene.add(key);
-  const edge = new THREE.DirectionalLight(0x8bbb92, 2.1);
+  const edge = new THREE.DirectionalLight(0x1c855c, 2.1);
   edge.position.set(4, 2, 3);
   scene.add(edge);
 
   const darkMaterial = new THREE.MeshStandardMaterial({
-    color: 0x092328,
+    color: 0x002010,
     roughness: 0.48,
     metalness: 0.04,
   });
   const greenMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a835f,
+    color: 0x1c855c,
     roughness: 0.42,
     metalness: 0.03,
   });
   const paleMaterial = new THREE.MeshStandardMaterial({
-    color: 0xf7faf7,
+    color: 0xf7f8f5,
     roughness: 0.28,
     metalness: 0.02,
   });
   const dotMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a835f,
+    color: 0x1c855c,
     roughness: 0.34,
   });
   const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x092328,
+    color: 0x002010,
     transparent: true,
     opacity: 0.12,
     depthWrite: false,
   });
   const inactivePalette = {
-    dark: new THREE.Color(0x717977),
-    light: new THREE.Color(0xaeb4b1),
-    bubble: new THREE.Color(0xdfe3e1),
-    dot: new THREE.Color(0x7f8784),
+    dark: new THREE.Color(0x3c4c49),
+    light: new THREE.Color(0x90b0a0),
+    bubble: new THREE.Color(0xc8d8c8),
+    dot: new THREE.Color(0x3c4c49),
   };
   const focusedPalette = {
-    dark: new THREE.Color(0x174f3d),
-    light: new THREE.Color(0x2a835f),
-    bubble: new THREE.Color(0xe5f0e7),
-    dot: new THREE.Color(0x2a835f),
+    dark: new THREE.Color(0x083b28),
+    light: new THREE.Color(0x1c855c),
+    bubble: new THREE.Color(0xc8d8c8),
+    dot: new THREE.Color(0x1c855c),
   };
 
   const capsuleGeometry = new THREE.CapsuleGeometry(0.075, 0.5, 6, 12);
@@ -773,9 +773,9 @@ const CATEGORY_MODEL_SOURCES = {
     url: new URL("assets/models/marketing/14811211.glb", import.meta.url).href,
     rotation: [-0.1, Math.PI / 2 - 0.42, -0.04],
   },
-  notebooks: {
-    type: "fbx",
-    url: new URL("assets/models/notebooks/icon.fbx", import.meta.url).href,
+  documentManagement: {
+    type: "gltf",
+    url: new URL("assets/models/document-management/doc-mgmt.glb", import.meta.url).href,
     rotation: [-0.1, 0.18, -0.025],
   },
 };
@@ -788,8 +788,8 @@ const CATEGORY_MODEL_RENDER_SIZE = 512;
 const CATEGORY_MODEL_PIXEL_RATIO = 2.5;
 // Orbiting models stay quiet and neutral. Focus introduces the product greens,
 // ordered from broad surfaces to smaller trim so the active asset stays light.
-const MODEL_IDLE_SWATCHES = [0xd7dcda, 0xc7cecb, 0xb7bfbc, 0xa5aeaa];
-const MODEL_ACTIVE_SWATCHES = [0xc0e7c7, 0x9fdaa9, 0x72ca8f, 0x43ad78];
+const MODEL_IDLE_SWATCHES = [0xf7f8f5, 0xc8d8c8, 0x90b0a0, 0x3c4c49];
+const MODEL_ACTIVE_SWATCHES = [0xc8d8c8, 0x90b0a0, 0x1c855c, 0x084828];
 
 function loadFbx(url) {
   return new Promise((resolve, reject) => {
@@ -862,25 +862,48 @@ function applyOrbitModelMaterials(object, offset = 0) {
 
       const paletteIndex = (materials.length + offset) % MODEL_IDLE_SWATCHES.length;
       const materialName = sourceMaterial?.name || "";
-      const hasGlow = /screen|display|emiss|part2|eye/i.test(materialName);
+      const normalizedMaterialName = materialName.toLowerCase();
+      const hasGlow = /screen|display|emiss|part2|eye|signal/i.test(normalizedMaterialName);
+      const isDarkSurface = /dark|gelap|black|shadow|body/i.test(normalizedMaterialName);
+      const isAccentSurface = /accent|highlight|yellow|kuning|emerald|green/i.test(normalizedMaterialName);
+      const isLightSurface = /light|terang|white|pale|ivory/i.test(normalizedMaterialName);
+      const sourceMetalness = Number(sourceMaterial?.metalness ?? 0);
+      const isChrome = !hasGlow && (
+        sourceMetalness >= 0.25 ||
+        /chrome|metal|steel|silver|hardware|rim|disc|frame|border|case/i.test(normalizedMaterialName)
+      );
+      const idleColor = isDarkSurface
+        ? new THREE.Color(0x083b28)
+        : isAccentSurface
+          ? new THREE.Color(0x90b0a0)
+          : isLightSurface
+            ? new THREE.Color(0xc8d8c8)
+            : new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
+      const activeColor = isDarkSurface
+        ? new THREE.Color(0x084828)
+        : isAccentSurface
+          ? new THREE.Color(0x1c855c)
+          : isLightSurface
+            ? new THREE.Color(0x90b0a0)
+            : new THREE.Color(MODEL_ACTIVE_SWATCHES[paletteIndex]);
       const material = new THREE.MeshPhysicalMaterial({
-        color: MODEL_IDLE_SWATCHES[paletteIndex],
-        roughness: hasGlow ? 0.4 : 0.82,
-        metalness: 0,
-        clearcoat: hasGlow ? 0.08 : 0.04,
-        clearcoatRoughness: 0.42,
-        specularIntensity: hasGlow ? 0.46 : 0.2,
-        envMapIntensity: hasGlow ? 0.52 : 0.36,
+        color: idleColor,
+        roughness: hasGlow ? 0.28 : isChrome ? 0.2 : 0.74,
+        metalness: hasGlow ? 0.08 : isChrome ? 0.58 : 0.04,
+        clearcoat: hasGlow ? 0.42 : isChrome ? 0.9 : 0.16,
+        clearcoatRoughness: hasGlow ? 0.12 : isChrome ? 0.08 : 0.34,
+        specularIntensity: hasGlow ? 0.72 : isChrome ? 1 : 0.24,
+        envMapIntensity: hasGlow ? 0.78 : isChrome ? 0.95 : 0.38,
         flatShading: false,
         transparent: false,
         opacity: 1,
         side: sourceMaterial?.side ?? THREE.FrontSide,
       });
       material.name = `xstation-orbit-${materialName || paletteIndex}`;
-      material.emissive.set(MODEL_IDLE_SWATCHES[paletteIndex]);
-      material.emissiveIntensity = hasGlow ? 0.035 : 0.006;
-      material.userData.idleColor = new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
-      material.userData.activeColor = new THREE.Color(MODEL_ACTIVE_SWATCHES[paletteIndex]);
+      material.emissive.copy(idleColor);
+      material.emissiveIntensity = hasGlow ? 0.035 : isChrome ? 0.004 : 0.006;
+      material.userData.idleColor = idleColor;
+      material.userData.activeColor = activeColor;
       material.userData.idleEmissive = hasGlow ? 0.035 : 0.006;
       material.userData.activeEmissive = hasGlow ? 0.26 : 0.035;
       materialMap.set(cacheKey, material);
@@ -964,11 +987,11 @@ function createCategoryModelView(host, reduce, modelKey) {
   const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 30);
   camera.position.set(0, 0.08, 6.2);
   camera.lookAt(0, 0, 0);
-  scene.add(new THREE.HemisphereLight(0xf3f8f4, 0x092328, 1.55));
+  scene.add(new THREE.HemisphereLight(0xf7f8f5, 0x002010, 1.55));
   const keyLight = new THREE.DirectionalLight(0xfffbf3, 2.65);
   keyLight.position.set(-3.2, 4.6, 5.2);
   scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x9bd8ab, 0.85);
+  const rimLight = new THREE.DirectionalLight(0x90b0a0, 0.85);
   rimLight.position.set(4, 1.4, 3.2);
   scene.add(rimLight);
 
