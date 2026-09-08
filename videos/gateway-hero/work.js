@@ -230,9 +230,9 @@ function setOrbitCopy(index, immediate = false) {
   })
     .to([title, lead], {
       autoAlpha: 0,
-      y: 14,
-      duration: 0.42,
-      ease: "power2.inOut",
+      y: 8,
+      duration: 0.2,
+      ease: "power2.in",
     })
     .call(() => {
       applyOrbitCopy(story, title, lead);
@@ -247,16 +247,16 @@ function setOrbitCopy(index, immediate = false) {
     })
     .to(stage, {
       height: () => targetHeight,
-      duration: 0.78,
+      duration: 0.46,
       ease: "power3.inOut",
     })
     .to([title, lead], {
       autoAlpha: 1,
       y: 0,
-      duration: 0.72,
+      duration: 0.36,
       ease: "power3.out",
-      stagger: 0.06,
-    }, "<+=0.06");
+      stagger: 0.035,
+    }, "<+=0.08");
 }
 
 function startOrbitAutoplay() {

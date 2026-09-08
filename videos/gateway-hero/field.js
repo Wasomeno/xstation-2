@@ -2,8 +2,18 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/libs/draco/");
+
+function createGLTFLoader() {
+  const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
+  return loader;
+}
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -56,12 +66,12 @@ const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
 // Keep the category and model mapping together so the orbit story order and
 // its visual shorthand cannot drift apart.
 const STATION_NODES = [
-  { label: "Marketing & Content", model: "megaphone", ring: "mid", angle: Math.PI / 2, accent: true },
+  { label: "Marketing & Content", model: "marketing", ring: "mid", angle: Math.PI / 2, accent: true },
   { label: "Prototyping", model: "retroComputer", ring: "inner", angle: 0.52, accent: false },
   { label: "AI Agents", model: "robot", ring: "outer", angle: 0.06, accent: false },
   { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 2, accent: true },
   { label: "Document Management", model: "notebooks", ring: "inner", angle: -2.45, accent: false },
-  { label: "Talent Assessment", model: "kenneyCharacters", ring: "outer", angle: Math.PI, accent: false },
+  { label: "Talent Assessment", model: "talentAssessment", ring: "outer", angle: Math.PI, accent: false },
 ];
 
 function mulberry32(seed) {
@@ -257,7 +267,7 @@ let stickmanScenePromise = null;
 function loadStickmanScene() {
   if (!stickmanScenePromise) {
     stickmanScenePromise = new Promise((resolve, reject) => {
-      new GLTFLoader().load(STICKMAN_ASSET_URL.href, (gltf) => resolve(gltf.scene), undefined, reject);
+      createGLTFLoader().load(STICKMAN_ASSET_URL.href, (gltf) => resolve(gltf.scene), undefined, reject);
     });
   }
   return stickmanScenePromise;
@@ -739,35 +749,34 @@ function createConversationView(host, reduce, phase = 0, characterStyle = "stick
 
 const CATEGORY_MODEL_SOURCES = {
   handshake: {
-    type: "gltf",
-    url: new URL("assets/models/handshake/scene.gltf", import.meta.url).href,
-    rotation: [-0.1, Math.PI / 2 - 0.3, -0.04],
+    type: "fbx",
+    url: new URL("assets/models/handshake/icon.fbx", import.meta.url).href,
+    rotation: [-0.1, -0.18, 0.025],
   },
   retroComputer: {
-    type: "gltf",
-    url: new URL("assets/models/retro-computer/scene.gltf", import.meta.url).href,
-    rotation: [-0.08, -Math.PI / 2 + 0.34, 0],
-  },
-  kenneyCharacters: {
     type: "fbx",
-    url: new URL("assets/models/kenney-characters/Model/characterMedium.fbx", import.meta.url).href,
-    ensemble: true,
-    rotation: [-0.04, -0.22, 0],
+    url: new URL("assets/models/retro-computer/icon.fbx", import.meta.url).href,
+    rotation: [-0.12, 0.2, -0.03],
+  },
+  talentAssessment: {
+    type: "gltf",
+    url: new URL("assets/models/kenney-characters/1.glb", import.meta.url).href,
+    rotation: [-0.1, -0.24, 0.02],
   },
   robot: {
     type: "gltf",
     url: new URL("assets/models/robot/scene.gltf", import.meta.url).href,
     rotation: [-0.04, -0.28, 0],
   },
-  megaphone: {
+  marketing: {
     type: "gltf",
-    url: new URL("assets/models/megaphone/scene.gltf", import.meta.url).href,
+    url: new URL("assets/models/marketing/14811211.glb", import.meta.url).href,
     rotation: [-0.1, Math.PI / 2 - 0.42, -0.04],
   },
   notebooks: {
-    type: "gltf",
-    url: new URL("assets/models/notebooks/scene.gltf", import.meta.url).href,
-    rotation: [0.04, -0.12, -0.02],
+    type: "fbx",
+    url: new URL("assets/models/notebooks/icon.fbx", import.meta.url).href,
+    rotation: [-0.1, 0.18, -0.025],
   },
 };
 
@@ -801,7 +810,7 @@ function loadCategoryModelSource(key) {
     }));
   } else {
     promise = new Promise((resolve, reject) => {
-      new GLTFLoader().load(source.url, resolve, undefined, reject);
+      createGLTFLoader().load(source.url, resolve, undefined, reject);
     }).then((gltf) => ({ scene: gltf.scene, animations: gltf.animations || [] }));
   }
 
@@ -1003,8 +1012,6 @@ function createCategoryModelView(host, reduce, modelKey) {
       tilt = THREE.MathUtils.lerp(transition.fromTilt, transition.targetTilt, eased);
       if (progress >= 1) transition = null;
     }
-
-    if (model && focused && !reduce) rotation += (delta * TWO_PI) / 12;
 
     stage.rotation.y = rotation;
     stage.rotation.x = 0;
