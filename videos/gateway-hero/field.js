@@ -1,999 +1,2059 @@
 import * as THREE from "three";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import {
-  advanceHoverProgress,
-  GLASS_PROFILES,
-  iconRenderProfile,
-  orbitPointAt,
-  orbitRotationAt,
-  ORBIT_PATHS,
-  ORBIT_ROTATION_OFFSET,
-  ORBIT_SWAY,
-  STATION_COLORS,
-  STATION_GLASS_GEOMETRY,
-  stationVisualScale,
-} from "./station-visuals.mjs";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 
-export const DOCK_READY = 0.58;
+const NS = "http://www.w3.org/2000/svg";
+
+const SLAB_DURATION = 8;
+const DOCK_DURATION = 36;
+const WHISPER_DURATION = 18;
+const ORBIT_RENDER_SCALE = 0.8;
+// Give the orbit sequence a longer, quieter section of the pinned scroll.
+// At six stations this makes each handoff take roughly twice as much wheel travel.
 export const FOCUS_START = 0.64;
 export const FOCUS_END = 0.98;
-
-const TAU = Math.PI * 2;
-const FOCUS_DOCK = 2.72;
-const ORB_RENDER_ORDER = 2;
-const RENDER_INTERVAL = 1000 / 60 - 2;
-const ORBIT_TUBULAR_SEGMENTS = 80;
-const ORBIT_RADIAL_SEGMENTS = 8;
-const DECORATION_SPIN_SPEED_MULTIPLIER = 1.69;
-const STATION_STEP = TAU / 6;
-const STATIONS = [
-  { label: "Marketing & Content", icon: "megaphone", angle: FOCUS_DOCK, orbit: 2 },
-  { label: "Prototyping", icon: "code", angle: FOCUS_DOCK - STATION_STEP, orbit: 1 },
-  { label: "AI Agents", icon: "robot", angle: FOCUS_DOCK - STATION_STEP * 2, orbit: 0 },
-  { label: "Customer Engagement", icon: "chat", angle: FOCUS_DOCK - STATION_STEP * 3, orbit: 2 },
-  { label: "Document Management", icon: "document", angle: FOCUS_DOCK - STATION_STEP * 4, orbit: 1 },
-  { label: "Talent Assessment", icon: "people", angle: FOCUS_DOCK - STATION_STEP * 5, orbit: 0 },
+export const DOCK_READY = 0.58;
+const FOCUS_ZOOM = 1.85;
+// GSAP's rotation property is in degrees. Every selected station rotates to the
+// left edge of its ring while the enlarged dock remains locked in place.
+const FOCUS_TARGET_ANGLE = 180;
+const DEG_TO_RAD = Math.PI / 180;
+const FAR = -1880;
+const NEAR = 620;
+const TRAVEL = NEAR - FAR;
+const PALETTE = ["ivory", "ivory", "steel", "peri", "gold", "gold", "dim", "peri"];
+const KEEP_INDICES = [6, 14, 1, 4, 9, 12];
+const SLAB_SLOTS = [
+  [-3, -1],
+  [-3, 0],
+  [-3, 1],
+  [-2, -1.5],
+  [-2, -0.5],
+  [-2, 0.5],
+  [-2, 1.5],
+  [-1, -1.5],
+  [-1, -0.5],
+  [-1, 0.5],
+  [-1, 1.5],
+  [1, -1.5],
+  [1, -0.5],
+  [1, 0.5],
+  [1, 1.5],
+  [2, -1.5],
+  [2, -0.5],
+  [2, 0.5],
+  [2, 1.5],
+  [3, -1],
+  [3, 0],
+  [3, 1],
 ];
 
-const DECORATIONS = [
-  ["sphere", -0.4, 2.66, -2.05, 0.22, 0.2],
-  ["tetra", 1.12, 2.94, -2.35, 0.42, 1.1],
-  ["cube", 2.08, 2.32, -1.95, 0.38, 2.2],
-  ["sphere", 3.18, 1.08, -2.2, 0.17, 0.8],
-  ["capsule", 3.72, -0.6, -2.0, 0.32, 2.8],
-  ["sphere", 2.24, -2.66, -1.85, 0.25, 1.6],
-  ["cylinder", 0.18, -3.02, -2.25, 0.48, 0.4],
-  ["sphere", -1.32, -2.52, -2.1, 0.19, 2.4],
-  ["cube", -3.3, -1.06, -2.4, 0.34, 1.3],
-  ["sphere", -3.24, 1.2, -1.9, 0.15, 2.05],
+const BASE_TILT = 0;
+const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
+// Keep the category and model mapping together so the orbit story order and
+// its visual shorthand cannot drift apart.
+const STATION_NODES = [
+  { label: "Marketing & Content", model: "megaphone", ring: "mid", angle: Math.PI / 2, accent: true },
+  { label: "Prototyping", model: "retroComputer", ring: "inner", angle: 0.52, accent: false },
+  { label: "AI Agents", model: "robot", ring: "outer", angle: 0.06, accent: false },
+  { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 2, accent: true },
+  { label: "Document Management", model: "notebooks", ring: "inner", angle: -2.45, accent: false },
+  { label: "Talent Assessment", model: "kenneyCharacters", ring: "outer", angle: Math.PI, accent: false },
 ];
 
-class EllipseCurve3 extends THREE.Curve {
-  constructor(rx, ry) {
-    super();
-    this.rx = rx;
-    this.ry = ry;
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function alphaAt(p, peak) {
+  if (p < 0.12) return (p / 0.12) * peak;
+  if (p > 0.84) return ((1 - p) / 0.16) * peak;
+  return peak;
+}
+
+function makeSlab(w, h, color) {
+  const el = document.createElement("div");
+  el.className = "slab";
+  if (color !== "ivory") el.classList.add("is-" + color);
+  el.style.width = w + "px";
+  el.style.height = h + "px";
+  el.setAttribute("aria-hidden", "true");
+  return el;
+}
+
+function slabSize(col) {
+  const abs = Math.abs(col);
+  const w = abs === 1 ? 22 : abs === 2 ? 18 : 14;
+  return { w, h: Math.round(w * 4.08) };
+}
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS(NS, name);
+  for (const key in attrs) el.setAttribute(key, attrs[key]);
+  return el;
+}
+
+function metrics() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const compact = w < 720;
+  const r = Math.min(w * (compact ? 0.48 : 0.4), h * (compact ? 0.4 : 0.48), compact ? 380 : 540);
+  return {
+    w,
+    h,
+    compact,
+    r,
+    rMid: r * 0.68,
+    rIn: r * 0.44,
+    hub: r * 0.23,
+    tilt: BASE_TILT,
+  };
+}
+
+function stationPose(m) {
+  if (m.compact) {
+    return { x: m.w * 0.22, y: m.h * 0.2, scale: 0.62 * ORBIT_RENDER_SCALE };
   }
+  return { x: m.w * 0.22, y: m.h * 0.01, scale: 0.96 * ORBIT_RENDER_SCALE };
+}
 
-  getPoint(t, target = new THREE.Vector3()) {
-    const angle = t * TAU;
-    return target.set(Math.cos(angle) * this.rx, Math.sin(angle) * this.ry, 0);
+function heroPose(m) {
+  if (m.compact) {
+    return { x: m.w * 0.22, y: m.h * 0.18, scale: 0.62 * ORBIT_RENDER_SCALE };
   }
+  return { x: m.w * 0.22, y: m.h * 0.02, scale: 0.96 * ORBIT_RENDER_SCALE };
 }
 
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
+function focusedStationPose(m, zoom = FOCUS_ZOOM) {
+  const pose = stationPose(m);
+  return {
+    // The dock's CSS origin is 50vw / 48vh. Keep the focused center at the
+    // right edge so only the left half of the enlarged orbit remains visible.
+    x: m.w * (m.compact ? 0.48 : 0.52),
+    y: m.h * 0.04,
+    scale: pose.scale * zoom,
+  };
 }
 
-function nearestAngle(target, current) {
-  let next = target;
-  while (next - current > Math.PI) next -= TAU;
-  while (next - current < -Math.PI) next += TAU;
-  return next;
+function poseAt(theta, radius) {
+  return {
+    x: Math.cos(theta) * radius,
+    y: Math.sin(theta) * radius,
+  };
 }
 
-function makeStroke(points, material, radius = 0.045, closed = false, z = 0.27) {
-  const vectors = points.map(([x, y]) => new THREE.Vector3(x, y, z));
-  const path = new THREE.CurvePath();
-  for (let index = 0; index < vectors.length - 1; index += 1) {
-    path.add(new THREE.LineCurve3(vectors[index], vectors[index + 1]));
-  }
-  if (closed) path.add(new THREE.LineCurve3(vectors[vectors.length - 1], vectors[0]));
-  const geometry = new THREE.TubeGeometry(path, Math.max(16, vectors.length * 5), radius, 10, false);
-  return new THREE.Mesh(geometry, material);
-}
+function createOrbView(host, gsap) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "dock-orbs";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
 
-function arcPoints(cx, cy, radius, start, end, segments = 12) {
-  return Array.from({ length: segments + 1 }, (_, index) => {
-    const angle = start + ((end - start) * index) / segments;
-    return [cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius];
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
   });
+  if (!renderer.getContext()) {
+    canvas.remove();
+    return null;
+  }
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+  camera.position.set(1.35, 1.05, 4.2);
+  camera.lookAt(0, 0, 0);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envScene = new RoomEnvironment();
+  const envMap = pmrem.fromScene(envScene, 0.04).texture;
+  scene.environment = envMap;
+  envScene.dispose();
+
+  scene.add(new THREE.HemisphereLight(0x8bbb92, 0x092328, 0.85));
+  const key = new THREE.DirectionalLight(0xe8f3ea, 1.35);
+  key.position.set(-2.2, 3.4, 2.8);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x2a835f, 0.45);
+  fill.position.set(2.8, 0.6, 1.6);
+  scene.add(fill);
+
+  const geo = new THREE.SphereGeometry(1, 96, 64);
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: 0x8bbb92,
+    roughness: 0.12,
+    metalness: 0.04,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
+    reflectivity: 0.9,
+    envMapIntensity: 1.15,
+  });
+  const orb = new THREE.Mesh(geo, mat);
+  scene.add(orb);
+
+  let lastPx = 0;
+
+  return {
+    layout(t, inner, gain, compact, pose) {
+      const px = Math.round(Math.max(150, Math.min(inner * 2.08, compact ? 210 : 300)));
+      if (px !== lastPx) {
+        lastPx = px;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(px, px, false);
+        canvas.style.width = px + "px";
+        canvas.style.height = px + "px";
+        camera.aspect = 1;
+        camera.updateProjectionMatrix();
+      }
+
+      orb.rotation.y = t * Math.PI * 2 * 0.18;
+      orb.rotation.x = Math.sin(t * Math.PI * 2) * 0.08;
+
+      const p = pose || { x: 0, y: 0, scale: 1 };
+      gsap.set(canvas, {
+        x: p.x,
+        y: p.y,
+        scale: p.scale,
+        rotationX: 0,
+        rotationY: 0,
+        rotationZ: 0,
+        xPercent: -50,
+        yPercent: -50,
+        autoAlpha: gain,
+        force3D: true,
+      });
+
+      if (gain > 0.02) renderer.render(scene, camera);
+    },
+    canvas,
+    dispose() {
+      renderer.dispose();
+      geo.dispose();
+      mat.dispose();
+      envMap.dispose();
+      pmrem.dispose();
+    },
+  };
 }
 
-function roundedRectPoints(width, height, radius, segments = 4) {
-  const left = -width * 0.5;
-  const right = width * 0.5;
-  const top = height * 0.5;
-  const bottom = -height * 0.5;
-  return [
-    ...arcPoints(right - radius, top - radius, radius, 0, Math.PI * 0.5, segments),
-    ...arcPoints(left + radius, top - radius, radius, Math.PI * 0.5, Math.PI, segments).slice(1),
-    ...arcPoints(left + radius, bottom + radius, radius, Math.PI, Math.PI * 1.5, segments).slice(1),
-    ...arcPoints(right - radius, bottom + radius, radius, Math.PI * 1.5, TAU, segments).slice(1),
-  ];
+const STICKMAN_ASSET_URL = new URL("assets/models/stickman/scene.gltf", import.meta.url);
+let stickmanScenePromise = null;
+
+function loadStickmanScene() {
+  if (!stickmanScenePromise) {
+    stickmanScenePromise = new Promise((resolve, reject) => {
+      new GLTFLoader().load(STICKMAN_ASSET_URL.href, (gltf) => resolve(gltf.scene), undefined, reject);
+    });
+  }
+  return stickmanScenePromise;
 }
 
-function makeDot(x, y, radius, material, z = 0.27) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), material);
-  mesh.position.set(x, y, z);
+function makeUpperBodyAsset(source, material, side) {
+  source.updateMatrixWorld(true);
+  let sourceMesh = null;
+  source.traverse((child) => {
+    if (!sourceMesh && child.isMesh) sourceMesh = child;
+  });
+  if (!sourceMesh) return null;
+
+  let geometry = sourceMesh.geometry.clone();
+  geometry.applyMatrix4(sourceMesh.matrixWorld);
+  if (geometry.index) geometry = geometry.toNonIndexed();
+  geometry.computeBoundingBox();
+
+  const bounds = geometry.boundingBox;
+  const width = bounds.max.x - bounds.min.x;
+  const height = bounds.max.y - bounds.min.y;
+  const centerX = (bounds.min.x + bounds.max.x) * 0.5;
+  const shoulderY = bounds.min.y + height * 0.7;
+  const waistY = bounds.min.y + height * 0.47;
+  const shoulderX = width * 0.115;
+  const position = geometry.getAttribute("position");
+  const original = new Float32Array(position.array);
+
+  for (let index = 0; index < position.count; index += 1) {
+    const x = original[index * 3];
+    const y = original[index * 3 + 1];
+    const z = original[index * 3 + 2];
+    const relativeX = x - centerX;
+    const armSide = Math.sign(relativeX);
+    const sitsOnArmBand =
+      Math.abs(relativeX) > shoulderX &&
+      y > shoulderY - height * 0.11 &&
+      y < shoulderY + height * 0.055;
+
+    if (!sitsOnArmBand || armSide === 0) continue;
+
+    const pivotX = centerX + armSide * shoulderX;
+    const innerArm = armSide === -side;
+    const angleMagnitude = THREE.MathUtils.degToRad(innerArm ? 38 : 62);
+    const angle = armSide > 0 ? -angleMagnitude : angleMagnitude;
+    const dx = x - pivotX;
+    const dy = y - shoulderY;
+
+    position.setXYZ(
+      index,
+      pivotX + dx * Math.cos(angle) - dy * Math.sin(angle),
+      shoulderY + dx * Math.sin(angle) + dy * Math.cos(angle),
+      z,
+    );
+  }
+
+  const keptPositions = [];
+  const appendTriangle = (a, b, c) => {
+    keptPositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  };
+  const clipAtWaist = (vertices) => {
+    const clipped = [];
+    for (let index = 0; index < vertices.length; index += 1) {
+      const current = vertices[index];
+      const previous = vertices[(index + vertices.length - 1) % vertices.length];
+      const currentInside = current.originalY >= waistY;
+      const previousInside = previous.originalY >= waistY;
+
+      if (currentInside !== previousInside) {
+        const mix = (waistY - previous.originalY) / (current.originalY - previous.originalY);
+        clipped.push({
+          x: THREE.MathUtils.lerp(previous.x, current.x, mix),
+          y: THREE.MathUtils.lerp(previous.y, current.y, mix),
+          z: THREE.MathUtils.lerp(previous.z, current.z, mix),
+          originalY: waistY,
+        });
+      }
+      if (currentInside) clipped.push(current);
+    }
+    return clipped;
+  };
+
+  for (let offset = 0; offset < position.array.length; offset += 9) {
+    let armTriangle = false;
+    const triangle = [];
+    for (let vertex = 0; vertex < 3; vertex += 1) {
+      const base = offset + vertex * 3;
+      const x = original[base];
+      const y = original[base + 1];
+      armTriangle ||=
+        Math.abs(x - centerX) > shoulderX &&
+        y > shoulderY - height * 0.11 &&
+        y < shoulderY + height * 0.055;
+      triangle.push({
+        x: position.array[base],
+        y: position.array[base + 1],
+        z: position.array[base + 2],
+        originalY: y,
+      });
+    }
+
+    const polygon = armTriangle ? triangle : clipAtWaist(triangle);
+    if (polygon.length < 3) continue;
+    for (let vertex = 1; vertex < polygon.length - 1; vertex += 1) {
+      appendTriangle(polygon[0], polygon[vertex], polygon[vertex + 1]);
+    }
+  }
+
+  geometry.dispose();
+  geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(keptPositions, 3));
+  const unweldedGeometry = geometry;
+  geometry = mergeVertices(unweldedGeometry, 0.0001);
+  unweldedGeometry.dispose();
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const cropped = geometry.boundingBox;
+  const croppedCenterX = (cropped.min.x + cropped.max.x) * 0.5;
+  const croppedCenterZ = (cropped.min.z + cropped.max.z) * 0.5;
+  const croppedHeight = cropped.max.y - cropped.min.y;
+  geometry.translate(-croppedCenterX, -cropped.min.y, -croppedCenterZ);
+
+  const mesh = new THREE.Mesh(geometry, material);
+  const scale = 1.34 / croppedHeight;
+  mesh.scale.setScalar(scale);
+  mesh.position.y = 0.16;
   return mesh;
 }
 
-function createHighlightTexture() {
-  const source = document.createElement("canvas");
-  source.width = 128;
-  source.height = 128;
-  const context = source.getContext("2d");
-  const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, "rgba(255,255,255,0.94)");
-  gradient.addColorStop(0.34, "rgba(255,255,255,0.52)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 128, 128);
-  const texture = new THREE.CanvasTexture(source);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
+function createConversationView(host, reduce, phase = 0, characterStyle = "stick") {
+  const canvas = document.createElement("canvas");
+  canvas.className = "orbit-conversation-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
 
-function createShadowTexture() {
-  const source = document.createElement("canvas");
-  source.width = 256;
-  source.height = 256;
-  const context = source.getContext("2d");
-  const gradient = context.createRadialGradient(128, 128, 8, 128, 128, 128);
-  gradient.addColorStop(0, "rgba(16, 46, 36, 0.72)");
-  gradient.addColorStop(0.22, "rgba(22, 58, 44, 0.42)");
-  gradient.addColorStop(0.55, "rgba(36, 82, 62, 0.14)");
-  gradient.addColorStop(1, "rgba(36, 82, 62, 0)");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 256, 256);
-  const texture = new THREE.CanvasTexture(source);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function createGlassEnvironment(pmrem) {
-  const envScene = new THREE.Scene();
-  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(14, 16, 12), new THREE.MeshBasicMaterial({ color: 0xf2faf6, side: THREE.BackSide })));
-  const windowPane = new THREE.Mesh(new THREE.PlaneGeometry(10, 6.5), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  windowPane.position.set(-5.6, 6.6, 8.4);
-  windowPane.lookAt(0, 0, 0);
-  const bounce = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 8.4), new THREE.MeshBasicMaterial({ color: 0xc8f2dc }));
-  bounce.position.set(7.4, 1.4, 5.8);
-  bounce.lookAt(0, 0, 0);
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(12, 1.2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  strip.position.set(0.4, 7.6, 2.2);
-  strip.lookAt(0, 0, 0);
-  const rimPane = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 8.8), new THREE.MeshBasicMaterial({ color: 0xf6fffb }));
-  rimPane.position.set(5.8, 1.8, -7.2);
-  rimPane.lookAt(0, 0, 0);
-  const frontCard = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 1.4), new THREE.MeshBasicMaterial({ color: 0xe5f8ee }));
-  frontCard.position.set(-1.2, -4.4, 8.8);
-  frontCard.lookAt(0, 0, 0);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshBasicMaterial({ color: 0x14362b }));
-  floor.rotation.x = -Math.PI * 0.5;
-  floor.position.y = -5.2;
-  envScene.add(windowPane, bounce, strip, rimPane, frontCard, floor);
-  const target = pmrem.fromScene(envScene, 0.02);
-  envScene.traverse((object) => {
-    object.geometry?.dispose?.();
-    if (object.material) object.material.dispose();
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
   });
-  return target;
-}
+  if (!renderer.getContext()) {
+    canvas.remove();
+    return null;
+  }
 
-function createIcon(type, material, lightMaterial, depthMaterial) {
-  const icon = new THREE.Group();
-  const stroke = (points, accent = false, radius = 0.045, closed = false) => {
-    const strokeMaterial = accent ? lightMaterial : material;
-    icon.add(makeStroke(points, depthMaterial, radius * 1.18, closed, 0.235));
-    icon.add(makeStroke(points, strokeMaterial, radius, closed, 0.31));
-    if (closed || points.length < 2) return;
-    [points[0], points[points.length - 1]].forEach(([x, y]) => {
-      const depthCap = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 12, 8), depthMaterial);
-      const faceCap = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.02, 12, 8), strokeMaterial);
-      depthCap.position.set(x, y, 0.235);
-      faceCap.position.set(x, y, 0.31);
-      icon.add(depthCap, faceCap);
-    });
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(200, 200, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 30);
+  camera.position.set(0, 1.2, 7.5);
+  camera.lookAt(0, 1.12, 0);
+
+  scene.add(new THREE.HemisphereLight(0xf7faf7, 0x092328, 2.4));
+  const key = new THREE.DirectionalLight(0xffffff, 3.2);
+  key.position.set(-3, 5, 6);
+  scene.add(key);
+  const edge = new THREE.DirectionalLight(0x8bbb92, 2.1);
+  edge.position.set(4, 2, 3);
+  scene.add(edge);
+
+  const darkMaterial = new THREE.MeshStandardMaterial({
+    color: 0x092328,
+    roughness: 0.48,
+    metalness: 0.04,
+  });
+  const greenMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a835f,
+    roughness: 0.42,
+    metalness: 0.03,
+  });
+  const paleMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf7faf7,
+    roughness: 0.28,
+    metalness: 0.02,
+  });
+  const dotMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2a835f,
+    roughness: 0.34,
+  });
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x092328,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+  });
+  const inactivePalette = {
+    dark: new THREE.Color(0x717977),
+    light: new THREE.Color(0xaeb4b1),
+    bubble: new THREE.Color(0xdfe3e1),
+    dot: new THREE.Color(0x7f8784),
   };
-  const dot = (x, y, radius, dotMaterial) => {
-    icon.add(
-      makeDot(x, y, radius * 1.18, depthMaterial, 0.235),
-      makeDot(x, y, radius, dotMaterial, 0.31),
-    );
+  const focusedPalette = {
+    dark: new THREE.Color(0x174f3d),
+    light: new THREE.Color(0x2a835f),
+    bubble: new THREE.Color(0xe5f0e7),
+    dot: new THREE.Color(0x2a835f),
   };
 
-  if (type === "code") {
-    stroke([[-0.18, 0.43], [-0.54, 0], [-0.18, -0.43]], false, 0.047);
-    stroke([[0.18, 0.43], [0.54, 0], [0.18, -0.43]], false, 0.047);
-    stroke([[0.14, 0.55], [-0.14, -0.55]], true, 0.035);
+  const capsuleGeometry = new THREE.CapsuleGeometry(0.075, 0.5, 6, 12);
+  const torsoGeometry = new THREE.CapsuleGeometry(0.11, 0.58, 6, 12);
+  const headGeometry = new THREE.SphereGeometry(0.22, 24, 18);
+  const dotGeometry = new THREE.SphereGeometry(0.055, 18, 12);
+  const shadowGeometry = new THREE.CircleGeometry(0.42, 32);
+
+  function limb(material, length = 0.58, geometry = capsuleGeometry, sourceLength = 0.65) {
+    const pivot = new THREE.Group();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.scale.y = length / sourceLength;
+    mesh.position.y = -length * 0.5;
+    pivot.add(mesh);
+    return pivot;
   }
 
-  if (type === "robot") {
-    stroke(roundedRectPoints(1.02, 0.7, 0.16), false, 0.043, true);
-    stroke([[0, 0.35], [0, 0.56]], false, 0.036);
-    dot(0, 0.61, 0.06, material);
-    dot(-0.26, 0.08, 0.066, lightMaterial);
-    dot(0.26, 0.08, 0.066, lightMaterial);
-    stroke([[-0.2, -0.18], [0, -0.25], [0.2, -0.18]], true, 0.03);
-  }
+  function makePerson(material, side) {
+    const person = new THREE.Group();
+    person.rotation.y = side * -0.12;
 
-  if (type === "chat") {
-    const bubble = roundedRectPoints(1.05, 0.72, 0.17);
-    stroke([...bubble.slice(0, -4), [0.16, -0.36], [-0.14, -0.58], [-0.1, -0.34], ...bubble.slice(-4)], false, 0.043, true);
-    [-0.28, 0, 0.28].forEach((x) => dot(x, 0.04, 0.057, lightMaterial));
-  }
-
-  if (type === "megaphone") {
-    stroke([[-0.5, 0.22], [-0.16, 0.22], [0.42, 0.5], [0.42, -0.34], [-0.16, -0.06], [-0.5, -0.06]], false, 0.052);
-    stroke([[-0.16, -0.06], [-0.04, -0.48], [0.18, -0.48], [0.08, -0.17]], false, 0.052);
-    stroke([[0.58, 0.29], [0.7, 0.18], [0.72, 0.03], [0.65, -0.09]], true, 0.035);
-  }
-
-  if (type === "document") {
-    stroke(roundedRectPoints(0.82, 1.08, 0.13), false, 0.05, true);
-    stroke([[-0.24, 0.25], [0.24, 0.25]], true, 0.037);
-    stroke([[-0.24, 0], [0.24, 0]], true, 0.037);
-    stroke([[-0.24, -0.25], [0.12, -0.25]], true, 0.037);
-  }
-
-  if (type === "people") {
-    dot(-0.25, 0.25, 0.16, material);
-    dot(0.29, 0.22, 0.13, lightMaterial);
-    stroke(arcPoints(-0.25, -0.48, 0.43, Math.PI * 0.12, Math.PI * 0.88, 14), false, 0.046);
-    stroke(arcPoints(0.29, -0.39, 0.34, Math.PI * 0.12, Math.PI * 0.88, 12), true, 0.038);
-  }
-
-  const buckets = new Map([[depthMaterial, []], [material, []], [lightMaterial, []]]);
-  [...icon.children].forEach((mesh) => {
-    mesh.updateMatrix();
-    const geometry = mesh.geometry.clone();
-    geometry.applyMatrix4(mesh.matrix);
-    buckets.get(mesh.material).push(geometry);
-    mesh.geometry.dispose();
-  });
-  icon.clear();
-  buckets.forEach((geometries, bucketMaterial) => {
-    if (!geometries.length) return;
-    const geometry = mergeGeometries(geometries, false);
-    geometries.forEach((item) => item.dispose());
-    if (geometry) {
-      const mesh = new THREE.Mesh(geometry, bucketMaterial);
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      icon.add(mesh);
+    if (characterStyle === "upper-body") {
+      person.position.x = side * 0.54;
+      return { person, model: null };
     }
-  });
-  return icon;
-}
 
-function createRoundedPanelGeometry(width, height, depth, radius, bevelSize, bevelSegments = 3, curveSegments = 8) {
-  const halfWidth = width * 0.5;
-  const halfHeight = height * 0.5;
-  const shape = new THREE.Shape();
-  shape.moveTo(-halfWidth + radius, -halfHeight);
-  shape.lineTo(halfWidth - radius, -halfHeight);
-  shape.quadraticCurveTo(halfWidth, -halfHeight, halfWidth, -halfHeight + radius);
-  shape.lineTo(halfWidth, halfHeight - radius);
-  shape.quadraticCurveTo(halfWidth, halfHeight, halfWidth - radius, halfHeight);
-  shape.lineTo(-halfWidth + radius, halfHeight);
-  shape.quadraticCurveTo(-halfWidth, halfHeight, -halfWidth, halfHeight - radius);
-  shape.lineTo(-halfWidth, -halfHeight + radius);
-  shape.quadraticCurveTo(-halfWidth, -halfHeight, -halfWidth + radius, -halfHeight);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth,
+    person.position.x = side * 0.57;
+
+    const torso = new THREE.Mesh(torsoGeometry, material);
+    torso.position.y = 0.92;
+    torso.rotation.z = side * 0.04;
+    person.add(torso);
+
+    const head = new THREE.Mesh(headGeometry, material);
+    head.position.set(side * -0.015, 1.58, 0);
+    person.add(head);
+
+    const outerArm = limb(material, 0.62);
+    outerArm.position.set(side * 0.16, 1.25, 0);
+    outerArm.rotation.z = side * -0.12;
+    person.add(outerArm);
+
+    const talkingArm = limb(material, 0.56);
+    talkingArm.position.set(side * -0.16, 1.25, 0.02);
+    talkingArm.rotation.z = side * 0.72;
+    person.add(talkingArm);
+
+    const outerLeg = limb(material, 0.72);
+    outerLeg.position.set(side * 0.095, 0.57, 0);
+    outerLeg.rotation.z = side * -0.13;
+    person.add(outerLeg);
+
+    const innerLeg = limb(material, 0.72);
+    innerLeg.position.set(side * -0.095, 0.57, 0);
+    innerLeg.rotation.z = side * 0.13;
+    person.add(innerLeg);
+
+    const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
+    shadow.position.set(0, -0.17, -0.08);
+    shadow.scale.set(0.92, 0.3, 1);
+    shadow.rotation.x = -Math.PI / 2;
+    person.add(shadow);
+
+    return { person, torso, head, talkingArm };
+  }
+
+  function roundedBubbleShape() {
+    const shape = new THREE.Shape();
+    const left = -0.72;
+    const right = 0.72;
+    const bottom = -0.22;
+    const top = 0.28;
+    const radius = 0.16;
+
+    shape.moveTo(left + radius, bottom);
+    shape.lineTo(0.12, bottom);
+    shape.lineTo(0.27, -0.42);
+    shape.lineTo(0.34, bottom);
+    shape.lineTo(right - radius, bottom);
+    shape.quadraticCurveTo(right, bottom, right, bottom + radius);
+    shape.lineTo(right, top - radius);
+    shape.quadraticCurveTo(right, top, right - radius, top);
+    shape.lineTo(left + radius, top);
+    shape.quadraticCurveTo(left, top, left, top - radius);
+    shape.lineTo(left, bottom + radius);
+    shape.quadraticCurveTo(left, bottom, left + radius, bottom);
+    return shape;
+  }
+
+  const conversation = new THREE.Group();
+  const conversationBaseY = characterStyle === "upper-body" ? -0.48 : -0.66;
+  const conversationBaseScale = characterStyle === "upper-body" ? 1.08 : 1;
+  conversation.position.y = conversationBaseY;
+  conversation.scale.setScalar(conversationBaseScale);
+  scene.add(conversation);
+
+  const leftPerson = makePerson(darkMaterial, -1);
+  const rightPerson = makePerson(greenMaterial, 1);
+  conversation.add(leftPerson.person, rightPerson.person);
+  const assetGeometries = [];
+
+  if (characterStyle === "upper-body") {
+    loadStickmanScene()
+      .then((asset) => {
+        if (disposed) return;
+        leftPerson.model = makeUpperBodyAsset(asset, darkMaterial, -1);
+        rightPerson.model = makeUpperBodyAsset(asset, greenMaterial, 1);
+        [leftPerson, rightPerson].forEach((figure) => {
+          if (!figure.model) return;
+          figure.person.add(figure.model);
+          assetGeometries.push(figure.model.geometry);
+        });
+      })
+      .catch(() => {});
+  }
+
+  const bubbleGroup = new THREE.Group();
+  const bubbleBaseY = characterStyle === "upper-body" ? 1.78 : 1.98;
+  bubbleGroup.position.set(0.04, bubbleBaseY, 0.05);
+  conversation.add(bubbleGroup);
+
+  const bubbleGeometry = new THREE.ExtrudeGeometry(roundedBubbleShape(), {
+    depth: 0.09,
     steps: 1,
-    curveSegments,
     bevelEnabled: true,
-    bevelSegments,
-    bevelSize,
-    bevelThickness: Math.min(bevelSize, depth * 0.38),
+    bevelSegments: 3,
+    bevelSize: 0.025,
+    bevelThickness: 0.025,
   });
-  geometry.center();
-  return geometry;
-}
+  bubbleGeometry.center();
+  const bubble = new THREE.Mesh(bubbleGeometry, paleMaterial);
+  bubble.position.z = -0.03;
+  bubbleGroup.add(bubble);
 
-let glowSpriteTexture;
+  const dots = [-0.24, 0, 0.24].map((x) => {
+    const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+    dot.position.set(x, 0.035, 0.11);
+    bubbleGroup.add(dot);
+    return dot;
+  });
 
-function getGlowSpriteTexture() {
-  if (!glowSpriteTexture) glowSpriteTexture = createHighlightTexture();
-  return glowSpriteTexture;
-}
+  const TWO_PI = Math.PI * 2;
+  const ENTRY_DURATION = 1.15;
+  const EXIT_DURATION = 0.72;
+  const ACTIVE_SCALE = 1.3;
+  const LOOP_DURATION = 24;
+  const easeOutQuart = (value) => 1 - Math.pow(1 - value, 4);
 
-function createStation(spec, index, materials, geometries) {
-  const root = new THREE.Group();
-  const bloom = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: getGlowSpriteTexture(),
-    color: STATION_COLORS.bloom,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  }));
-  bloom.position.z = -0.22;
-  bloom.scale.set(2.15, 2.15, 1);
-  bloom.renderOrder = 3;
-  const glow = new THREE.Mesh(
-    geometries.glow,
-    new THREE.MeshBasicMaterial({ color: STATION_COLORS.glow, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }),
-  );
-  glow.position.z = -0.08;
-  glow.renderOrder = 3;
-  const halo = new THREE.Mesh(geometries.halo, materials.halo.clone());
-  halo.position.z = -0.04;
-  const slab = new THREE.Mesh(
-    geometries.slab,
-    materials.glass.clone(),
-  );
-  slab.name = `glass-slab-${index}`;
-  slab.renderOrder = 4;
-  const edge = new THREE.LineSegments(geometries.edge, materials.edge.clone());
-  edge.renderOrder = 7;
-  const icon = createIcon(spec.icon, materials.icon, materials.iconLight, materials.iconDepth);
-  icon.scale.setScalar(0.82);
-  icon.position.z = 0.13;
-  icon.renderOrder = 8;
-  root.add(bloom, glow, halo, slab, edge, icon);
-  const tilts = [
-    [-0.22, 0.38, -0.16],
-    [0.18, -0.32, 0.18],
-    [-0.14, 0.42, -0.12],
-    [0.26, -0.34, 0.14],
-    [-0.22, -0.28, -0.12],
-    [0.16, 0.36, 0.18],
-  ];
-  root.rotation.order = "YXZ";
-  root.userData.baseTilt = new THREE.Vector3(...tilts[index]);
-  root.userData.lift = 0;
-  root.userData.hoverProgress = 0;
-  return { root, slab, icon, bloom, glow, halo, edge, spec, index };
-}
+  let frame = 0;
+  let disposed = false;
+  let isHovered = false;
+  let isFocused = host.classList.contains("is-focus");
+  let wasFocused = false;
+  let greenMix = isFocused ? 1 : 0;
+  let focusStartedAt = 0;
+  let focusStartScale = 1;
+  let focusStartRotation = 0;
+  let exitStartedAt = 0;
+  let exitStartScale = 1;
+  let exitStartRotation = 0;
+  let exitTargetRotation = 0;
+  let exitStartTilt = 0;
+  let modelScale = 1;
+  let modelRotation = 0;
+  let modelTilt = 0;
 
-function createDecoration(spec, materials, geometryCache) {
-  const [type, x, y, z, scale, phase] = spec;
-  if (!geometryCache.has(type)) {
-    let geometry;
-    if (type === "sphere") geometry = new THREE.SphereGeometry(1, 20, 14);
-    if (type === "tetra") geometry = new THREE.TetrahedronGeometry(1, 0);
-    if (type === "cube") geometry = new RoundedBoxGeometry(1.25, 1.25, 1.25, 3, 0.18);
-    if (type === "capsule") geometry = new THREE.CapsuleGeometry(0.52, 0.68, 4, 10);
-    if (type === "cylinder") geometry = new THREE.CylinderGeometry(0.72, 0.72, 1.05, 18, 1, false, 0, Math.PI * 2);
-    geometryCache.set(type, geometry);
-  }
-  const geometry = geometryCache.get(type);
-  const group = new THREE.Group();
-  const shell = new THREE.Mesh(geometry, materials.decorative);
-  shell.renderOrder = 0;
-  group.add(shell);
-  if (type !== "sphere") {
-    const inner = new THREE.Mesh(geometry, materials.decorativeCore);
-    inner.scale.setScalar(0.52);
-    inner.renderOrder = 0;
-    group.add(inner);
-  }
-  const glint = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: getGlowSpriteTexture(),
-    color: 0xc8ffda,
-    transparent: true,
-    opacity: 0.34 + Math.cos(phase) * 0.06,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  }));
-  glint.position.set(-0.3 + Math.sin(phase) * 0.05, 0.34, 0.68);
-  glint.scale.set(0.52, 0.28, 1);
-  glint.renderOrder = 2;
-  group.add(glint);
-  const depth = Math.min(-1.85, z);
-  group.position.set(x, y, depth);
-  group.scale.setScalar(scale);
-  group.rotation.set(phase * 0.2, phase * 0.34, phase * 0.15);
-  group.userData.base = new THREE.Vector3(x, y, depth);
-  group.userData.baseRotation = group.rotation.clone();
-  group.userData.baseScale = scale;
-  group.userData.glint = glint;
-  group.userData.motion = {
-    radiusX: 0.07 + (phase % 0.7) * 0.045,
-    radiusY: 0.08 + (phase % 0.5) * 0.06,
-    radiusZ: 0.035 + (phase % 0.4) * 0.025,
-    speed: 0.2 + (phase % 0.8) * 0.08,
-    angularVelocity: new THREE.Vector3(
-      Math.sin(phase * 3.7 + 0.4) * (0.026 + phase * 0.006) * DECORATION_SPIN_SPEED_MULTIPLIER,
-      Math.cos(phase * 2.9 + 0.7) * (0.044 + phase * 0.008) * DECORATION_SPIN_SPEED_MULTIPLIER,
-      Math.sin(phase * 4.3 + 1.2) * (0.018 + phase * 0.005) * DECORATION_SPIN_SPEED_MULTIPLIER,
-    ),
+  const render = (time = window.performance.now()) => {
+    if (disposed) return;
+    const motionTime = time * 0.001;
+    const seconds = motionTime + phase;
+
+    if (!reduce) {
+      conversation.position.y = conversationBaseY + Math.sin(seconds * 1.15) * 0.025;
+      if (characterStyle === "upper-body") {
+        leftPerson.person.rotation.z = -0.025 + Math.sin(seconds * 1.45) * 0.018;
+        rightPerson.person.rotation.z = 0.025 - Math.sin(seconds * 1.45 + 0.8) * 0.018;
+      } else {
+        leftPerson.torso.rotation.z = -0.04 + Math.sin(seconds * 1.35) * 0.025;
+        rightPerson.torso.rotation.z = 0.04 - Math.sin(seconds * 1.35 + 0.8) * 0.025;
+        leftPerson.head.rotation.z = Math.sin(seconds * 1.55) * 0.055;
+        rightPerson.head.rotation.z = -Math.sin(seconds * 1.55 + 0.9) * 0.055;
+        leftPerson.talkingArm.rotation.z = -0.72 - Math.sin(seconds * 2.1) * 0.18;
+        rightPerson.talkingArm.rotation.z = 0.72 + Math.sin(seconds * 1.85 + 1.1) * 0.16;
+      }
+      bubbleGroup.position.y = bubbleBaseY + Math.sin(seconds * 1.4 + 0.35) * 0.045;
+      dots.forEach((dot, index) => {
+        const pulse = 0.82 + (Math.sin(seconds * 3.1 - index * 0.72) + 1) * 0.12;
+        dot.scale.setScalar(pulse);
+      });
+    }
+
+    if (reduce) {
+      modelScale = isFocused ? ACTIVE_SCALE : 1;
+      modelRotation = 0;
+      modelTilt = 0;
+    } else {
+      if (isFocused && !wasFocused) {
+        focusStartedAt = motionTime;
+        focusStartScale = modelScale;
+        focusStartRotation = modelRotation;
+      } else if (!isFocused && wasFocused) {
+        exitStartedAt = motionTime;
+        exitStartScale = modelScale;
+        exitStartRotation = modelRotation;
+        exitTargetRotation = Math.round(modelRotation / TWO_PI) * TWO_PI;
+        exitStartTilt = modelTilt;
+      }
+
+      if (isFocused) {
+        const elapsed = Math.max(0, motionTime - focusStartedAt);
+        const entryProgress = THREE.MathUtils.clamp(elapsed / ENTRY_DURATION, 0, 1);
+        const entryEase = easeOutQuart(entryProgress);
+        const loopTime = Math.max(0, elapsed - ENTRY_DURATION);
+        modelScale = THREE.MathUtils.lerp(focusStartScale, ACTIVE_SCALE, entryEase);
+        modelRotation =
+          focusStartRotation + TWO_PI * entryEase + (loopTime / LOOP_DURATION) * TWO_PI;
+        modelTilt = Math.sin((loopTime / LOOP_DURATION) * TWO_PI) * 0.09 * entryEase;
+      } else if (wasFocused || modelScale !== 1 || modelRotation !== exitTargetRotation) {
+        const exitProgress = THREE.MathUtils.clamp((motionTime - exitStartedAt) / EXIT_DURATION, 0, 1);
+        const exitEase = easeOutQuart(exitProgress);
+        modelScale = THREE.MathUtils.lerp(exitStartScale, 1, exitEase);
+        modelRotation = THREE.MathUtils.lerp(exitStartRotation, exitTargetRotation, exitEase);
+        modelTilt = THREE.MathUtils.lerp(exitStartTilt, 0, exitEase);
+      }
+    }
+
+    wasFocused = isFocused;
+    conversation.scale.setScalar(conversationBaseScale * modelScale);
+    conversation.rotation.set(modelTilt, modelRotation, 0);
+
+    const greenTarget = isHovered || isFocused ? 1 : 0;
+    greenMix += (greenTarget - greenMix) * (reduce ? 1 : 0.1);
+    darkMaterial.color.lerpColors(inactivePalette.dark, focusedPalette.dark, greenMix);
+    greenMaterial.color.lerpColors(inactivePalette.light, focusedPalette.light, greenMix);
+    paleMaterial.color.lerpColors(inactivePalette.bubble, focusedPalette.bubble, greenMix);
+    dotMaterial.color.lerpColors(inactivePalette.dot, focusedPalette.dot, greenMix);
+
+    renderer.render(scene, camera);
+    if (!reduce) frame = window.requestAnimationFrame(render);
   };
-  group.userData.phase = phase;
-  return group;
+
+  host.classList.add("is-conversation");
+  render();
+
+  return {
+    setHovered(next) {
+      isHovered = Boolean(next);
+      if (reduce) render();
+    },
+    setFocused(next) {
+      isFocused = Boolean(next);
+      if (reduce) render();
+    },
+    dispose() {
+      disposed = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      renderer.dispose();
+      capsuleGeometry.dispose();
+      torsoGeometry.dispose();
+      headGeometry.dispose();
+      dotGeometry.dispose();
+      shadowGeometry.dispose();
+      bubbleGeometry.dispose();
+      assetGeometries.forEach((geometry) => geometry.dispose());
+      darkMaterial.dispose();
+      greenMaterial.dispose();
+      paleMaterial.dispose();
+      dotMaterial.dispose();
+      shadowMaterial.dispose();
+    },
+  };
 }
 
-function createFallback(root) {
-  const fallback = document.createElement("div");
-  fallback.className = "glass-orbit-fallback";
-  fallback.setAttribute("aria-hidden", "true");
-  fallback.innerHTML = '<span class="glass-orbit-fallback-core"></span>';
-  root.appendChild(fallback);
+const CATEGORY_MODEL_SOURCES = {
+  handshake: {
+    type: "gltf",
+    url: new URL("assets/models/handshake/scene.gltf", import.meta.url).href,
+    rotation: [-0.1, Math.PI / 2 - 0.3, -0.04],
+  },
+  retroComputer: {
+    type: "gltf",
+    url: new URL("assets/models/retro-computer/scene.gltf", import.meta.url).href,
+    rotation: [-0.08, -Math.PI / 2 + 0.34, 0],
+  },
+  kenneyCharacters: {
+    type: "fbx",
+    url: new URL("assets/models/kenney-characters/Model/characterMedium.fbx", import.meta.url).href,
+    ensemble: true,
+    rotation: [-0.04, -0.22, 0],
+  },
+  robot: {
+    type: "gltf",
+    url: new URL("assets/models/robot/scene.gltf", import.meta.url).href,
+    rotation: [-0.04, -0.28, 0],
+  },
+  megaphone: {
+    type: "gltf",
+    url: new URL("assets/models/megaphone/scene.gltf", import.meta.url).href,
+    rotation: [-0.1, Math.PI / 2 - 0.42, -0.04],
+  },
+  notebooks: {
+    type: "gltf",
+    url: new URL("assets/models/notebooks/scene.gltf", import.meta.url).href,
+    rotation: [0.04, -0.12, -0.02],
+  },
+};
+
+const categoryModelPromises = new Map();
+// Keep geometry inside the WebGL frustum. CSS enlarges the complete transparent
+// canvas for the remaining focus scale so wide models do not clip at its edges.
+const CATEGORY_MODEL_FOCUS_SCALE = 1.48;
+// Orbiting models stay quiet and neutral. Focus introduces the product greens,
+// ordered from broad surfaces to smaller trim so the active asset stays light.
+const MODEL_IDLE_SWATCHES = [0xd7dcda, 0xc7cecb, 0xb7bfbc, 0xa5aeaa];
+const MODEL_ACTIVE_SWATCHES = [0xc0e7c7, 0x9fdaa9, 0x72ca8f, 0x43ad78];
+
+function loadFbx(url) {
+  return new Promise((resolve, reject) => {
+    new FBXLoader().load(url, resolve, undefined, reject);
+  });
+}
+
+function loadCategoryModelSource(key) {
+  if (categoryModelPromises.has(key)) return categoryModelPromises.get(key);
+  const source = CATEGORY_MODEL_SOURCES[key];
+  let promise;
+
+  if (source.type === "fbx") {
+    promise = Promise.all([
+      loadFbx(source.url),
+      source.animationUrl ? loadFbx(source.animationUrl) : Promise.resolve(null),
+    ]).then(([model, animation]) => ({
+      scene: model,
+      animations: animation?.animations?.length ? animation.animations : model.animations || [],
+    }));
+  } else {
+    promise = new Promise((resolve, reject) => {
+      new GLTFLoader().load(source.url, resolve, undefined, reject);
+    }).then((gltf) => ({ scene: gltf.scene, animations: gltf.animations || [] }));
+  }
+
+  categoryModelPromises.set(key, promise);
+  return promise;
+}
+
+function fitModel(object, targetSize = 1.75) {
+  object.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(object);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const largestSide = Math.max(size.x, size.y, size.z) || 1;
+  const scale = targetSize / largestSide;
+
+  object.scale.multiplyScalar(scale);
+  object.position.addScaledVector(center, -scale);
+  object.updateMatrixWorld(true);
+}
+
+function applyOrbitModelMaterials(object, offset = 0) {
+  const materialMap = new Map();
+  const materials = [];
+
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+    child.castShadow = false;
+    child.receiveShadow = false;
+
+    const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    const greenMaterials = sourceMaterials.map((sourceMaterial, sourceIndex) => {
+      const cacheKey = sourceMaterial?.uuid || `${child.uuid}-${sourceIndex}`;
+      if (materialMap.has(cacheKey)) return materialMap.get(cacheKey);
+
+      const paletteIndex = (materials.length + offset) % MODEL_IDLE_SWATCHES.length;
+      const materialName = sourceMaterial?.name || "";
+      const hasGlow = /screen|display|emiss|part2|eye/i.test(materialName);
+      const material = new THREE.MeshStandardMaterial({
+        color: MODEL_IDLE_SWATCHES[paletteIndex],
+        roughness: hasGlow ? 0.28 : THREE.MathUtils.clamp(sourceMaterial?.roughness ?? 0.52, 0.32, 0.76),
+        metalness: hasGlow ? 0.08 : THREE.MathUtils.clamp(sourceMaterial?.metalness ?? 0.04, 0, 0.24),
+        transparent: false,
+        opacity: 1,
+        side: sourceMaterial?.side ?? THREE.FrontSide,
+      });
+      material.name = `xstation-orbit-${materialName || paletteIndex}`;
+      material.emissive.set(MODEL_IDLE_SWATCHES[paletteIndex]);
+      material.emissiveIntensity = hasGlow ? 0.035 : 0.006;
+      material.userData.idleColor = new THREE.Color(MODEL_IDLE_SWATCHES[paletteIndex]);
+      material.userData.activeColor = new THREE.Color(MODEL_ACTIVE_SWATCHES[paletteIndex]);
+      material.userData.idleEmissive = hasGlow ? 0.035 : 0.006;
+      material.userData.activeEmissive = hasGlow ? 0.26 : 0.035;
+      materialMap.set(cacheKey, material);
+      materials.push(material);
+      return material;
+    });
+
+    child.material = Array.isArray(child.material) ? greenMaterials : greenMaterials[0];
+  });
+
+  return materials;
+}
+
+function buildCategoryModel(source, config) {
+  const materials = [];
+
+  if (!config.ensemble) {
+    const model = cloneSkeleton(source.scene);
+    materials.push(...applyOrbitModelMaterials(model));
+    fitModel(model);
+    const orientedModel = new THREE.Group();
+    orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
+    orientedModel.add(model);
+    return { model: orientedModel, materials };
+  }
+
+  const ensemble = new THREE.Group();
+  [-0.82, 0, 0.82].forEach((x, index) => {
+    const character = cloneSkeleton(source.scene);
+    materials.push(...applyOrbitModelMaterials(character));
+    fitModel(character, 1.72);
+    character.position.x = x;
+    character.position.y = index === 1 ? 0.08 : -0.08;
+    character.rotation.y = index === 1 ? 0 : index === 0 ? 0.22 : -0.22;
+    character.scale.multiplyScalar(index === 1 ? 1 : 0.88);
+    ensemble.add(character);
+
+  });
+  fitModel(ensemble, 1.75);
+  const orientedModel = new THREE.Group();
+  orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
+  orientedModel.add(ensemble);
+  return { model: orientedModel, materials };
+}
+
+function createCategoryModelView(host, reduce, modelKey) {
+  const config = CATEGORY_MODEL_SOURCES[modelKey];
+  const canvas = document.createElement("canvas");
+  canvas.className = "orbit-conversation-canvas orbit-category-model-canvas";
+  canvas.setAttribute("aria-hidden", "true");
+  host.classList.add("is-conversation", "is-category-model", "is-model-loading");
+  host.appendChild(canvas);
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+    premultipliedAlpha: false,
+    powerPreference: "high-performance",
+  });
+  if (!renderer.getContext()) {
+    canvas.remove();
+    host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
+    return null;
+  }
+
+  renderer.setClearColor(0x000000, 0);
+  renderer.setClearAlpha(0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(240, 240, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.08;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 30);
+  camera.position.set(0, 0.08, 6.2);
+  camera.lookAt(0, 0, 0);
+  scene.add(new THREE.HemisphereLight(0xf3f8f4, 0x092328, 2.35));
+  const keyLight = new THREE.DirectionalLight(0xf0f7f1, 3.1);
+  keyLight.position.set(-3.2, 4.6, 5.2);
+  scene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0x67b982, 2.15);
+  rimLight.position.set(4, 1.4, 3.2);
+  scene.add(rimLight);
+
+  const stage = new THREE.Group();
+  scene.add(stage);
+
+  const TWO_PI = Math.PI * 2;
+  const easeInOutCubic = (value) =>
+    value < 0.5 ? 4 * value * value * value : 1 - Math.pow(-2 * value + 2, 3) / 2;
+  let model = null;
+  let materials = [];
+  let frame = 0;
+  let disposed = false;
+  let hovered = false;
+  let focused = host.classList.contains("is-focus");
+  let greenMix = focused ? 1 : 0;
+  let rotation = 0;
+  let scale = focused ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+  let lift = focused ? 0.1 : 0;
+  let tilt = focused ? -0.025 : 0;
+  let transition = null;
+  let previousFrameTime = window.performance.now() * 0.001;
+
+  function startTransition(kind) {
+    if (reduce) {
+      rotation = 0;
+      scale = focused ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+      lift = focused ? 0.1 : 0;
+      tilt = focused ? -0.025 : 0;
+      greenMix = focused ? 1 : 0;
+      transition = null;
+      return;
+    }
+
+    const targetScale = kind === "focus" ? CATEGORY_MODEL_FOCUS_SCALE : 1;
+    let targetRotation = 0;
+    if (kind === "exit") targetRotation = Math.round(rotation / TWO_PI) * TWO_PI;
+    transition = {
+      kind,
+      startedAt: window.performance.now() * 0.001,
+      duration: kind === "focus" ? 0.92 : kind === "exit" ? 0.72 : 1.15,
+      fromRotation: rotation,
+      targetRotation,
+      fromScale: scale,
+      targetScale,
+      fromLift: lift,
+      targetLift: kind === "focus" ? 0.1 : 0,
+      fromTilt: tilt,
+      targetTilt: kind === "focus" ? -0.025 : 0,
+    };
+  }
+
+  function render() {
+    if (disposed) return;
+    const now = window.performance.now() * 0.001;
+    const delta = Math.min(Math.max(now - previousFrameTime, 0), 0.05);
+    previousFrameTime = now;
+    if (model && transition) {
+      const progress = THREE.MathUtils.clamp((now - transition.startedAt) / transition.duration, 0, 1);
+      const eased = easeInOutCubic(progress);
+      if (transition.kind === "exit") {
+        rotation = THREE.MathUtils.lerp(transition.fromRotation, transition.targetRotation, eased);
+      }
+      scale = THREE.MathUtils.lerp(transition.fromScale, transition.targetScale, eased);
+      lift = THREE.MathUtils.lerp(transition.fromLift, transition.targetLift, eased);
+      tilt = THREE.MathUtils.lerp(transition.fromTilt, transition.targetTilt, eased);
+      if (progress >= 1) transition = null;
+    }
+
+    if (model && focused && !reduce) rotation += (delta * TWO_PI) / 12;
+
+    stage.rotation.y = rotation;
+    stage.rotation.x = 0;
+    stage.rotation.z = tilt;
+    stage.position.y = lift;
+    stage.scale.setScalar(scale);
+
+    const colorTarget = focused ? 1 : 0;
+    if (reduce) {
+      greenMix = colorTarget;
+    } else {
+      const colorEase = 1 - Math.exp(-delta * (colorTarget > greenMix ? 5.2 : 7.5));
+      greenMix = THREE.MathUtils.lerp(greenMix, colorTarget, colorEase);
+      if (Math.abs(colorTarget - greenMix) < 0.001) greenMix = colorTarget;
+    }
+    materials.forEach((material) => {
+      material.color.lerpColors(material.userData.idleColor, material.userData.activeColor, greenMix);
+      material.emissive.copy(material.color);
+      material.emissiveIntensity = THREE.MathUtils.lerp(
+        material.userData.idleEmissive,
+        material.userData.activeEmissive,
+        greenMix,
+      );
+    });
+
+    renderer.render(scene, camera);
+    if (!reduce) frame = window.requestAnimationFrame(render);
+  }
+
+  loadCategoryModelSource(modelKey)
+    .then((source) => {
+      if (disposed) return;
+      const built = buildCategoryModel(source, config);
+      model = built.model;
+      materials = built.materials;
+      stage.add(model);
+      host.classList.remove("is-model-loading");
+      host.classList.add("is-model-ready");
+      if (focused) startTransition("focus");
+      if (reduce) render();
+    })
+    .catch((error) => {
+      console.warn(`Could not load ${modelKey} orbit model`, error);
+      host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
+      host.classList.add("is-model-error");
+      canvas.remove();
+    });
+
+  render();
+
   return {
-    items: [], mode: "pass", startIdle() {}, playEnter() {}, playWelcome() {}, setMode() {},
-    setProgress() {}, setOrbitEntryProgress() {}, freezeOrbit() {}, unfreezeOrbit() {},
-    setPresentationVisible() {},
-    hideProductsNode() {}, showProductsNode() {}, setCompanionsVisible() {},
-    getProductsRect() { return null; }, getFocus() { return -1; }, recedeDock() {},
-    pause() {}, resumeWhisper() {}, layout() {}, destroy() { fallback.remove(); },
+    setHovered(next) {
+      hovered = Boolean(next);
+      if (reduce) render();
+    },
+    setFocused(next) {
+      const wasFocused = focused;
+      focused = Boolean(next);
+      if (model && focused !== wasFocused) startTransition(focused ? "focus" : "exit");
+      if (reduce) render();
+    },
+    dispose() {
+      disposed = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      materials.forEach((material) => material.dispose());
+      renderer.dispose();
+      canvas.remove();
+    },
+  };
+}
+
+function noopController() {
+  return {
+    items: [],
+    mode: "idle",
+    startIdle() {},
+    playEnter() {},
+    playWelcome() {},
+    setMode() {},
+    setProgress() {},
+    setOrbitEntryProgress() {},
+    getFocus() { return -1; },
+    pause() {},
+    resumeWhisper() {},
+    layout() {},
+    destroy() {},
   };
 }
 
 export function createField({ root, gsap, reduce }) {
-  if (!root || !gsap) return createFallback(root || document.body);
-  const canvas = document.createElement("canvas");
-  canvas.className = "dock-svg glass-orbit-canvas";
-  canvas.setAttribute("aria-hidden", "true");
-  root.appendChild(canvas);
+  if (!root || !gsap) return noopController();
 
-  let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: false });
-  } catch (error) {
-    canvas.remove();
-    return createFallback(root);
-  }
-  renderer.setClearColor(0xffffff, 0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1));
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
-  renderer.transmissionResolutionScale = 0.72;
+  let m = metrics();
+  let mode = "idle";
+  let passP = 0;
+  const state = { t: 0 };
 
-  const scene = new THREE.Scene();
-  // Preserve the graphic scale while giving tilted orbit planes a readable depth falloff.
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-  camera.position.set(0, 0, 16);
-  camera.lookAt(0, 0, 0);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environmentTarget = createGlassEnvironment(pmrem);
-  scene.environment = environmentTarget.texture;
-  scene.environmentIntensity = 1.5;
-
-  RectAreaLightUniformsLib.init();
-  const key = new THREE.RectAreaLight(0xffffff, 14, 6.2, 8);
-  key.position.set(-5.2, 6.8, 8.5);
-  key.lookAt(0, 0, 0);
-  const side = new THREE.RectAreaLight(0xb5ffd4, 10, 3.4, 6.8);
-  side.position.set(7, 0.2, 6.8);
-  side.lookAt(0, 0, 0);
-  scene.add(key, side, new THREE.HemisphereLight(0xf7fffb, 0x1f4b3a, 1.05));
-
-  const materials = {
-    glass: new THREE.MeshPhysicalMaterial({ ...GLASS_PROFILES.slab, side: THREE.DoubleSide }),
-    halo: new THREE.MeshBasicMaterial({ color: STATION_COLORS.halo, transparent: true, opacity: 0.08, depthWrite: false }),
-    edge: new THREE.LineBasicMaterial({ color: STATION_COLORS.edge, transparent: true, opacity: 0.42, depthWrite: false }),
-    iconDepth: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: 0x02271e, roughness: 0.2, metalness: 0.02, clearcoat: 0.5, clearcoatRoughness: 0.08, specularIntensity: 0.55, specularColor: 0x7bc59f, envMapIntensity: 0.9 })),
-    icon: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.icon, roughness: 0.11, metalness: 0.035, clearcoat: 0.82, clearcoatRoughness: 0.045, specularIntensity: 0.78, specularColor: 0xd9ffeb, envMapIntensity: 1.45 })),
-    iconLight: new THREE.MeshPhysicalMaterial(iconRenderProfile({ color: STATION_COLORS.iconAccent, roughness: 0.13, metalness: 0.025, clearcoat: 0.76, clearcoatRoughness: 0.055, specularIntensity: 0.72, specularColor: 0xd9ffeb, envMapIntensity: 1.3 })),
-    orbit: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbit),
-    orbitFilament: new THREE.LineBasicMaterial({
-      color: 0x2f875b,
-      transparent: true,
-      opacity: 0.36,
-      depthWrite: false,
-      depthTest: true,
-      toneMapped: false,
-    }),
-    decorative: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationShell),
-    decorativeCore: new THREE.MeshPhysicalMaterial(GLASS_PROFILES.decorationCore),
-  };
-  const glassIdle = new THREE.Color(STATION_COLORS.glassIdle);
-  const glassLive = new THREE.Color(STATION_COLORS.glassFocused);
-
-  const composition = new THREE.Group();
-  scene.add(composition);
-  const atmosphere = new THREE.Mesh(new THREE.CircleGeometry(3.55, 48), new THREE.MeshBasicMaterial({ color: 0xe3e7e5, transparent: true, opacity: 0.04, depthWrite: false }));
-  atmosphere.position.z = -2.5;
-  atmosphere.scale.y = 0.8;
-  composition.add(atmosphere);
-
-  const orbGroup = new THREE.Group();
-  composition.add(orbGroup);
-  const orbGeometry = new THREE.SphereGeometry(1, 40, 28);
-  const orbDepth = new THREE.Mesh(
-    orbGeometry,
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      colorWrite: false,
-      depthTest: true,
-      depthWrite: true,
-    }),
-  );
-  orbDepth.scale.setScalar(1.48);
-  orbDepth.renderOrder = 1;
-  const orbCore = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbCore));
-  const orbShell = new THREE.Mesh(orbGeometry, new THREE.MeshPhysicalMaterial(GLASS_PROFILES.orbShell));
-  orbCore.scale.setScalar(1.32);
-  orbShell.scale.setScalar(1.52);
-  orbCore.material.depthTest = true;
-  orbCore.material.depthWrite = false;
-  orbShell.material.depthTest = true;
-  orbShell.material.depthWrite = false;
-  orbCore.renderOrder = ORB_RENDER_ORDER;
-  orbShell.renderOrder = ORB_RENDER_ORDER + 1;
-  const orbBubble = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 0.9, thickness: 0.35, ior: 1.38, transparent: true, opacity: 0.7, envMapIntensity: 1.4, depthTest: false, depthWrite: false }));
-  orbBubble.position.set(-0.38, 0.46, 0.42);
-  orbBubble.renderOrder = ORB_RENDER_ORDER + 2;
-  const highlightTexture = createHighlightTexture();
-  const orbHighlight = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.54, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  orbHighlight.position.set(-0.62, 0.7, 1.62);
-  orbHighlight.scale.set(0.78, 0.42, 1);
-  orbHighlight.renderOrder = ORB_RENDER_ORDER + 3;
-  const orbGlint = new THREE.Sprite(new THREE.SpriteMaterial({ map: highlightTexture, color: 0xffffff, transparent: true, opacity: 0.28, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  orbGlint.position.set(0.58, -0.48, 1.46);
-  orbGlint.scale.set(0.34, 0.2, 1);
-  orbGlint.renderOrder = ORB_RENDER_ORDER + 3;
-  orbGroup.add(orbDepth, orbCore, orbShell, orbBubble, orbHighlight, orbGlint);
-  const shadowTexture = createShadowTexture();
-  const orbShadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.8, 2.35),
-    new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: 0.92, depthWrite: false, toneMapped: false }),
-  );
-  orbShadow.rotation.x = -1.02;
-  orbShadow.position.set(0.1, -1.78, 0.08);
-  orbShadow.renderOrder = 0;
-  const orbContact = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.35, 1.05),
-    new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: 0.7, depthWrite: false, toneMapped: false }),
-  );
-  orbContact.rotation.x = -1.08;
-  orbContact.position.set(0.06, -1.7, 0.18);
-  orbContact.renderOrder = 0;
-  composition.add(orbShadow, orbContact);
-
-  const orbitGroup = new THREE.Group();
-  orbitGroup.rotation.order = "ZYX";
-  orbitGroup.rotation.z = ORBIT_ROTATION_OFFSET;
-  composition.add(orbitGroup);
-  ORBIT_PATHS.forEach((path) => {
-    const material = materials.orbit.clone();
-    material.opacity = path.opacity;
-    const curve = new EllipseCurve3(path.radiusX, path.radiusY);
-    const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, ORBIT_TUBULAR_SEGMENTS, 0.045, ORBIT_RADIAL_SEGMENTS, true), material);
-    mesh.rotation.order = "ZYX";
-    const filamentMaterial = materials.orbitFilament.clone();
-    filamentMaterial.opacity = path.filamentOpacity;
-    const filamentPoints = Array.from(
-      { length: ORBIT_TUBULAR_SEGMENTS },
-      (_, index) => curve.getPoint(index / ORBIT_TUBULAR_SEGMENTS),
-    );
-    const filament = new THREE.LineLoop(
-      new THREE.BufferGeometry().setFromPoints(filamentPoints),
-      filamentMaterial,
-    );
-    filament.renderOrder = 7;
-    mesh.add(filament);
-    mesh.rotation.set(path.rotationX, path.rotationY, path.rotationZ);
-    mesh.renderOrder = 6;
-    orbitGroup.add(mesh);
-    return mesh;
-  });
-
-  const stationGeometries = {
-    glow: createRoundedPanelGeometry(2.02, 2.02, 0.04, 0.3, 0.02),
-    halo: createRoundedPanelGeometry(2.1, 2.1, 0.08, 0.3, 0.035),
-    slab: createRoundedPanelGeometry(
-      STATION_GLASS_GEOMETRY.width,
-      STATION_GLASS_GEOMETRY.height,
-      STATION_GLASS_GEOMETRY.depth,
-      STATION_GLASS_GEOMETRY.radius,
-      STATION_GLASS_GEOMETRY.bevelSize,
-      STATION_GLASS_GEOMETRY.bevelSegments,
-      STATION_GLASS_GEOMETRY.curveSegments,
-    ),
-  };
-  stationGeometries.edge = new THREE.EdgesGeometry(stationGeometries.slab, 28);
-  const stations = STATIONS.map((spec, index) => {
-    const station = createStation(spec, index, materials, stationGeometries);
-    composition.add(station.root);
-    return station;
-  });
-  const decorationGeometries = new Map();
-  const decoratives = DECORATIONS.map((spec) => {
-    const object = createDecoration(spec, materials, decorationGeometries);
-    composition.add(object);
-    return object;
-  });
-
-  const state = { time: 0, mode: "pass", focusIndex: -1, focusRotation: 0, focusStrength: 0, entry: reduce ? 1 : 0, recede: 0, companions: 1, pointerX: 0, pointerY: 0, pointerTargetX: 0, pointerTargetY: 0, hoverIndex: -1 };
-  let width = 1;
-  let height = 1;
-  let compact = false;
-  let raf = 0;
-  let lastTime = performance.now();
-  let frozen = false;
-  let destroyed = false;
-  let inView = true;
-  let pageVisible = !document.hidden;
-  let presentationVisible = true;
-  let looping = false;
-  let pointerMoved = false;
-  let focusTween = null;
+  let idleTl = null;
+  let whisperTl = null;
   let resizeTimer = 0;
-  let staticRaf = 0;
-  let lastRenderTime = 0;
-  let lastAlpha = -1;
-  const raycaster = new THREE.Raycaster();
-  const pointer = new THREE.Vector2(4, 4);
-  const stationSlabs = stations.map((station) => station.slab);
-  const orbitPosition = new THREE.Vector3();
 
-  function baseScale() {
-    return compact ? 0.62 : Math.min(1.02, Math.max(0.82, width / 1500));
-  }
+  const rng = mulberry32(0xa5c11e);
+  const slabs = [];
 
-  function resize() {
-    width = Math.max(1, window.innerWidth);
-    height = Math.max(1, window.innerHeight);
-    compact = width < 768;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? 0.85 : 1));
-    renderer.setSize(width, height, false);
-    camera.fov = compact ? 42 : 36;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    const viewHeight = compact ? 12.4 : 10.4;
-    const viewWidth = viewHeight * (width / height);
-    composition.position.set((compact ? 0.08 : 0.5) * viewWidth * 0.5, (compact ? -0.48 : -0.01) * viewHeight * 0.5, 0);
-    composition.scale.setScalar(baseScale());
-    kick();
-  }
-
-  function stationAngle(station) {
-    return station.spec.angle + state.focusRotation;
-  }
-
-  function updateStation(station) {
-    const angle = stationAngle(station);
-    const lift = station.root.userData.lift || 0;
-    const active = lift > 0.02;
-    const hovered = station.index === state.hoverIndex;
-    const hoverProgress = advanceHoverProgress(station.root.userData.hoverProgress || 0, hovered && !active, reduce);
-    station.root.userData.hoverProgress = hoverProgress;
-    const pathDrift = reduce ? 0 : Math.sin(state.time * 0.82 + station.index * 1.37) * 0.025 * (1 - lift * 0.55);
-    const orbitPath = ORBIT_PATHS[station.spec.orbit];
-    const localOrbit = orbitPointAt(orbitPath, angle + pathDrift);
-    orbitPosition.set(localOrbit[0], localOrbit[1], localOrbit[2]).applyEuler(orbitGroup.rotation);
-    const orbitX = orbitPosition.x;
-    const orbitY = orbitPosition.y;
-    const orbitZ = orbitPosition.z;
-    const showX = compact ? -1.9 : -3.32;
-    const showY = compact ? 2.65 : 2.42;
-    const showZ = compact ? 2.05 : 2.35;
-    station.root.position.set(
-      orbitX + (showX - orbitX) * lift,
-      orbitY + (showY - orbitY) * lift,
-      orbitZ + (showZ - orbitZ) * lift + hoverProgress * 0.2 * (1 - lift),
-    );
-    const tilt = station.root.userData.baseTilt;
-    const toward = lift * 0.84;
-    const wobble = reduce || lift > 0.04 ? 0 : 1;
-    const spin = reduce ? 0 : lift * TAU;
-    station.root.rotation.x = tilt.x * (1 - toward) + Math.sin(angle) * -0.04 * (1 - lift) + state.pointerY * 0.04 + lift * 0.18;
-    station.root.rotation.y = tilt.y * (1 - toward) + Math.cos(angle) * 0.05 * (1 - lift) + state.pointerX * 0.045 + spin + lift * -0.26;
-    station.root.rotation.z = tilt.z * (1 - toward) * 0.35 + Math.sin(state.time * 0.55 + station.index) * 0.02 * wobble;
-    const hoverTiltEase = 1 - hoverProgress * 0.28;
-    station.root.rotation.x *= hoverTiltEase;
-    station.root.rotation.y *= hoverTiltEase;
-    station.root.rotation.z *= 1 - hoverProgress * 0.42;
-    const depth = clamp01((orbitZ + 1.5) / 3);
-    const orbitDepthScale = 0.9 + depth * 0.18;
-    const depthScale = orbitDepthScale + (1 - orbitDepthScale) * lift;
-    station.root.scale.setScalar(stationVisualScale({ depthScale, lift, hoverProgress }));
-    station.root.visible = state.companions > 0.02;
-    station.slab.material.color.lerpColors(glassIdle, glassLive, lift);
-    station.slab.material.envMapIntensity = 2.2 - lift * 0.55;
-    station.halo.material.opacity = 0.095 + lift * 0.1 + hoverProgress * 0.07;
-    station.glow.material.opacity = lift * 0.14 + hoverProgress * 0.09;
-    station.glow.scale.setScalar(1 + lift * 0.04 + hoverProgress * 0.025);
-    station.bloom.material.opacity = lift * 0.22 + hoverProgress * 0.1;
-    station.bloom.scale.set(2.05 + lift * 0.2 + hoverProgress * 0.12, 2.05 + lift * 0.2 + hoverProgress * 0.12, 1);
-    station.edge.material.opacity = 0.42 + lift * 0.04 + hoverProgress * 0.16;
-  }
-
-  function updateScene() {
-    state.pointerX += (state.pointerTargetX - state.pointerX) * 0.055;
-    state.pointerY += (state.pointerTargetY - state.pointerY) * 0.055;
-    composition.rotation.x = state.pointerY * -0.035;
-    composition.rotation.y = state.pointerX * 0.055;
-    composition.scale.setScalar(baseScale() * (0.86 + state.entry * 0.14) * (1 - state.recede * 0.13));
-    const alpha = state.entry * (1 - state.recede);
-    composition.visible = alpha > 0.002;
-    if (alpha !== lastAlpha) {
-      canvas.style.setProperty("--field-alpha", String(alpha));
-      lastAlpha = alpha;
+  function placeSlabs() {
+    const colPitch = m.compact ? 70 : 104;
+    const rowPitch = m.compact ? 128 : 186;
+    const gutter = m.compact ? 108 : 208;
+    const rail = m.compact ? 260 : 460;
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      const x = it.col * colPitch + Math.sign(it.col) * gutter;
+      const y = it.row * rowPitch;
+      it.x = x;
+      it.y = y;
+      it.idleX = x;
+      it.idleY = y;
+      it.railX = Math.sign(it.col) * rail;
     }
-    const orbFloat = reduce ? 0 : 1;
-    const floatX = Math.sin(state.time * 0.41 + 0.6) * 0.09 * orbFloat;
-    const floatY = (Math.sin(state.time * 0.58) * 0.18 + Math.sin(state.time * 0.27 + 1.1) * 0.07) * orbFloat;
-    const floatZ = Math.cos(state.time * 0.36 + 0.4) * 0.06 * orbFloat;
-    orbGroup.position.set(floatX, floatY, floatZ);
-    orbGroup.rotation.y = state.time * 0.07;
-    orbGroup.rotation.x = Math.sin(state.time * 0.22) * 0.05;
-    orbCore.scale.setScalar(1.32 * (1 + Math.sin(state.time * 0.72) * 0.01));
-    const shadowPulse = 1 + floatY * 0.35 + Math.sin(state.time * 0.72) * 0.02;
-    orbShadow.position.set(0.1 + floatX, -1.78, 0.08 + floatZ * 0.25);
-    orbContact.position.set(0.06 + floatX, -1.7, 0.18 + floatZ * 0.2);
-    orbShadow.scale.set(shadowPulse, shadowPulse * 0.92, 1);
-    orbContact.scale.set(shadowPulse * 0.96, shadowPulse * 0.9, 1);
-    orbShadow.material.opacity = 0.92 - floatY * 0.55;
-    orbContact.material.opacity = 0.7 - floatY * 0.4;
-    orbBubble.position.set(-0.38 + Math.sin(state.time * 0.4) * 0.04, 0.46, 0.42);
-    orbitGroup.rotation.x = Math.sin(state.time * ORBIT_SWAY.speed) * ORBIT_SWAY.rotationX;
-    orbitGroup.rotation.y = Math.cos(state.time * ORBIT_SWAY.speed * 0.9) * ORBIT_SWAY.rotationY;
-    orbitGroup.rotation.z = orbitRotationAt(null, state.time);
-    stations.forEach(updateStation);
-    decoratives.forEach((object) => {
-      const { base, baseRotation, baseScale: decorationScale, glint, motion, phase } = object.userData;
-      const motionAmount = reduce ? 0 : 1;
-      const theta = state.time * motion.speed + phase;
-      const pulse = Math.sin(theta * 1.7 + phase * 0.4);
-      object.position.set(
-        base.x + Math.cos(theta) * motion.radiusX * motionAmount,
-        base.y + Math.sin(theta * 1.18) * motion.radiusY * motionAmount,
-        base.z + Math.cos(theta * 0.83) * motion.radiusZ * motionAmount,
-      );
-      object.rotation.set(
-        baseRotation.x + (state.time * motion.angularVelocity.x + Math.sin(theta) * 0.045) * motionAmount,
-        baseRotation.y + (state.time * motion.angularVelocity.y + Math.cos(theta * 0.76) * 0.055) * motionAmount,
-        baseRotation.z + (state.time * motion.angularVelocity.z + Math.sin(theta * 0.62) * 0.04) * motionAmount,
-      );
-      object.scale.setScalar(decorationScale * (1 + pulse * 0.035 * motionAmount));
-      glint.position.set(
-        -0.3 + Math.sin(theta * 1.45) * 0.12 * motionAmount,
-        0.34 + Math.cos(theta * 1.2) * 0.08 * motionAmount,
-        0.68,
-      );
-      glint.material.opacity = 0.32 + (pulse + 1) * 0.08;
+  }
+
+  if (!reduce) {
+    for (let i = 0; i < SLAB_SLOTS.length; i++) {
+      const col = SLAB_SLOTS[i][0];
+      const row = SLAB_SLOTS[i][1];
+      const size = slabSize(col);
+      const color = PALETTE[i % PALETTE.length];
+      const el = makeSlab(size.w, size.h, color);
+      root.appendChild(el);
+
+      slabs.push({
+        el,
+        col,
+        row,
+        phase: ((col + 3) * 0.11 + (row + 1.5) * 0.17 + i * 0.02) % 1,
+        x: 0,
+        y: 0,
+        peak: color === "gold" || color === "peri" ? 0.78 : 0.52,
+        idleX: 0,
+        idleY: 0,
+        railX: 0,
+        keepWhisper: false,
+        whisperSample: null,
+      });
+    }
+
+    placeSlabs();
+
+    KEEP_INDICES.forEach((idx, keepIndex) => {
+      const it = slabs[idx];
+      it.keepWhisper = true;
+      it.whisperSample = {
+        side: keepIndex < 3 ? -1 : 1,
+        row: keepIndex % 3,
+        inset: rng() * 24,
+      };
     });
-    if (pointerMoved && !reduce && pointer.x <= 1) {
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(stationSlabs, false);
-      state.hoverIndex = hits.length ? stations.findIndex((station) => station.slab === hits[0].object) : -1;
+  }
+
+  const dock = document.createElement("div");
+  dock.className = "dock";
+  dock.setAttribute("aria-hidden", "true");
+  root.appendChild(dock);
+
+  const svg = svgEl("svg", {
+    class: "dock-svg",
+    viewBox: "-1200 -1200 2400 2400",
+    "aria-hidden": "true",
+  });
+  const ringCore = svgEl("circle", { class: "dock-ring is-core", cx: "0", cy: "0" });
+  const ringInner = svgEl("circle", { class: "dock-ring is-inner", cx: "0", cy: "0" });
+  const ringMid = svgEl("circle", { class: "dock-ring is-mid", cx: "0", cy: "0" });
+  const ringOuter = svgEl("circle", { class: "dock-ring is-outer", cx: "0", cy: "0" });
+  const spokeGroup = svgEl("g", { class: "dock-spokes" });
+  const spokes = STATION_NODES.map(() =>
+    svgEl("line", {
+      class: "dock-spoke",
+      x1: "0",
+      y1: "0",
+      x2: "0",
+      y2: "0",
+    }),
+  );
+  spokeGroup.append(...spokes);
+  const alignLine = svgEl("line", {
+    class: "dock-align",
+    x1: "0",
+    y1: "0",
+    x2: "0",
+    y2: "0",
+  });
+  svg.append(spokeGroup, ringCore, ringInner, ringMid, ringOuter, alignLine);
+  dock.appendChild(svg);
+
+  const ringEls = {
+    inner: ringInner,
+    mid: ringMid,
+    outer: ringOuter,
+    core: ringCore,
+  };
+
+  const nodes = STATION_NODES.map((spec, index) => {
+    const el = document.createElement("div");
+    el.className = "dock-node" + (spec.accent ? " is-accent" : "");
+    if (spec.label === "Products") el.setAttribute("data-dock", "products");
+    const label = document.createElement("span");
+    label.className = "dock-node-label";
+    label.textContent = spec.label;
+    el.appendChild(label);
+    dock.appendChild(el);
+    return { el, spec, spoke: spokes[index], x: 0, y: 0 };
+  });
+
+  const conversationViews = nodes.map((node) => {
+    try {
+      node.el.setAttribute("aria-label", node.spec.label);
+      return createCategoryModelView(node.el, reduce, node.spec.model);
+    } catch (err) {
+      return null;
     }
-    pointerMoved = false;
+  });
+
+  let hover = null;
+  let orbitFrozen = false;
+  let presentationVisible = true;
+ let orbitEntryProgress = 1;
+  let focusIndex = -1;
+  let focusStrength = 0;
+  let focusLocal = 0;
+  let focusZoom = 1;
+  let focusRotationTarget = 0;
+  let focusFrozen = false;
+  let focusReturning = false;
+  let focusExitTween = null;
+  const productsNode = nodes.find((node) => node.el.dataset.dock === "products") || null;
+
+  let orbView = null;
+  if (!reduce) {
+    try {
+      orbView = createOrbView(root, gsap);
+    } catch (err) {
+      orbView = null;
+    }
   }
 
-  function shouldAnimate() {
-    return !destroyed && !frozen && inView && pageVisible && presentationVisible && state.mode !== "paused" && !reduce;
+  const focusMotion = {
+    dockX: 0,
+    dockY: 0,
+    dockScale: 1,
+    orbX: 0,
+    orbY: 0,
+    rotation: 0,
+  };
+  let focusMotionReady = false;
+  let focusSnapTween = null;
+  const focusTargets = Object.fromEntries(Object.keys(focusMotion).map((key) => [key, Number.NaN]));
+
+  function setFocusTargets(values) {
+    const changed = Object.entries(values).some(([key, value]) => {
+      return Math.abs(focusTargets[key] - value) >= 0.001 || !Number.isFinite(focusTargets[key]);
+    });
+    if (!changed) return;
+
+    if (focusSnapTween) focusSnapTween.kill();
+    Object.assign(focusTargets, values);
+    focusSnapTween = gsap.to(focusMotion, {
+      ...values,
+      duration: 0.92,
+      ease: "power3.inOut",
+      overwrite: true,
+      onUpdate: renderFocusMotion,
+      onComplete: () => {
+        focusSnapTween = null;
+        renderFocusMotion();
+      },
+    });
   }
 
-  function syncCanvasVisibility() {
-    canvas.style.display = presentationVisible && inView && pageVisible ? "block" : "none";
+  function releaseFocusMotion() {
+    if (focusSnapTween) focusSnapTween.kill();
+    focusSnapTween = null;
+    focusMotion.rotation = 0;
+    focusMotionReady = false;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
+    gsap.set(svg, { rotation: 0, transformOrigin: "50% 50%" });
   }
 
-  function render(now = performance.now()) {
-    if (destroyed || !presentationVisible || !pageVisible) return;
-    updateScene();
-    renderer.render(scene, camera);
-    lastRenderTime = now;
+  function finishFocusExit() {
+    focusExitTween = null;
+    focusReturning = false;
+    focusStrength = 0;
+    focusLocal = 0;
+    setFocusIndex(-1);
+    releaseFocusMotion();
+    focusFrozen = false;
+    if (idleTl && (mode === "idle" || mode === "pass")) idleTl.play();
+    if (mode === "pass" && !orbitFrozen) layoutStation(passP);
   }
 
-  function stopLoop() {
-    looping = false;
-    if (raf) window.cancelAnimationFrame(raf);
-    raf = 0;
+  function startFocusExit() {
+    if (focusReturning || !focusMotionReady) return;
+
+    focusReturning = true;
+    focusStrength = 0;
+    focusLocal = 0;
+    if (focusSnapTween) focusSnapTween.kill();
+    focusSnapTween = null;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
+
+    const pose = stationPose(m);
+    focusExitTween = gsap.to(focusMotion, {
+      dockX: pose.x,
+      dockY: pose.y,
+      dockScale: pose.scale,
+      orbX: pose.x,
+      orbY: pose.y,
+      rotation: nearestRotation(0, focusMotion.rotation),
+      duration: 0.82,
+      ease: "power3.inOut",
+      overwrite: true,
+      onUpdate: renderFocusMotion,
+      onComplete: finishFocusExit,
+    });
   }
 
-  function cancelStaticRender() {
-    if (staticRaf) window.cancelAnimationFrame(staticRaf);
-    staticRaf = 0;
+  function cancelFocusExit() {
+    if (!focusReturning) return;
+    if (focusExitTween) focusExitTween.kill();
+    focusExitTween = null;
+    focusReturning = false;
+    Object.keys(focusTargets).forEach((key) => {
+      focusTargets[key] = Number.NaN;
+    });
   }
 
-  function requestRender() {
-    if (destroyed || looping || staticRaf || !presentationVisible || !pageVisible) return;
-    const drawWhenReady = (now) => {
-      if (destroyed || looping || !presentationVisible || !pageVisible) {
-        staticRaf = 0;
-        return;
+  function layoutSlab(it, t, x = it.x, y = it.y, peak = it.peak) {
+    const p = (it.phase + t) % 1;
+    const z = FAR + p * TRAVEL;
+    gsap.set(it.el, {
+      x,
+      y,
+      z,
+      xPercent: -50,
+      yPercent: -50,
+      rotationX: 0,
+      rotationY: 0,
+      rotationZ: 0,
+      autoAlpha: alphaAt(p, peak),
+      force3D: true,
+    });
+  }
+
+  function layoutSlabsIdle(t) {
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      it.el.style.display = "";
+      layoutSlab(it, t, it.idleX, it.idleY, it.peak);
+    }
+  }
+
+  function layoutSlabsPass(t, p) {
+    const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
+    const fade = gsap.utils.clamp(0, 1, (p - 0.22) / 0.26);
+    const pull = 0.4 * u;
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      if (fade >= 1) {
+        gsap.set(it.el, { autoAlpha: 0 });
+        it.el.style.display = "none";
+        it.el.style.willChange = "auto";
+        continue;
       }
-      if (now - lastRenderTime < RENDER_INTERVAL) {
-        staticRaf = window.requestAnimationFrame(drawWhenReady);
-        return;
-      }
-      staticRaf = 0;
-      render(now);
-    };
-    staticRaf = window.requestAnimationFrame(drawWhenReady);
+      it.el.style.display = "";
+      it.el.style.willChange = "transform";
+      const x = it.idleX + (it.railX - it.idleX) * pull;
+      const y = it.idleY * (1 - pull * 0.25);
+      layoutSlab(it, t, x, y, it.peak * (1 + 0.35 * u) * (1 - fade));
+    }
   }
 
-  function frame(now) {
-    if (destroyed) {
-      stopLoop();
+  function hideSlabs() {
+    for (let i = 0; i < slabs.length; i++) {
+      const it = slabs[i];
+      gsap.set(it.el, { autoAlpha: 0, scaleX: 1, scaleY: 1 });
+      it.el.style.display = "none";
+      it.el.style.willChange = "auto";
+    }
+  }
+
+  function sizeRings() {
+    ringCore.setAttribute("r", String(m.hub * 1.08));
+    ringInner.setAttribute("r", String(m.rIn));
+    ringMid.setAttribute("r", String(m.rMid));
+    ringOuter.setAttribute("r", String(m.r));
+  }
+
+  function ringRadius(name) {
+    if (name === "inner") return m.rIn;
+    if (name === "mid") return m.rMid;
+    return m.r;
+  }
+
+  function layoutSpokes() {
+    const orbEdge = m.hub * 1.24;
+    nodes.forEach((node) => {
+      const length = Math.hypot(node.x, node.y) || 1;
+      const inwardX = (node.x / length) * orbEdge;
+      const inwardY = (node.y / length) * orbEdge;
+      node.spoke.setAttribute("x1", node.x.toFixed(2));
+      node.spoke.setAttribute("y1", node.y.toFixed(2));
+      node.spoke.setAttribute("x2", inwardX.toFixed(2));
+      node.spoke.setAttribute("y2", inwardY.toFixed(2));
+    });
+  }
+
+  function layoutOrbs(t, gain, pose) {
+    if (orbView) orbView.layout(t, m.hub, gain, m.compact, pose);
+  }
+
+  function clearHot() {
+    dock.classList.remove("is-orb-hot");
+    nodes.forEach((node, index) => {
+      node.el.classList.remove("is-hot");
+      conversationViews[index]?.setHovered(false);
+    });
+    nodes.forEach((node) => node.spoke.classList.remove("is-hot"));
+    Object.keys(ringEls).forEach((key) => ringEls[key].classList.remove("is-hot"));
+    alignLine.classList.remove("is-hot");
+  }
+
+  function applyHover() {
+    clearHot();
+    if (!hover) {
+      alignLine.setAttribute("x2", "0");
+      alignLine.setAttribute("y2", "0");
       return;
     }
-    if (!shouldAnimate()) {
-      stopLoop();
-      requestRender();
+    if (hover === "orb") {
+      dock.classList.add("is-orb-hot");
+      nodes.forEach((node, index) => {
+        node.el.classList.add("is-hot");
+        conversationViews[index]?.setHovered(true);
+      });
+      nodes.forEach((node) => node.spoke.classList.add("is-hot"));
+      Object.keys(ringEls).forEach((key) => ringEls[key].classList.add("is-hot"));
       return;
     }
-    if (now - lastRenderTime >= RENDER_INTERVAL) {
-      const delta = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
-      lastTime = now;
-      state.time += delta;
-      render(now);
-    }
-    raf = window.requestAnimationFrame(frame);
+    hover.el.classList.add("is-hot");
+    conversationViews[nodes.indexOf(hover)]?.setHovered(true);
+    hover.spoke.classList.add("is-hot");
+    ringEls[hover.spec.ring].classList.add("is-hot");
+    ringCore.classList.add("is-hot");
+    alignLine.classList.add("is-hot");
+    alignLine.setAttribute("x2", hover.x.toFixed(2));
+    alignLine.setAttribute("y2", hover.y.toFixed(2));
   }
 
-  function startLoop() {
-    if (destroyed || looping || !shouldAnimate()) return;
-    looping = true;
-    lastTime = performance.now();
-    cancelStaticRender();
-    raf = window.requestAnimationFrame(frame);
+  function setHover(next) {
+    if (next === hover) return;
+    hover = next;
+    applyHover();
   }
 
-  function kick() {
-    if (shouldAnimate()) startLoop();
-    else requestRender();
-  }
-
-  function onTweenUpdate() {
-    if (!looping) requestRender();
-  }
-
-  function setPresentationVisible(visible) {
-    if (presentationVisible === visible) return;
-    presentationVisible = visible;
-    syncCanvasVisibility();
-    if (visible) {
-      lastTime = performance.now();
-      kick();
-    } else {
-      stopLoop();
-      cancelStaticRender();
-    }
-  }
-
-  function setFocusIndex(index) {
-    if (index === state.focusIndex) return;
-    state.focusIndex = index;
-    focusTween?.kill();
-    const duration = reduce ? 0 : 1.28;
-    stations.forEach((station) => {
-      gsap.to(station.root.userData, {
-        lift: station.index === index ? 1 : 0,
-        duration,
-        ease: "power3.inOut",
-        overwrite: true,
-        onUpdate: onTweenUpdate,
+  function bindHover() {
+    nodes.forEach((node) => {
+      node.el.addEventListener("pointerenter", () => setHover(node));
+      node.el.addEventListener("pointerleave", () => {
+        if (hover === node) setHover(null);
       });
     });
-    if (index < 0) {
-      focusTween = gsap.to(state, { focusStrength: 0, duration, ease: "power3.inOut", overwrite: true, onUpdate: onTweenUpdate });
-      return;
+    const canvas = orbView && orbView.canvas;
+    if (canvas) {
+      canvas.addEventListener("pointerenter", () => setHover("orb"));
+      canvas.addEventListener("pointerleave", () => {
+        if (hover === "orb") setHover(null);
+      });
     }
-    const dock = compact ? 2.85 : FOCUS_DOCK;
-    const orbitPath = ORBIT_PATHS[STATIONS[index].orbit];
-    const orbitRotation = orbitRotationAt(orbitPath, state.time);
-    const target = nearestAngle(dock - STATIONS[index].angle - orbitRotation, state.focusRotation);
-    focusTween = gsap.to(state, { focusRotation: target, focusStrength: 1, duration, ease: "power3.inOut", overwrite: true, onUpdate: onTweenUpdate });
   }
 
-  function setProgress(progress) {
-    if (progress < FOCUS_START) return setFocusIndex(-1);
-    const sequence = clamp01((progress - FOCUS_START) / (FOCUS_END - FOCUS_START));
-    setFocusIndex(Math.round(sequence * (STATIONS.length - 1)));
+  function setFocusFromProgress(p) {
+    // Progress sources can settle a few floating-point ticks below the requested
+    // value (for example 0.639969 instead of 0.64).
+    const focusProgress = p + 0.0001;
+    const sequence = gsap.utils.clamp(0, 1, (focusProgress - FOCUS_START) / (FOCUS_END - FOCUS_START));
+
+    if (focusProgress < FOCUS_START) {
+      if (focusMotionReady && focusIndex >= 0) startFocusExit();
+      else if (!focusReturning) {
+        focusStrength = 0;
+        focusLocal = 0;
+        setFocusIndex(-1);
+        releaseFocusMotion();
+        if (focusFrozen) {
+          focusFrozen = false;
+          if (idleTl && (mode === "idle" || mode === "pass")) idleTl.play();
+        }
+      }
+      return;
+    }
+
+    cancelFocusExit();
+    focusFrozen = true;
+    if (idleTl) idleTl.pause();
+
+    if (sequence >= 1) {
+      setFocusIndex(STATION_NODES.length - 1);
+      focusStrength = 1;
+      focusLocal = 0;
+      focusZoom = FOCUS_ZOOM;
+      return;
+    }
+
+    // Snap points divide the focus range into N - 1 equal intervals. Mapping
+    // with round() makes every exact snap resolve to one exact station.
+    setFocusIndex(Math.round(sequence * (STATION_NODES.length - 1)));
+    focusLocal = 0;
+    focusStrength = 1;
+    // The first snap should already be fully zoomed, just like every later station.
+    focusZoom = FOCUS_ZOOM;
+  }
+
+  function renderFocusMotion() {
+    gsap.set(dock, {
+      x: focusMotion.dockX,
+      y: focusMotion.dockY,
+      scale: focusMotion.dockScale,
+      transformOrigin: "0 0",
+    });
+
+    gsap.set(svg, {
+      rotation: focusMotion.rotation,
+      transformOrigin: "50% 50%",
+    });
+
+    if (orbView && orbView.canvas) {
+      gsap.set(orbView.canvas, {
+        x: focusMotion.orbX,
+        y: focusMotion.orbY,
+        scale: focusMotion.dockScale,
+        transformOrigin: "50% 50%",
+      });
+    }
+
+    const angle = focusMotion.rotation * DEG_TO_RAD;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    nodes.forEach((node) => {
+      // Rotate node positions numerically so the labels never inherit the line spin.
+      const x = node.x * cos - node.y * sin;
+      const y = node.x * sin + node.y * cos;
+      gsap.set(node.el, {
+        x,
+        y,
+        rotation: 0,
+        transformOrigin: "50% 50%",
+      });
+    });
+
+  }
+
+  function nearestRotation(target, current) {
+    const delta = ((target - current + 180) % 360 + 360) % 360 - 180;
+    return current + delta;
+  }
+
+  function stationRotation(index) {
+    const station = STATION_NODES[index];
+    const speed = RING_SPIN[station.ring] || 1;
+    const angle = station.angle + state.t * Math.PI * 2 * speed;
+    return FOCUS_TARGET_ANGLE - (angle * 180) / Math.PI;
+  }
+
+  function setFocusIndex(nextIndex) {
+    if (nextIndex === focusIndex) return;
+    focusIndex = nextIndex;
+    if (nextIndex < 0) {
+      focusRotationTarget = 0;
+      return;
+    }
+
+    // Rotation is a selection event, not a continuously scrubbed value. Always
+    // rotate the selected station to the same side; mere viewport visibility is
+    // not enough because every selection must finish at the shared anchor.
+    const target = stationRotation(nextIndex);
+    focusRotationTarget = nearestRotation(target, focusMotion.rotation);
+  }
+
+  function applyFocusVisuals() {
+    const focused = focusIndex >= 0 && focusStrength > 0;
+    const activeRing = focused ? nodes[focusIndex]?.spec.ring : null;
+
+    if (focused) {
+      const pose = stationPose(m);
+      const focusedPose = focusedStationPose(m, focusZoom);
+      // Focus framing is independent from the active node. This means changing
+      // stations can only rotate the orbital geometry; it cannot pan the dock.
+      const dockX = focusedPose.x;
+      const dockY = focusedPose.y;
+      const dockScale = focusedPose.scale;
+      const orbX = dockX;
+      const orbY = dockY;
+      const focusValues = {
+        dockX,
+        dockY,
+        dockScale,
+        orbX,
+        orbY,
+        rotation: focusRotationTarget,
+      };
+
+      if (!focusMotionReady) {
+        const currentDockX = Number(gsap.getProperty(dock, "x"));
+        const currentDockY = Number(gsap.getProperty(dock, "y"));
+        const currentDockScale = Number(gsap.getProperty(dock, "scale"));
+        const currentOrbX = orbView?.canvas
+          ? Number(gsap.getProperty(orbView.canvas, "x"))
+          : currentDockX;
+        const currentOrbY = orbView?.canvas
+          ? Number(gsap.getProperty(orbView.canvas, "y"))
+          : currentDockY;
+        Object.assign(focusMotion, {
+          // Continue from the transform that is actually on screen. This also
+          // keeps a fast selection change continuous instead of assigning the
+          // final focused pose on its first frame.
+          dockX: Number.isFinite(currentDockX) ? currentDockX : dockX,
+          dockY: Number.isFinite(currentDockY) ? currentDockY : dockY,
+          dockScale: Number.isFinite(currentDockScale) ? currentDockScale : pose.scale,
+          orbX: Number.isFinite(currentOrbX) ? currentOrbX : orbX,
+          orbY: Number.isFinite(currentOrbY) ? currentOrbY : orbY,
+          rotation: focusMotion.rotation,
+        });
+        focusMotionReady = true;
+        renderFocusMotion();
+      }
+
+      setFocusTargets(focusValues);
+      renderFocusMotion();
+    } else if (!focusReturning) {
+      releaseFocusMotion();
+    }
+
+    nodes.forEach((node, index) => {
+      const isActive = focused && index === focusIndex;
+      node.el.classList.toggle("is-focus", isActive);
+      conversationViews[index]?.setFocused(isActive);
+    });
+    Object.entries(ringEls).forEach(([name, ring]) => {
+      ring.classList.toggle("is-focus", name === activeRing);
+    });
+    dock.classList.toggle("is-focus-mode", focused);
+  }
+
+  function layoutDock(t, gain, pose) {
+    sizeRings();
+    const entryGain = orbitEntryProgress;
+    const visibleGain = presentationVisible ? gain * entryGain : 0;
+    const entryPose = {
+      x: pose.x,
+      y: pose.y,
+      scale: pose.scale * (0.84 + 0.16 * entryGain),
+    };
+    const dockProps = {
+      transformOrigin: "0 0",
+      rotationX: 0,
+      rotation: -5 * (1 - entryGain),
+      autoAlpha: visibleGain,
+      force3D: true,
+    };
+    if (!(focusIndex >= 0 && focusStrength > 0) && !focusReturning) {
+      dockProps.x = entryPose.x;
+      dockProps.y = entryPose.y;
+      dockProps.scale = entryPose.scale;
+    }
+    gsap.set(dock, dockProps);
+    if (!orbitFrozen) gsap.set(svg, { autoAlpha: entryGain });
+
+    const live = visibleGain > 0.55 && !orbitFrozen;
+    const spin = t * Math.PI * 2;
+    if (!orbitFrozen) {
+      nodes.forEach((node) => {
+        const speed = RING_SPIN[node.spec.ring] || 1;
+        const pos = poseAt(node.spec.angle + spin * speed, ringRadius(node.spec.ring));
+        node.x = pos.x;
+        node.y = pos.y;
+        node.el.style.pointerEvents = live ? "auto" : "none";
+        gsap.set(node.el, {
+          x: pos.x,
+          y: pos.y,
+          z: 0,
+          xPercent: -50,
+          yPercent: -50,
+          rotationX: 0,
+          rotationY: 0,
+          rotationZ: 0,
+          autoAlpha: visibleGain,
+          force3D: true,
+        });
+      });
+    } else {
+      nodes.forEach((node) => {
+        node.el.style.pointerEvents = "none";
+      });
+    }
+
+    layoutSpokes();
+
+    if (orbView && orbView.canvas) {
+      orbView.canvas.style.pointerEvents = live ? "auto" : "none";
+      orbView.canvas.style.cursor = live ? "pointer" : "default";
+    }
+    if (orbitFrozen && !layoutDock._companionsForced) {
+      return;
+    }
+
+    if (hover && hover !== "orb") {
+      alignLine.setAttribute("x2", hover.x.toFixed(2));
+      alignLine.setAttribute("y2", hover.y.toFixed(2));
+    }
+
+    layoutOrbs(t, visibleGain, entryPose);
+    // layoutOrbs writes the ready canvas pose. Focus rendering runs last so
+    // both active and returning snap transitions retain sole transform ownership.
+    if (focusMotionReady) renderFocusMotion();
+  }
+
+  function layoutStation(p) {
+    const dockIn = gsap.utils.clamp(0, 1, (p - 0.22) / 0.28);
+    // The progress-driven setup ends at a stable, fully readable dock state.
+    // Focus is selected later and owns its own move-and-zoom animation.
+    const slide = gsap.utils.clamp(0, 1, (p - 0.36) / (DOCK_READY - 0.36));
+    const easeSlide = slide * slide * (3 - 2 * slide);
+    const pose = stationPose(m);
+    const from = { x: 0, y: 0, scale: 1 };
+    layoutDock(state.t, dockIn, {
+      x: from.x + (pose.x - from.x) * easeSlide,
+      y: from.y + (pose.y - from.y) * easeSlide,
+      scale: from.scale + (pose.scale - from.scale) * easeSlide,
+    });
+    applyFocusVisuals();
+    gsap.set(root, { perspective: 1100 });
+    if (p < 0.48) layoutSlabsPass(state.t, p);
+    else hideSlabs();
+  }
+
+  function tickIdle() {
+    if (mode === "idle") {
+      layoutSlabsIdle(state.t);
+      gsap.set(dock, { autoAlpha: 0 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
+      gsap.set(root, { perspective: 1100 });
+      return;
+    }
+    if (mode === "pass") {
+      layoutStation(passP);
+      return;
+    }
+    if (mode === "whisper") {
+      hideSlabs();
+      layoutDock(state.t, 1, stationPose(m));
+      gsap.set(root, { perspective: 1100 });
+    }
+  }
+
+  function setProgress(p) {
+    passP = p;
+    setFocusFromProgress(p);
+    if (mode === "whisper" || mode === "paused") return;
+    if (orbitFrozen) return;
+    const u = gsap.utils.clamp(0, 1, (p - 0.18) / 0.54);
+    if (idleTl) {
+      // setMode("pass") can run before passP reaches the dock range. Keep the
+      // timeline duration in sync here so the default hero orbit uses the
+      // slower dock cycle instead of retaining the earlier slab duration.
+      idleTl.duration(p < 0.55 ? SLAB_DURATION : DOCK_DURATION);
+      idleTl.timeScale(p < 0.55 ? 1 + 2.2 * u : 1);
+      if (focusFrozen) idleTl.pause();
+      else if (idleTl.paused()) idleTl.play();
+    }
+    layoutStation(p);
   }
 
   function setOrbitEntryProgress(progress) {
-    state.entry = clamp01(progress);
-    kick();
+    orbitEntryProgress = gsap.utils.clamp(0, 1, progress);
+
+    if (mode === "pass") {
+      layoutStation(passP);
+    } else if (mode === "whisper") {
+      layoutDock(state.t, 1, stationPose(m));
+    }
   }
 
-  function setMode(next) {
-    state.mode = next;
-    controller.mode = next;
-    kick();
+  function freezeOrbit() {
+    if (orbitFrozen) return;
+    orbitFrozen = true;
+    if (idleTl) idleTl.pause();
+    if (whisperTl) whisperTl.pause();
+  }
+
+  function unfreezeOrbit() {
+    if (!orbitFrozen) return;
+    orbitFrozen = false;
+    if (mode === "pass") layoutStation(passP);
+    else if (mode === "whisper") {
+      if (idleTl) {
+        idleTl.duration(DOCK_DURATION);
+        idleTl.timeScale(1);
+        idleTl.play();
+      }
+      layoutDock(state.t, 1, stationPose(m));
+    } else if (mode === "idle") {
+      if (idleTl) idleTl.play();
+    }
+  }
+
+  function hideProductsNode() {
+    if (productsNode) productsNode.el.style.visibility = "hidden";
+  }
+
+  function showProductsNode() {
+    if (productsNode) productsNode.el.style.visibility = "";
+  }
+
+  function setCompanionsVisible(on) {
+    const alpha = on ? 1 : 0;
+    const dur = on ? 0.28 : 0.45;
+    nodes.forEach((node) => {
+      if (node === productsNode) return;
+      gsap.to(node.el, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    });
+    gsap.to(svg, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    if (orbView && orbView.canvas) {
+      gsap.to(orbView.canvas, { autoAlpha: alpha, duration: dur, ease: "power2.out", overwrite: true });
+    }
+  }
+
+  function getProductsRect() {
+    if (!productsNode) return null;
+    return productsNode.el.getBoundingClientRect();
   }
 
   function recedeDock(amount) {
-    state.recede = clamp01(amount);
-    kick();
+    const a = gsap.utils.clamp(0, 1, amount);
+    if (a > 0.002) freezeOrbit();
+    else unfreezeOrbit();
+    const alpha = 1 - a;
+    const sc = 1 - 0.08 * a;
+    nodes.forEach((node) => {
+      gsap.set(node.el, { autoAlpha: alpha, scale: sc, transformOrigin: "50% 50%" });
+    });
+    gsap.set(svg, { autoAlpha: alpha });
+    if (orbView && orbView.canvas) {
+      gsap.set(orbView.canvas, { autoAlpha: alpha, scale: sc, transformOrigin: "50% 50%" });
+    }
   }
 
-  function setCompanionsVisible(visible) {
-    gsap.to(state, { companions: visible ? 1 : 0, duration: visible ? 0.42 : 0.3, ease: "power2.out", overwrite: "auto", onUpdate: onTweenUpdate });
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    controller.mode = next;
+    if (orbitFrozen && next !== "idle") {
+      if (idleTl) idleTl.pause();
+      if (whisperTl) whisperTl.pause();
+      hideSlabs();
+      if (next === "paused") return;
+      layoutDock(state.t, 1, stationPose(m));
+      return;
+    }
+
+    if (next === "pass") {
+      if (whisperTl) whisperTl.pause();
+      if (idleTl) {
+        idleTl.duration(passP < 0.55 ? SLAB_DURATION : DOCK_DURATION);
+        const u = gsap.utils.clamp(0, 1, (passP - 0.18) / 0.54);
+        idleTl.timeScale(passP < 0.55 ? 1 + 2.2 * u : 1);
+      if (focusFrozen) idleTl.pause();
+      else if (idleTl.paused()) idleTl.play();
+      }
+      slabs.forEach((it) => {
+        it.el.style.display = "";
+        it.el.style.willChange = "transform";
+      });
+      return;
+    }
+    if (next === "whisper") {
+      hideSlabs();
+      if (idleTl) {
+        idleTl.duration(DOCK_DURATION);
+        idleTl.timeScale(1);
+        if (idleTl.paused()) idleTl.play();
+      }
+      if (whisperTl) whisperTl.pause();
+      layoutDock(state.t, 1, stationPose(m));
+      gsap.set(root, { perspective: 1100 });
+      return;
+    }
+    if (next === "idle") {
+      if (whisperTl) whisperTl.pause();
+      if (idleTl) {
+        idleTl.duration(SLAB_DURATION);
+        idleTl.timeScale(1);
+        idleTl.play();
+      }
+      slabs.forEach((it) => {
+        it.el.style.display = "";
+        it.el.style.willChange = "transform";
+      });
+      gsap.set(dock, { autoAlpha: 0, x: 0, y: 0, scale: 1 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
+      gsap.set(root, { perspective: 1100 });
+      layoutSlabsIdle(state.t);
+      return;
+    }
+    if (next === "paused") {
+      if (idleTl) idleTl.pause();
+      if (whisperTl) whisperTl.pause();
+      hideSlabs();
+      gsap.set(dock, { autoAlpha: 0 });
+      layoutOrbs(state.t, 0, { x: 0, y: 0, scale: 1 });
+    }
   }
 
-  function onPointerMove(event) {
-    if (!presentationVisible || !inView) return;
-    const nx = event.clientX / width * 2 - 1;
-    const ny = -(event.clientY / height * 2 - 1);
-    state.pointerTargetX = nx;
-    state.pointerTargetY = ny;
-    pointer.set(nx, ny);
-    pointerMoved = true;
+  function playWelcome() {
+    if (idleTl) idleTl.pause();
+    if (whisperTl) whisperTl.pause();
+    hideSlabs();
+    layoutDock(state.t, 1, heroPose(m));
+    gsap.set(root, { perspective: 1100 });
   }
 
-  function onPointerLeave() {
-    state.pointerTargetX = 0;
-    state.pointerTargetY = 0;
-    pointer.set(4, 4);
-    state.hoverIndex = -1;
+  function onResize() {
+    m = metrics();
+    placeSlabs();
+    if (mode === "whisper") {
+      hideSlabs();
+      layoutDock(state.t, 1, stationPose(m));
+    } else if (mode === "pass") setProgress(passP);
+    else if (mode !== "paused") {
+      layoutSlabsIdle(state.t);
+      gsap.set(dock, { autoAlpha: 0 });
+    }
   }
 
   function handleResize() {
     window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(resize, 40);
+    resizeTimer = window.setTimeout(onResize, 40);
   }
 
-  function handleVisibilityChange() {
-    pageVisible = !document.hidden;
-    syncCanvasVisibility();
-    if (pageVisible) {
-      lastTime = performance.now();
-      kick();
-    } else {
-      stopLoop();
-      cancelStaticRender();
-    }
+  if (!reduce) {
+    idleTl = gsap.to(state, {
+      t: "+=1",
+      duration: SLAB_DURATION,
+      ease: "none",
+      repeat: -1,
+      repeatRefresh: true,
+      paused: true,
+      overwrite: false,
+      immediateRender: false,
+      onUpdate: tickIdle,
+    });
+    whisperTl = gsap.to(state, {
+      t: "+=1",
+      duration: WHISPER_DURATION,
+      ease: "none",
+      repeat: -1,
+      repeatRefresh: true,
+      paused: true,
+      overwrite: false,
+      immediateRender: false,
+      onUpdate: function () {
+        if (mode === "whisper") {
+          hideSlabs();
+          layoutDock(state.t, 1, stationPose(m));
+        }
+      },
+    });
   }
 
-  const visibilityTarget = document.getElementById("pin-slot") || root;
-  const visibility = new IntersectionObserver((entries) => {
-    inView = entries.some((entry) => entry.isIntersecting);
-    syncCanvasVisibility();
-    if (inView) kick();
-    else stopLoop();
-  }, { threshold: 0.02 });
-  visibility.observe(visibilityTarget);
+  gsap.set(dock, { autoAlpha: 0, rotationX: 0, x: 0, y: 0, scale: 1, force3D: true });
+  gsap.set(root, { perspective: 1100 });
+  if (!reduce) {
+    layoutSlabsIdle(0);
+  } else {
+    hideSlabs();
+    layoutDock(0, 1, heroPose(m));
+  }
 
+  bindHover();
   window.addEventListener("resize", handleResize);
-  window.addEventListener("pointermove", onPointerMove, { passive: true });
-  document.documentElement.addEventListener("pointerleave", onPointerLeave);
-  document.addEventListener("visibilitychange", handleVisibilityChange);
-  resize();
-  kick();
 
   const controller = {
-    items: stations,
-    mode: state.mode,
-    startIdle() { setMode("idle"); },
-    playEnter() { setMode("pass"); },
-    playWelcome() { setMode("pass"); },
+    items: slabs,
+    mode,
+    startIdle() {
+      if (mode === "whisper" || mode === "paused") return;
+      if (idleTl) {
+        idleTl.duration(mode === "idle" ? SLAB_DURATION : DOCK_DURATION);
+        idleTl.play();
+      }
+    },
+    playEnter() {
+      this.startIdle();
+    },
+    playWelcome,
     setMode,
     setProgress,
     setOrbitEntryProgress,
-    freezeOrbit() { frozen = true; stopLoop(); requestRender(); },
-    unfreezeOrbit() { frozen = false; lastTime = performance.now(); kick(); },
-    setPresentationVisible,
-    hideProductsNode() {},
-    showProductsNode() {},
+    freezeOrbit,
+    unfreezeOrbit,
+    hideProductsNode,
+    showProductsNode,
     setCompanionsVisible,
-    getProductsRect() { return null; },
-    getFocus() { return state.focusIndex; },
+    setPresentationVisible(on) {
+      presentationVisible = Boolean(on);
+      layoutDock(state.t, presentationVisible ? 1 : 0, stationPose(m));
+    },
+    getProductsRect,
+    getFocus: () => focusStrength >= 0.9999 ? focusIndex : -1,
     recedeDock,
-    pause() { setMode("paused"); },
-    resumeWhisper() { setMode("whisper"); },
-    layout() { resize(); kick(); },
+    pause() {
+      setMode("paused");
+    },
+    resumeWhisper() {
+      setMode("whisper");
+    },
+    layout(t = state.t) {
+      m = metrics();
+      placeSlabs();
+      if (mode === "whisper") {
+        hideSlabs();
+        layoutDock(t, 1, stationPose(m));
+      } else if (mode === "pass") layoutStation(passP);
+      else layoutSlabsIdle(t);
+    },
     destroy() {
-      destroyed = true;
-      visibility.disconnect();
-      stopLoop();
-      window.cancelAnimationFrame(raf);
-      window.clearTimeout(resizeTimer);
       window.removeEventListener("resize", handleResize);
-      window.removeEventListener("pointermove", onPointerMove);
-      document.documentElement.removeEventListener("pointerleave", onPointerLeave);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      cancelStaticRender();
-      focusTween?.kill();
-      stations.forEach((station) => gsap.killTweensOf(station.root.userData));
-      const geometries = new Set();
-      const sceneMaterials = new Set();
-      scene.traverse((object) => {
-        if (object.geometry) geometries.add(object.geometry);
-        if (Array.isArray(object.material)) object.material.forEach((material) => sceneMaterials.add(material));
-        else if (object.material) sceneMaterials.add(object.material);
+      window.clearTimeout(resizeTimer);
+      if (idleTl) idleTl.kill();
+      if (whisperTl) whisperTl.kill();
+      if (focusSnapTween) focusSnapTween.kill();
+      if (focusExitTween) focusExitTween.kill();
+      if (orbView) orbView.dispose();
+      conversationViews.forEach((view) => view?.dispose());
+      slabs.forEach((it) => {
+        it.el.style.willChange = "auto";
       });
-      geometries.forEach((geometry) => geometry.dispose());
-      sceneMaterials.forEach((material) => material.dispose());
-      environmentTarget.dispose();
-      highlightTexture.dispose();
-      shadowTexture.dispose();
-      pmrem.dispose();
-      renderer.dispose();
-      canvas.remove();
     },
   };
 
