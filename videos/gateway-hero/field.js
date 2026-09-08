@@ -27,6 +27,7 @@ export const FOCUS_START = 0.64;
 export const FOCUS_END = 0.98;
 export const DOCK_READY = 0.58;
 const FOCUS_ZOOM = 1.85;
+const ACTIVE_CATEGORY_ZOOM = 3.75;
 // GSAP's rotation property is in degrees. Every selected station rotates to the
 // left edge of its ring while the enlarged dock remains locked in place.
 const FOCUS_TARGET_ANGLE = 180;
@@ -62,16 +63,16 @@ const SLAB_SLOTS = [
 ];
 
 const BASE_TILT = 0;
-const RING_SPIN = { inner: 1, mid: 0.82, outer: 0.64 };
+const RING_SPIN = { mid: 0.82, outer: 0.64 };
 // Keep the category and model mapping together so the orbit story order and
 // its visual shorthand cannot drift apart.
 const STATION_NODES = [
   { label: "Marketing & Content", model: "marketing", ring: "mid", angle: Math.PI / 2, accent: true },
-  { label: "Prototyping", model: "retroComputer", ring: "inner", angle: 0.52, accent: false },
+  { label: "Prototyping", model: "retroComputer", ring: "outer", angle: -Math.PI * 2 / 3, accent: false },
   { label: "AI Agents", model: "robot", ring: "outer", angle: 0.06, accent: false },
-  { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 2, accent: true },
-  { label: "Document Management", model: "documentManagement", ring: "inner", angle: -2.45, accent: false },
-  { label: "Talent Assessment", model: "talentAssessment", ring: "outer", angle: Math.PI, accent: false },
+  { label: "Customer Engagement", model: "handshake", ring: "mid", angle: -Math.PI / 6, accent: true },
+  { label: "Document Management", model: "documentManagement", ring: "mid", angle: Math.PI * 7 / 6, accent: false },
+  { label: "Talent Assessment", model: "talentAssessment", ring: "outer", angle: Math.PI * 2 / 3, accent: false },
 ];
 
 function mulberry32(seed) {
@@ -123,7 +124,6 @@ function metrics() {
     compact,
     r,
     rMid: r * 0.68,
-    rIn: r * 0.44,
     hub: r * 0.23,
     tilt: BASE_TILT,
   };
@@ -767,21 +767,25 @@ const CATEGORY_MODEL_SOURCES = {
     // front opening remains the visual anchor.
     rotation: [-0.2, 0.58, -0.06],
     activeMaterialColors: {
-      white: 0x90b0a0,
+      white: 0x083b28,
     },
   },
   talentAssessment: {
     type: "gltf",
-    url: new URL("assets/models/kenney-characters/1.glb", import.meta.url).href,
+    url: new URL(
+      "assets/models/talent-assessment/user-3d-icon.glb",
+      import.meta.url,
+    ).href,
     // Add a restrained perspective turn so the card has visible depth while
     // its assessment controls remain easy to read.
-    rotation: [-0.16, -0.5, -0.06],
-    // Focused card treatment: emerald outer panel, pale mint controls, and
-    // a deep forest check/detail layer.
+    // Keep the three figures separated in a readable front three-quarter view.
+    targetSize: 1.4,
+    rotation: [0, 0, 0.025],
+    // Focused user-group treatment: layered deep forest forms with natural
+    // light falloff across the clustered spheres.
     activeMaterialColors: {
-      white: 0xc8d8c8,
-      green: 0x083b28,
-      default: 0x1c855c,
+      none: 0x083b28,
+      default: 0x083b28,
     },
   },
   robot: {
@@ -832,7 +836,7 @@ const CATEGORY_MODEL_SOURCES = {
 const categoryModelPromises = new Map();
 // Keep geometry inside the WebGL frustum. CSS enlarges the complete transparent
 // canvas for the remaining focus scale so wide models do not clip at its edges.
-const CATEGORY_MODEL_FOCUS_SCALE = 1.48;
+const CATEGORY_MODEL_FOCUS_SCALE = 1;
 const CATEGORY_MODEL_RENDER_SIZE = 512;
 const CATEGORY_MODEL_PIXEL_RATIO = 2.5;
 // Orbiting models stay quiet and neutral. Focus introduces the product greens,
@@ -907,7 +911,7 @@ function applyOrbitModelMaterials(
   object.traverse((child) => {
     if (!child.isMesh) return;
     prepareOrbitModelGeometry(child);
-    child.castShadow = false;
+    child.castShadow = true;
     child.receiveShadow = false;
 
     const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
@@ -1035,6 +1039,8 @@ function createCategoryModelView(host, reduce, modelKey) {
   renderer.setClearAlpha(0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CATEGORY_MODEL_PIXEL_RATIO));
   renderer.setSize(CATEGORY_MODEL_RENDER_SIZE, CATEGORY_MODEL_RENDER_SIZE, false);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
@@ -1049,12 +1055,39 @@ function createCategoryModelView(host, reduce, modelKey) {
   camera.position.set(0, 0.08, 6.2);
   camera.lookAt(0, 0, 0);
   scene.add(new THREE.HemisphereLight(0xf7f8f5, 0x002010, 1.55));
-  const keyLight = new THREE.DirectionalLight(0xfffbf3, 2.65);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.65);
   keyLight.position.set(-3.2, 4.6, 5.2);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.camera.near = 0.1;
+  keyLight.shadow.camera.far = 14;
+  keyLight.shadow.camera.left = -4;
+  keyLight.shadow.camera.right = 4;
+  keyLight.shadow.camera.top = 4;
+  keyLight.shadow.camera.bottom = -4;
+  keyLight.shadow.bias = -0.0002;
+  keyLight.shadow.normalBias = 0.025;
+  keyLight.shadow.radius = 4;
   scene.add(keyLight);
+  scene.add(keyLight.target);
   const rimLight = new THREE.DirectionalLight(0x90b0a0, 0.85);
   rimLight.position.set(4, 1.4, 3.2);
   scene.add(rimLight);
+
+  const shadowGeometry = new THREE.PlaneGeometry(7, 7);
+  const shadowMaterial = new THREE.ShadowMaterial({
+    color: 0x262626,
+    opacity: 0.18,
+    transparent: true,
+    depthWrite: false,
+  });
+  const shadowReceiver = new THREE.Mesh(shadowGeometry, shadowMaterial);
+  shadowReceiver.rotation.x = -Math.PI / 2;
+  shadowReceiver.position.y = -0.82;
+  shadowReceiver.receiveShadow = true;
+  shadowReceiver.visible = host.classList.contains("is-focus");
+  shadowReceiver.renderOrder = -1;
+  scene.add(shadowReceiver);
 
   const stage = new THREE.Group();
   scene.add(stage);
@@ -1069,6 +1102,8 @@ function createCategoryModelView(host, reduce, modelKey) {
   let hovered = false;
   let focused = host.classList.contains("is-focus");
   let greenMix = focused ? 1 : 0;
+  let floatMix = focused ? 1 : 0;
+  const floatPhase = [...modelKey].reduce((sum, character) => sum + character.charCodeAt(0), 0) * 0.017;
   let rotation = 0;
   let scale = focused ? CATEGORY_MODEL_FOCUS_SCALE : 1;
   let lift = focused ? 0.1 : 0;
@@ -1083,6 +1118,7 @@ function createCategoryModelView(host, reduce, modelKey) {
       lift = focused ? 0.1 : 0;
       tilt = focused ? -0.025 : 0;
       greenMix = focused ? 1 : 0;
+      floatMix = focused ? 1 : 0;
       transition = null;
       return;
     }
@@ -1122,10 +1158,26 @@ function createCategoryModelView(host, reduce, modelKey) {
       if (progress >= 1) transition = null;
     }
 
+    const floatTarget = focused ? 1 : 0;
+    if (reduce) {
+      floatMix = floatTarget;
+    } else {
+      const floatEase = 1 - Math.exp(-delta * (floatTarget > floatMix ? 4.8 : 7.2));
+      floatMix = THREE.MathUtils.lerp(floatMix, floatTarget, floatEase);
+      if (Math.abs(floatTarget - floatMix) < 0.001) floatMix = floatTarget;
+    }
+
+    // A restrained, phase-shifted float gives the focused model presence
+    // without moving the orbit layout or making the asset feel weightless.
+    const floatTime = now * 1.1 + floatPhase;
+    const floatLift = Math.sin(floatTime) * 0.052 * floatMix;
+    const floatPitch = Math.sin(floatTime * 0.72 + 0.8) * 0.018 * floatMix;
+    const floatRoll = Math.cos(floatTime * 0.9) * 0.012 * floatMix;
+
     stage.rotation.y = rotation;
-    stage.rotation.x = 0;
-    stage.rotation.z = tilt;
-    stage.position.y = lift;
+    stage.rotation.x = floatPitch;
+    stage.rotation.z = tilt + floatRoll;
+    stage.position.y = lift + floatLift;
     stage.scale.setScalar(scale);
 
     const colorTarget = focused ? 1 : 0;
@@ -1179,6 +1231,7 @@ function createCategoryModelView(host, reduce, modelKey) {
     setFocused(next) {
       const wasFocused = focused;
       focused = Boolean(next);
+      shadowReceiver.visible = focused;
       if (model && focused !== wasFocused) startTransition(focused ? "focus" : "exit");
       if (reduce) render();
     },
@@ -1189,6 +1242,8 @@ function createCategoryModelView(host, reduce, modelKey) {
         if (child.isMesh) child.geometry?.dispose();
       });
       materials.forEach((material) => material.dispose());
+      shadowGeometry.dispose();
+      shadowMaterial.dispose();
       environment.dispose();
       pmrem.dispose();
       renderer.dispose();
@@ -1296,9 +1351,8 @@ export function createField({ root, gsap, reduce }) {
     "aria-hidden": "true",
   });
   const ringCore = svgEl("circle", { class: "dock-ring is-core", cx: "0", cy: "0" });
-  const ringInner = svgEl("circle", { class: "dock-ring is-inner", cx: "0", cy: "0" });
-  const ringMid = svgEl("circle", { class: "dock-ring is-mid", cx: "0", cy: "0" });
-  const ringOuter = svgEl("circle", { class: "dock-ring is-outer", cx: "0", cy: "0" });
+const ringMid = svgEl("circle", { class: "dock-ring is-mid", cx: "0", cy: "0" });
+const ringOuter = svgEl("circle", { class: "dock-ring is-outer", cx: "0", cy: "0" });
   const spokeGroup = svgEl("g", { class: "dock-spokes" });
   const spokes = STATION_NODES.map(() =>
     svgEl("line", {
@@ -1317,12 +1371,11 @@ export function createField({ root, gsap, reduce }) {
     x2: "0",
     y2: "0",
   });
-  svg.append(spokeGroup, ringCore, ringInner, ringMid, ringOuter, alignLine);
+svg.append(spokeGroup, ringCore, ringMid, ringOuter, alignLine);
   dock.appendChild(svg);
 
   const ringEls = {
-    inner: ringInner,
-    mid: ringMid,
+  mid: ringMid,
     outer: ringOuter,
     core: ringCore,
   };
@@ -1381,9 +1434,33 @@ export function createField({ root, gsap, reduce }) {
   };
   let focusMotionReady = false;
   let focusSnapTween = null;
-  const focusTargets = Object.fromEntries(Object.keys(focusMotion).map((key) => [key, Number.NaN]));
+const focusTargets = Object.fromEntries(Object.keys(focusMotion).map((key) => [key, Number.NaN]));
+const categoryAssetScales = STATION_NODES.map(() => ({ value: 1 }));
+const categoryAssetScaleTargets = STATION_NODES.map(() => 1);
+const categoryAssetScaleTweens = STATION_NODES.map(() => null);
 
-  function setFocusTargets(values) {
+function setCategoryAssetFocus(nextIndex) {
+  nodes.forEach((node, index) => {
+    const target = index === nextIndex ? ACTIVE_CATEGORY_ZOOM : 1;
+    if (categoryAssetScaleTargets[index] === target) return;
+
+    categoryAssetScaleTargets[index] = target;
+    categoryAssetScaleTweens[index]?.kill();
+    categoryAssetScaleTweens[index] = gsap.to(categoryAssetScales[index], {
+      value: target,
+      duration: target > categoryAssetScales[index].value ? 0.86 : 0.68,
+      ease: target > categoryAssetScales[index].value ? "expo.out" : "power3.inOut",
+      overwrite: true,
+      onUpdate: renderFocusMotion,
+      onComplete: () => {
+        categoryAssetScaleTweens[index] = null;
+        renderFocusMotion();
+      },
+    });
+  });
+}
+
+function setFocusTargets(values) {
     const changed = Object.entries(values).some(([key, value]) => {
       return Math.abs(focusTargets[key] - value) >= 0.001 || !Number.isFinite(focusTargets[key]);
     });
@@ -1433,6 +1510,7 @@ export function createField({ root, gsap, reduce }) {
     focusReturning = true;
     focusStrength = 0;
     focusLocal = 0;
+    setCategoryAssetFocus(-1);
     if (focusSnapTween) focusSnapTween.kill();
     focusSnapTween = null;
     Object.keys(focusTargets).forEach((key) => {
@@ -1521,16 +1599,13 @@ export function createField({ root, gsap, reduce }) {
 
   function sizeRings() {
     ringCore.setAttribute("r", String(m.hub * 1.08));
-    ringInner.setAttribute("r", String(m.rIn));
-    ringMid.setAttribute("r", String(m.rMid));
+  ringMid.setAttribute("r", String(m.rMid));
     ringOuter.setAttribute("r", String(m.r));
   }
 
-  function ringRadius(name) {
-    if (name === "inner") return m.rIn;
-    if (name === "mid") return m.rMid;
-    return m.r;
-  }
+function ringRadius(name) {
+  return name === "mid" ? m.rMid : m.r;
+}
 
   function layoutSpokes() {
     const orbEdge = m.hub * 1.24;
@@ -1680,9 +1755,13 @@ export function createField({ root, gsap, reduce }) {
       // Rotate node positions numerically so the labels never inherit the line spin.
       const x = node.x * cos - node.y * sin;
       const y = node.x * sin + node.y * cos;
+      const baseDockScale = stationPose(m).scale;
+      const categoryScale = (baseDockScale / Math.max(focusMotion.dockScale, 0.001))
+        * categoryAssetScales[nodes.indexOf(node)].value;
       gsap.set(node.el, {
         x,
         y,
+        scale: categoryScale,
         rotation: 0,
         transformOrigin: "50% 50%",
       });
@@ -1720,10 +1799,11 @@ export function createField({ root, gsap, reduce }) {
   function applyFocusVisuals() {
     const focused = focusIndex >= 0 && focusStrength > 0;
     const activeRing = focused ? nodes[focusIndex]?.spec.ring : null;
+    setCategoryAssetFocus(focused ? focusIndex : -1);
 
     if (focused) {
       const pose = stationPose(m);
-      const focusedPose = focusedStationPose(m, focusZoom);
+    const focusedPose = focusedStationPose(m);
       // Focus framing is independent from the active node. This means changing
       // stations can only rotate the orbital geometry; it cannot pan the dock.
       const dockX = focusedPose.x;
@@ -1824,6 +1904,7 @@ export function createField({ root, gsap, reduce }) {
           rotationX: 0,
           rotationY: 0,
           rotationZ: 0,
+          scale: 1,
           autoAlpha: visibleGain,
           force3D: true,
         });
@@ -2168,9 +2249,10 @@ export function createField({ root, gsap, reduce }) {
       window.clearTimeout(resizeTimer);
       if (idleTl) idleTl.kill();
       if (whisperTl) whisperTl.kill();
-      if (focusSnapTween) focusSnapTween.kill();
-      if (focusExitTween) focusExitTween.kill();
-      if (orbView) orbView.dispose();
+    if (focusSnapTween) focusSnapTween.kill();
+    if (focusExitTween) focusExitTween.kill();
+    categoryAssetScaleTweens.forEach((tween) => tween?.kill());
+    if (orbView) orbView.dispose();
       conversationViews.forEach((view) => view?.dispose());
       slabs.forEach((it) => {
         it.el.style.willChange = "auto";

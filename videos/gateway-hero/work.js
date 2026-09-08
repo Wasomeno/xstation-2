@@ -1,5 +1,4 @@
 import { createField, DOCK_READY, FOCUS_END, FOCUS_START } from "./field.js";
-import { createQrSlab } from "./qr-slab.js";
 
 const ORBIT_STORIES = [
   {
@@ -12,7 +11,7 @@ const ORBIT_STORIES = [
   },
   {
     title: "AI Agents",
-    lead: "CRM AI Agent and Codev handle repeatable questions and development tasks, giving teams more time for work that needs people.",
+    lead: "CRM AI Agent and CoDev handle repeatable questions and development tasks, giving teams more time for work that needs people.",
   },
   {
     title: "Customer Engagement",
@@ -732,16 +731,6 @@ if (!isShot) cleanupProjectVideos = bindProjectVideoPlayback();
 window.addEventListener("pagehide", () => cleanupProjectVideos(), { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
-
-const cleanupQrSlab = createQrSlab({
-  root: document.querySelector("[data-qr-slab]"),
-  gsap,
-  ScrollTrigger: isShot ? null : ScrollTrigger,
-  reduce,
-  entryDelay: 0.28,
-});
-
-window.addEventListener("pagehide", cleanupQrSlab, { once: true });
 
 if (gsap && !isShot) {
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });

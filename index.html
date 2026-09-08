@@ -182,9 +182,8 @@
         color: var(--ink);
         background: currentColor;
         box-shadow:
-          0 0 7px color-mix(in srgb, var(--slab-glow) 76%, transparent),
-          0 0 24px color-mix(in srgb, var(--slab-glow) 48%, transparent),
-          0 0 58px color-mix(in srgb, var(--slab-glow) 24%, transparent);
+          0 0 14px color-mix(in srgb, var(--slab-glow) 58%, transparent),
+          0 0 42px color-mix(in srgb, var(--slab-glow) 22%, transparent);
         backface-visibility: hidden;
         transform-origin: 50% 50%;
         will-change: transform, opacity;
@@ -194,9 +193,8 @@
         color: var(--signal);
         --slab-glow: var(--signal);
         box-shadow:
-          0 0 9px color-mix(in srgb, var(--signal) 88%, transparent),
-          0 0 30px color-mix(in srgb, var(--signal) 62%, transparent),
-          0 0 72px color-mix(in srgb, var(--signal) 32%, transparent);
+          0 0 16px color-mix(in srgb, var(--signal) 70%, transparent),
+          0 0 52px color-mix(in srgb, var(--signal) 28%, transparent);
       }
 
       .welcome-slab.is-peri {
@@ -332,16 +330,16 @@
         text-transform: none;
         padding: 0.2em 0.45em;
         margin: 0;
-        background: rgb(255 255 255 / 0.72);
-        box-shadow: 0 0 18px 12px rgb(255 255 255 / 0.56);
+        background: transparent;
+        box-shadow: none;
         border-radius: 2px;
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
       }
 
       @supports not (backdrop-filter: blur(8px)) {
         #brand em {
-          background: rgb(255 255 255 / 0.72);
+          background: transparent;
         }
       }
 
@@ -434,7 +432,7 @@
         stroke-linecap: round;
         stroke-linejoin: round;
         fill: none;
-        opacity: 0;
+        opacity: 0.22;
         transform: translate3d(0, -7px, 0) scale(0.82);
         transform-origin: 50% 0%;
         transition:
@@ -625,13 +623,22 @@
       }
 
       .station-cta.is-primary {
-        background: var(--deep-forest);
+        background: linear-gradient(
+          135deg,
+          var(--deep-forest) 0%,
+          color-mix(in srgb, var(--deep-forest) 78%, var(--signal)) 52%,
+          var(--deep-forest) 100%
+        );
         border-color: var(--deep-forest);
         color: var(--paper);
       }
 
       .station-cta.is-primary::before {
-        background: var(--cta-fill);
+        background: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--deep-forest) 94%, var(--signal)) 0%,
+          var(--cta-fill) 100%
+        );
       }
 
       .station-cta:active {
@@ -660,11 +667,11 @@
           color: var(--paper);
         }
 
-        .station-cta.is-primary:hover {
-          border-color: var(--cta-fill);
-        }
+      .station-cta.is-primary:hover {
+        border-color: var(--cta-fill);
+      }
 
-        .station-cta:hover::before {
+      .station-cta:hover::before {
           transform: scaleX(1);
           transform-origin: left center;
         }
@@ -674,6 +681,7 @@
         .station-cta::before {
           transition-duration: 0.01ms;
         }
+
       }
 
       @media (max-width: 767px) {
@@ -747,7 +755,7 @@
 
       #hero-copy p {
         max-width: 47ch;
-        font-size: clamp(1rem, 1.28vw, 1.25rem);
+        font-size: clamp(1.2rem, 1.55vw, 1.5rem);
         line-height: 1.55;
         color: #5b6865;
       }
@@ -790,7 +798,7 @@
 
         #hero-copy p {
           max-width: 34ch;
-          font-size: 0.9rem;
+          font-size: 1.1rem;
           line-height: 1.45;
         }
 
@@ -837,8 +845,7 @@
 
       :root #field-stage::before {
         background:
-          radial-gradient(ellipse 38% 58% at 72% 50%, color-mix(in srgb, var(--atmosphere) 90%, transparent) 0%, color-mix(in srgb, var(--page) 42%, transparent) 42%, transparent 74%),
-          linear-gradient(90deg, var(--page) 0%, color-mix(in srgb, var(--page) 94%, var(--mist)) 46%, var(--page) 100%);
+          linear-gradient(90deg, var(--page) 0%, var(--page) 46%, var(--page) 100%);
       }
 
       :root .welcome-atmosphere {
@@ -923,7 +930,7 @@
         </div>
         <div class="space-panel js-enter">
           <div class="space-copy">
-            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Digital Marketing</p>
+            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Content Creation</p>
             <h2 id="bikinkonten-title" class="js-enter-child">BikinKonten</h2>
             <p class="product-tagline js-enter-child">From Content Plan to <span>Creative, All in One Place.</span></p>
             <p class="lede js-enter-child">Turn content ideas into branded social media visuals faster. Plan, create, and organize AI-generated images and videos in one workspace, while keeping every brand on point.</p>
@@ -937,7 +944,7 @@
         </div>
         <div class="space-panel js-enter">
           <div class="space-copy">
-            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Digital Marketing</p>
+            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Chatbot Assistant</p>
             <h2 id="lubna-title" class="js-enter-child">Lubna</h2>
             <p class="product-tagline js-enter-child">Your AI Marketing Assistant, <span>From Brief to Publish.</span></p>
             <p class="lede js-enter-child">Share a brief and let Lubna turn it into branded social media content through a simple chat. Plan, create, and publish faster.</p>
@@ -952,7 +959,7 @@
         </div>
         <div class="space-panel js-enter">
           <div class="space-copy">
-            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Customer Chat</p>
+            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Chatbot Assistant</p>
             <h2 id="crm-ai-agent-title" class="js-enter-child">CRM AI Agent</h2>
             <p class="product-tagline js-enter-child">Turn WhatsApp Conversations <span>Into Customer Experiences.</span></p>
             <p class="lede js-enter-child">Every question answered. Every prospect engaged. CRM AI Agent handles product inquiries on WhatsApp with instant, consistent answers, 24/7.</p>
@@ -966,7 +973,7 @@
         </div>
         <div class="space-panel js-enter">
           <div class="space-copy">
-            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Technical Hiring</p>
+            <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Talent Assessment</p>
             <h2 id="hireassess-title" class="js-enter-child">HireAssess</h2>
             <p class="product-tagline js-enter-child">Evaluate Skills <span>Through Real Work.</span></p>
             <p class="lede js-enter-child">Assess technical candidates through real work and practical responses. Get a clearer view of their skills and make technical hiring faster, more consistent, and objective.</p>
@@ -995,7 +1002,7 @@
         <div class="space-panel js-enter">
           <div class="space-copy">
             <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Software Development</p>
-            <h2 id="codev-title" class="js-enter-child">Codev</h2>
+            <h2 id="codev-title" class="js-enter-child">CoDev</h2>
             <p class="product-tagline js-enter-child">Give It a Task. <span>Let It Ship.</span></p>
             <p class="lede js-enter-child">Hand off an issue and let CoDev handle the rest. It writes code, creates merge requests, responds to reviews, and fixes issues until the work is ready to merge.</p>
           </div>
@@ -1024,7 +1031,7 @@
         <div class="space-panel js-enter">
           <div class="space-copy">
             <p class="field-mark js-enter-child"><span aria-hidden="true"></span>Finance</p>
-            <h2 id="cofinance-title" class="js-enter-child">Cofinance</h2>
+            <h2 id="cofinance-title" class="js-enter-child">CoFinance</h2>
             <p class="product-tagline js-enter-child">See the Numbers. <span>Predict the Risks. Act Smarter.</span></p>
             <p class="lede js-enter-child">AI finance agent that connects milestone project, invoice/collection, and cashflow projection data to monitor liquidity, anticipate risks, and drive better financial decisions.</p>
           </div>
@@ -1067,14 +1074,11 @@
           </h2>
           <p class="inquiry-support">Scan the QR code on the side if you want to connect with us.</p>
         </div>
-	        <figure class="inquiry-code">
-	          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
-	            <span class="qr-slab" data-qr-slab>
-	              <canvas class="qr-slab-canvas" aria-hidden="true"></canvas>
-	              <img class="qr-slab-fallback" src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
-	            </span>
-	          </a>
-	        </figure>
+        <figure class="inquiry-code">
+          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
+            <img class="inquiry-qr-image" src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
+          </a>
+        </figure>
       </section>
 
       <footer class="site-footer" aria-label="Site footer">

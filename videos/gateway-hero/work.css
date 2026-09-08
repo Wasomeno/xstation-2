@@ -1091,3 +1091,92 @@ html.lenis body {
 #work-root .space.is-app .space-stage {
   background-color: #ffffff !important;
 }
+/* Requested polish: a restrained green color cycle keeps the primary CTA alive. */
+@keyframes demo-button-green-shift {
+  0%,
+  100% {
+    background-color: var(--deepest);
+  }
+
+  34% {
+    background-color: var(--forest);
+  }
+
+  68% {
+    background-color: var(--dark-surface);
+  }
+}
+
+.station-cta.is-primary {
+  background: var(--button-fill);
+  background-image: none;
+  animation: demo-button-green-shift 8s ease-in-out infinite;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--deep-forest) 12%, transparent);
+}
+
+.station-cta.is-primary::before {
+  background: var(--signal);
+}
+
+.station-cta.is-primary:hover,
+.station-cta.is-primary:focus-visible {
+  animation-play-state: paused;
+  border-color: var(--signal);
+  transition: border-color 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.station-cta.is-primary:hover::before,
+.station-cta.is-primary:focus-visible::before {
+  background: var(--signal);
+  transform: scaleX(1);
+  transform-origin: left center;
+}
+
+/* Keep the project system on-brand: dark forest for hierarchy, signal green for emphasis. */
+#work-root .index-mark,
+#work-root .space-panel h2 {
+  color: var(--deep-forest);
+}
+
+#work-root .product-tagline {
+  color: var(--forest);
+}
+
+#work-root .product-tagline span,
+#work-root .field-mark {
+  color: var(--signal);
+}
+
+#work-root .lede {
+  color: color-mix(in srgb, var(--deep-forest) 68%, var(--slate));
+}
+
+/* A flat QR keeps the contact point crisp and easy to scan. */
+.qr-slab {
+  display: contents;
+}
+
+.qr-slab-canvas {
+  display: none;
+}
+
+.inquiry-qr-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
+}
+
+.inquiry-qr:hover .inquiry-qr-image,
+.inquiry-qr:focus-visible .inquiry-qr-image {
+  transform: translateY(-3px);
+  filter: drop-shadow(0 14px 24px rgb(8 59 40 / 0.14));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .station-cta.is-primary {
+    animation: none;
+  }
+}

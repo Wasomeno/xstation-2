@@ -173,10 +173,10 @@
 }
 
 .dock-node.is-conversation.is-focus {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--signal) 34%, transparent));
+border: 0;
+background: transparent;
+box-shadow: none;
+filter: drop-shadow(0 12px 16px rgb(38 38 38 / 0.16));
 }
 
 .dock-node.is-conversation .dock-node-label {
@@ -205,6 +205,20 @@
 
 .dock-node.is-category-model {
   isolation: isolate;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
+}
+
+.dock-node.is-category-model:hover,
+.dock-node.is-category-model.is-hot,
+.dock-node.is-category-model.is-focus {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  filter: none;
 }
 
 .dock-node.is-category-model::before {
@@ -227,7 +241,20 @@
 }
 
 .dock-node.is-category-model.is-focus .orbit-category-model-canvas {
-  transform: scale(1.385);
+  transform: scale(1);
+}
+
+.dock.is-focus-mode .dock-node:not(.is-focus) {
+  opacity: 0.22;
+  filter: saturate(0.72);
+}
+
+.dock.is-focus-mode .dock-node {
+  transition: opacity 0.58s cubic-bezier(0.16, 1, 0.3, 1), filter 0.58s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dock.is-focus-mode .dock-node.is-focus {
+  z-index: 8;
 }
 
 .dock-node.is-conversation:not(.is-category-model):hover .orbit-conversation-canvas,

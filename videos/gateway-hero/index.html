@@ -107,9 +107,13 @@
         overflow: hidden;
       }
 
-      html.is-welcome #field-stage {
-        background: color-mix(in srgb, var(--deep-forest) 28%, var(--page));
-      }
+html.is-welcome #field-stage {
+background: color-mix(in srgb, var(--deep-forest) 28%, var(--page));
+}
+
+html.is-welcome #field-stage:has(.dock-node.is-focus) {
+background: var(--page);
+}
 
       html.is-welcome #veil,
       html.is-welcome #vignette,
