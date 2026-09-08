@@ -10,7 +10,7 @@ const BASE_ROTATION = {
 };
 const TILT_LIMIT = THREE.MathUtils.degToRad(3.5);
 
-export function createQrSlab({ root, gsap, ScrollTrigger, reduce = false } = {}) {
+export function createQrSlab({ root, gsap, ScrollTrigger, reduce = false, entryDelay = 0 } = {}) {
   if (!root) return () => {};
 
   const canvas = root.querySelector(".qr-slab-canvas");
@@ -132,7 +132,7 @@ export function createQrSlab({ root, gsap, ScrollTrigger, reduce = false } = {})
       ? { scrollTrigger: { trigger: root, start: "top 88%", once: true } }
       : {};
 
-    entryTimeline = gsap.timeline({ ...timelineConfig });
+    entryTimeline = gsap.timeline({ ...timelineConfig, delay: entryDelay });
     entryTimeline
       .fromTo(
         root,

@@ -497,6 +497,46 @@ function bindBrandVisibility() {
   });
 }
 
+function bindInquiryEntry() {
+  const section = document.getElementById("contact");
+  if (!section || !gsap || !ScrollTrigger) return;
+
+  const titleLines = section.querySelectorAll(".inquiry-title-line > span");
+  const support = section.querySelector(".inquiry-support");
+
+  if (reduce) {
+    gsap.set([titleLines, support], { autoAlpha: 1, y: 0, yPercent: 0 });
+    return;
+  }
+
+  const timeline = gsap.timeline({
+    scrollTrigger: {
+      trigger: section,
+      start: "top 78%",
+      once: true,
+    },
+  });
+
+  timeline
+    .fromTo(
+      titleLines,
+      { autoAlpha: 0, yPercent: 108 },
+      {
+        autoAlpha: 1,
+        yPercent: 0,
+        duration: 0.92,
+        ease: "expo.out",
+        stagger: 0.09,
+      }
+    )
+    .fromTo(
+      support,
+      { autoAlpha: 0, y: 16 },
+      { autoAlpha: 1, y: 0, duration: 0.64, ease: "power3.out" },
+      0.34
+    );
+}
+
 function bindEnter() {
   if (!gsap || !ScrollTrigger) return;
   const blurOn = !reduce && !window.matchMedia("(max-width: 767px)").matches;
@@ -533,18 +573,21 @@ function bindParallax() {
   if (reduce || shot || !gsap || !ScrollTrigger) return;
   if (window.matchMedia("(max-width: 767px)").matches) return;
 
-  document.querySelectorAll(".space-stage img.hero, .stage-media img").forEach((img) => {
-    const trigger = img.closest(".space, .stage");
+  document.querySelectorAll(".stage-media img").forEach((media) => {
+    const trigger = media.closest(".space, .stage");
     if (!trigger) return;
     const app = trigger.classList.contains("is-app");
+    const motion = app
+      ? { travel: 3, startScale: 1.02 }
+      : { travel: 4.5, startScale: 1.04 };
     gsap.fromTo(
-      img,
+      media,
       {
-        yPercent: app ? -7 : -14,
-        scale: app ? 1 : 1.08,
+        yPercent: -motion.travel,
+        scale: motion.startScale,
       },
       {
-        yPercent: app ? 7 : 14,
+        yPercent: motion.travel,
         scale: 1,
         ease: "none",
         force3D: true,
@@ -552,13 +595,100 @@ function bindParallax() {
           trigger,
           start: "top bottom",
           end: "bottom top",
-          scrub: 0.55,
+          scrub: 0.8,
           invalidateOnRefresh: true,
         },
       }
     );
   });
 
+}
+
+function bindProjectVideoPlayback() {
+  const videos = [...document.querySelectorAll(".space-stage video.hero")];
+  if (!videos.length) return () => {};
+
+  const sources = new Map(videos.map((video) => [video, video.getAttribute("src")]));
+  const sections = videos.map((video) => ({
+    video,
+    section: video.closest(".space"),
+  }));
+  let activeVideo = null;
+
+  const releaseVideo = (video) => {
+    video.pause();
+    if (video.getAttribute("src")) {
+      video.removeAttribute("src");
+      video.load();
+    }
+  };
+
+  const releaseAll = () => videos.forEach(releaseVideo);
+
+  if (reduce) {
+    releaseAll();
+    return () => {};
+  }
+
+  const playVideo = (video) => {
+    if (!video.getAttribute("src")) {
+      video.setAttribute("src", sources.get(video));
+      video.load();
+    }
+    if (!video.paused) return;
+    video.preload = "auto";
+    const playback = video.play();
+    playback?.catch(() => {});
+  };
+
+  const getVisibleScore = (section) => {
+    if (!section) return -1;
+    const bounds = section.getBoundingClientRect();
+    const visibleHeight = Math.max(0, Math.min(bounds.bottom, window.innerHeight) - Math.max(bounds.top, 0));
+    if (!visibleHeight) return -1;
+    const visibleRatio = visibleHeight / Math.max(bounds.height, 1);
+    const sectionCenter = bounds.top + bounds.height / 2;
+    const viewportCenter = window.innerHeight / 2;
+    return visibleRatio - Math.abs(sectionCenter - viewportCenter) / (window.innerHeight * 1000);
+  };
+
+  const syncActiveVideo = () => {
+    const next = sections
+      .map((entry) => ({ ...entry, score: getVisibleScore(entry.section) }))
+      .filter((entry) => entry.score >= 0)
+      .sort((a, b) => b.score - a.score)[0]?.video;
+
+    if (next === activeVideo) return;
+    activeVideo = next || null;
+    videos.forEach((video) => {
+      if (video === activeVideo) playVideo(video);
+      else releaseVideo(video);
+    });
+  };
+
+  const observer = "IntersectionObserver" in window
+    ? new IntersectionObserver(syncActiveVideo, { threshold: [0, 0.25, 0.5, 0.75, 1] })
+    : null;
+
+  if (observer) sections.forEach(({ section }) => section && observer.observe(section));
+  syncActiveVideo();
+
+  const onVisibilityChange = () => {
+    if (document.hidden) {
+      activeVideo = null;
+      releaseAll();
+    } else {
+      syncActiveVideo();
+    }
+  };
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+
+  return () => {
+    observer?.disconnect();
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    releaseAll();
+  };
 }
 
 function applyShot() {
@@ -578,6 +708,9 @@ function applyShot() {
 }
 
 const isShot = applyShot();
+let cleanupProjectVideos = () => {};
+if (!isShot) cleanupProjectVideos = bindProjectVideoPlayback();
+window.addEventListener("pagehide", () => cleanupProjectVideos(), { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
 
@@ -586,6 +719,7 @@ const cleanupQrSlab = createQrSlab({
   gsap,
   ScrollTrigger: isShot ? null : ScrollTrigger,
   reduce,
+  entryDelay: 0.28,
 });
 
 window.addEventListener("pagehide", cleanupQrSlab, { once: true });
@@ -599,6 +733,7 @@ if (gsap && !isShot) {
     const orbitTl = startOrbitAutoplay();
     bindSpatialFold(orbitTl);
     bindBrandVisibility();
+    bindInquiryEntry();
     bindEnter();
     bindParallax();
   }, document.body);
