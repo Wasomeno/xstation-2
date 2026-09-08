@@ -1,4 +1,5 @@
 import { createField, DOCK_READY, FOCUS_END, FOCUS_START } from "./field.js";
+import { createQrSlab } from "./qr-slab.js";
 
 const ORBIT_STORIES = [
   {
@@ -202,16 +203,31 @@ function setOrbitCopy(index, immediate = false) {
   const story = index === -1 ? DEFAULT_ORBIT_STORY : ORBIT_STORIES[index];
   const title = document.getElementById("doctrine-title");
   const lead = document.getElementById("doctrine-lead");
+  const stage = document.querySelector("#hero-copy .doctrine-copy-stage");
 
-  if (!title || !lead) return;
+  if (!title || !lead || !stage) return;
+
+  if (orbitCopyTl) {
+    orbitCopyTl.kill();
+    gsap?.set(stage, { clearProps: "height,overflow,willChange" });
+    gsap?.set([title, lead], { clearProps: "transform,opacity,visibility" });
+  }
 
   if (immediate || !gsap) {
     applyOrbitCopy(story, title, lead);
     return;
   }
 
-  if (orbitCopyTl) orbitCopyTl.kill();
-  orbitCopyTl = gsap.timeline({ defaults: { overwrite: "auto" } })
+  const startHeight = stage.getBoundingClientRect().height;
+  let targetHeight = startHeight;
+
+  orbitCopyTl = gsap.timeline({
+    defaults: { overwrite: "auto" },
+    onComplete: () => {
+      gsap.set(stage, { clearProps: "height,overflow,willChange" });
+      orbitCopyTl = null;
+    },
+  })
     .to([title, lead], {
       autoAlpha: 0,
       y: 14,
@@ -220,18 +236,27 @@ function setOrbitCopy(index, immediate = false) {
     })
     .call(() => {
       applyOrbitCopy(story, title, lead);
+      gsap.set(stage, { height: "auto" });
+      targetHeight = stage.getBoundingClientRect().height;
+      gsap.set(stage, {
+        height: startHeight,
+        overflow: "clip",
+        willChange: "height",
+      });
+      gsap.set([title, lead], { autoAlpha: 0, y: 18 });
     })
-    .fromTo(
-      [title, lead],
-      { autoAlpha: 0, y: 18 },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.72,
-        ease: "power3.out",
-        stagger: 0.06,
-      },
-    );
+    .to(stage, {
+      height: () => targetHeight,
+      duration: 0.78,
+      ease: "power3.inOut",
+    })
+    .to([title, lead], {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.72,
+      ease: "power3.out",
+      stagger: 0.06,
+    }, "<+=0.06");
 }
 
 function startOrbitAutoplay() {
@@ -421,6 +446,57 @@ function bindSpatialFold(orbitTl) {
   });
 }
 
+function bindBrandVisibility() {
+  if (shot || !gsap || !ScrollTrigger) return;
+
+  const brand = document.getElementById("brand");
+  const brandLabel = brand?.querySelector("em");
+  const products = document.getElementById("work");
+  if (!brand || !brandLabel || !products) return;
+
+  let visible = true;
+
+  function setVisible(nextVisible) {
+    if (nextVisible === visible) return;
+    visible = nextVisible;
+    brand.style.pointerEvents = nextVisible ? "auto" : "none";
+
+    if (reduce) {
+      gsap.set(brandLabel, {
+        autoAlpha: nextVisible ? 1 : 0,
+        yPercent: 0,
+      });
+      return;
+    }
+
+    gsap.to(brandLabel, {
+      autoAlpha: nextVisible ? 1 : 0,
+      yPercent: nextVisible ? 0 : -115,
+      duration: nextVisible ? 0.46 : 0.34,
+      ease: nextVisible ? "power3.out" : "power2.in",
+      overwrite: true,
+    });
+  }
+
+  ScrollTrigger.create({
+    id: "brand-directional-visibility",
+    trigger: products,
+    start: "top bottom",
+    end: "max",
+    onEnter: (self) => {
+      if (self.direction > 0) setVisible(false);
+    },
+    onUpdate: (self) => {
+      if (self.direction < 0) {
+        setVisible(true);
+      } else if (self.isActive) {
+        setVisible(false);
+      }
+    },
+    onLeaveBack: () => setVisible(true),
+  });
+}
+
 function bindEnter() {
   if (!gsap || !ScrollTrigger) return;
   const blurOn = !reduce && !window.matchMedia("(max-width: 767px)").matches;
@@ -503,8 +579,18 @@ function applyShot() {
 
 const isShot = applyShot();
 
+if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
+
+const cleanupQrSlab = createQrSlab({
+  root: document.querySelector("[data-qr-slab]"),
+  gsap,
+  ScrollTrigger: isShot ? null : ScrollTrigger,
+  reduce,
+});
+
+window.addEventListener("pagehide", cleanupQrSlab, { once: true });
+
 if (gsap && !isShot) {
-  if (ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
   let cleanupHeroEntry = () => {};
   const ctx = gsap.context(() => {
@@ -512,6 +598,7 @@ if (gsap && !isShot) {
     cleanupHeroEntry = bindHeroEntry();
     const orbitTl = startOrbitAutoplay();
     bindSpatialFold(orbitTl);
+    bindBrandVisibility();
     bindEnter();
     bindParallax();
   }, document.body);

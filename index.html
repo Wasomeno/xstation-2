@@ -232,16 +232,28 @@
         margin: 0;
         text-align: center;
         font-family: var(--sans);
-        font-size: clamp(2.25rem, 3.8vw, 3.5rem);
+        font-size: clamp(3.375rem, 5.7vw, 5.25rem);
         font-weight: 400;
         line-height: 1.12;
         letter-spacing: -0.03em;
         color: var(--ink);
       }
 
-      .welcome-title span {
+      .welcome-title-line {
+        display: flex;
+        justify-content: center;
+        gap: 0.22em;
+      }
+
+      .welcome-word-mask {
+        display: inline-block;
+        overflow: hidden;
+        padding-block: 0.08em;
+        margin-block: -0.08em;
+      }
+
+      .welcome-word {
         display: block;
-        opacity: 0;
         will-change: transform, opacity;
       }
 
@@ -304,7 +316,15 @@
         color: inherit;
       }
 
+      #brand .brand-mask {
+        display: block;
+        overflow: hidden;
+        margin: -0.2em -0.45em;
+        border-radius: 2px;
+      }
+
       #brand em {
+        display: block;
         font-family: var(--sans);
         font-style: normal;
         font-weight: 400;
@@ -312,7 +332,7 @@
         letter-spacing: 0.04em;
         text-transform: none;
         padding: 0.2em 0.45em;
-        margin: -0.2em -0.45em;
+        margin: 0;
         background: rgb(255 255 255 / 0.72);
         box-shadow: 0 0 18px 12px rgb(255 255 255 / 0.56);
         border-radius: 2px;
@@ -511,6 +531,12 @@
         max-width: 36rem;
       }
 
+      #hero-copy .doctrine-copy-stage {
+        display: grid;
+        gap: inherit;
+        min-width: 0;
+      }
+
       #hero-copy h2 {
         margin: 0;
         font-family: var(--sans);
@@ -654,7 +680,7 @@
 
         .welcome-title {
           max-width: min(18ch, 92vw);
-          font-size: clamp(1.7rem, 7.4vw, 2.15rem);
+          font-size: clamp(2.55rem, 11.1vw, 3.225rem);
         }
 
         #hero-copy {
@@ -785,7 +811,17 @@
       <div class="welcome-atmosphere"></div>
       <div class="welcome-field"></div>
       <div class="welcome-title-layer">
-        <h1 class="welcome-title"><span>Your Gateway To</span><span>Intelligent Products</span></h1>
+        <h1 class="welcome-title" aria-label="Your Gateway To Intelligent Products">
+          <span class="welcome-title-line" aria-hidden="true">
+            <span class="welcome-word-mask"><span class="welcome-word">Your</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">Gateway</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">To</span></span>
+          </span>
+          <span class="welcome-title-line" aria-hidden="true">
+            <span class="welcome-word-mask"><span class="welcome-word">Intelligent</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">Products</span></span>
+          </span>
+        </h1>
       </div>
     </div>
     <div id="field-stage">
@@ -793,7 +829,7 @@
     </div>
     <header id="site-nav">
       <a id="brand" href="#root">
-        <em>XTATION</em>
+        <span class="brand-mask"><em>XTATION</em></span>
       </a>
     </header>
     <div id="pin-slot">
@@ -801,13 +837,15 @@
         <section id="hero">
           <div id="hero-copy">
             <div class="doctrine-block">
-              <h2 id="doctrine-title">
-                <span class="hero-title-line"><span>Your Gateway to</span></span>
-                <span class="hero-title-line"><span>Intelligent Products</span></span>
-              </h2>
-              <p id="doctrine-lead">
-                Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
-              </p>
+              <div class="doctrine-copy-stage">
+                <h2 id="doctrine-title">
+                  <span class="hero-title-line"><span>Your Gateway to</span></span>
+                  <span class="hero-title-line"><span>Intelligent Products</span></span>
+                </h2>
+                <p id="doctrine-lead">
+                  Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
+                </p>
+              </div>
               <div class="station-actions">
                 <a class="station-cta" href="#work"><span>See Products</span></a>
                 <a class="station-cta is-primary" href="#contact"><span>Book a Demo</span></a>
@@ -820,7 +858,7 @@
 
     <div id="work-root" class="work-pad">
       <section class="chapter" id="work" aria-labelledby="index-title">
-        <h2 class="index-mark" id="index-title"><span class="index-line"><span>Explore What AI Can Do</span></span><span class="index-line"><span>for Your Business</span></span></h2>
+        <h2 class="index-mark" id="index-title"><span class="index-line"><span>Explore What AI Can Do</span></span><span class="index-line"><span>for <strong class="index-emphasis">Your Business</strong></span></span></h2>
       </section>
 
       <section class="space is-app" id="bikinkonten" aria-labelledby="bikinkonten-title">
@@ -947,27 +985,29 @@
       </section>
 
       <section class="clients" id="clients" aria-labelledby="clients-title">
-        <h2 id="clients-title" class="clients-title js-enter">Trusted by</h2>
-        <ul class="client-list js-enter">
-          <li class="js-enter-child" data-client="pama">
-            <img src="videos/gateway-hero/media/clients/pama.png" alt="PAMA" width="201" height="224" loading="lazy" decoding="async" />
-          </li>
-          <li class="js-enter-child" data-client="pertamina">
-            <img src="videos/gateway-hero/media/clients/pertamina-patra-niaga.png" alt="Pertamina Patra Niaga" width="585" height="193" loading="lazy" decoding="async" />
-          </li>
-          <li class="js-enter-child" data-client="pupuk">
-            <img src="videos/gateway-hero/media/clients/pupuk-indonesia.png" alt="Pupuk Indonesia" width="2024" height="906" loading="lazy" decoding="async" />
-          </li>
-          <li class="js-enter-child" data-client="resona">
-            <img src="videos/gateway-hero/media/clients/bank-resona-perdania.png" alt="Bank Resona Perdania" width="1306" height="1036" loading="lazy" decoding="async" />
-          </li>
-          <li class="js-enter-child" data-client="kpp">
-            <img src="videos/gateway-hero/media/clients/kpp-mining.png" alt="KPP Mining" width="1552" height="686" loading="lazy" decoding="async" />
-          </li>
-          <li class="js-enter-child" data-client="kalla">
-            <img src="videos/gateway-hero/media/clients/kalla.png" alt="Kalla" width="387" height="104" loading="lazy" decoding="async" />
-          </li>
-        </ul>
+        <div class="clients-inner">
+          <h2 id="clients-title" class="clients-title js-enter">Trusted by</h2>
+          <ul class="client-list js-enter">
+            <li class="js-enter-child" data-client="pama">
+              <img src="videos/gateway-hero/media/clients/pama.png" alt="PAMA" width="201" height="224" loading="lazy" decoding="async" />
+            </li>
+            <li class="js-enter-child" data-client="pertamina">
+              <img src="videos/gateway-hero/media/clients/pertamina-patra-niaga.png" alt="Pertamina Patra Niaga" width="585" height="193" loading="lazy" decoding="async" />
+            </li>
+            <li class="js-enter-child" data-client="pupuk">
+              <img src="videos/gateway-hero/media/clients/pupuk-indonesia.png" alt="Pupuk Indonesia" width="2024" height="906" loading="lazy" decoding="async" />
+            </li>
+            <li class="js-enter-child" data-client="resona">
+              <img src="videos/gateway-hero/media/clients/bank-resona-perdania.png" alt="Bank Resona Perdania" width="1306" height="1036" loading="lazy" decoding="async" />
+            </li>
+            <li class="js-enter-child" data-client="kpp">
+              <img src="videos/gateway-hero/media/clients/kpp-mining.png" alt="KPP Mining" width="1552" height="686" loading="lazy" decoding="async" />
+            </li>
+            <li class="js-enter-child" data-client="kalla">
+              <img src="videos/gateway-hero/media/clients/kalla.png" alt="Kalla" width="387" height="104" loading="lazy" decoding="async" />
+            </li>
+          </ul>
+        </div>
       </section>
 
       <section class="inquiry" id="contact" aria-labelledby="inquiry-title">
@@ -975,12 +1015,20 @@
           <h2 id="inquiry-title">Let's Build<br />Intelligent Solution<br />for Your Business</h2>
           <p>Scan the QR code on the side if you want to connect with us.</p>
         </div>
-        <figure class="inquiry-code">
-          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
-            <img src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
-          </a>
-        </figure>
+	        <figure class="inquiry-code">
+	          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
+	            <span class="qr-slab" data-qr-slab>
+	              <canvas class="qr-slab-canvas" aria-hidden="true"></canvas>
+	              <img class="qr-slab-fallback" src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
+	            </span>
+	          </a>
+	        </figure>
       </section>
+
+      <footer class="site-footer" aria-label="Site footer">
+        <a class="site-footer-brand" href="#root">XTATION</a>
+        <p class="site-footer-meta">&copy; 2026 XTATION</p>
+      </footer>
 
     </div>
 
