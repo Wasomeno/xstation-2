@@ -196,6 +196,24 @@ function applyOrbitCopy(story, title, lead) {
   lead.textContent = story.lead;
 }
 
+function measureOrbitCopyHeight(stage, story) {
+  const measurement = stage.cloneNode(true);
+  const title = measurement.querySelector("#doctrine-title");
+  const lead = measurement.querySelector("#doctrine-lead");
+  if (!title || !lead || !stage.parentElement) return stage.getBoundingClientRect().height;
+
+  measurement.style.position = "absolute";
+  measurement.style.visibility = "hidden";
+  measurement.style.pointerEvents = "none";
+  measurement.style.height = "auto";
+  measurement.style.width = `${stage.getBoundingClientRect().width}px`;
+  stage.parentElement.appendChild(measurement);
+  applyOrbitCopy(story, title, lead);
+  const height = measurement.getBoundingClientRect().height;
+  measurement.remove();
+  return height;
+}
+
 function setOrbitCopy(index, immediate = false) {
   if (index < -1 || index >= ORBIT_STORIES.length || index === activeOrbit) return;
 
@@ -207,19 +225,22 @@ function setOrbitCopy(index, immediate = false) {
 
   if (!title || !lead || !stage) return;
 
+  const startHeight = stage.getBoundingClientRect().height;
+
   if (orbitCopyTl) {
     orbitCopyTl.kill();
-    gsap?.set(stage, { clearProps: "height,overflow,willChange" });
-    gsap?.set([title, lead], { clearProps: "transform,opacity,visibility" });
+    orbitCopyTl = null;
   }
 
   if (immediate || !gsap) {
     applyOrbitCopy(story, title, lead);
+    gsap?.set(stage, { clearProps: "height,overflow,willChange" });
     return;
   }
 
-  const startHeight = stage.getBoundingClientRect().height;
-  let targetHeight = startHeight;
+  gsap.set(stage, { height: startHeight, overflow: "clip", willChange: "height" });
+  gsap.set([title, lead], { clearProps: "transform,opacity,visibility" });
+  const targetHeight = measureOrbitCopyHeight(stage, story);
 
   orbitCopyTl = gsap.timeline({
     defaults: { overwrite: "auto" },
@@ -236,20 +257,18 @@ function setOrbitCopy(index, immediate = false) {
     })
     .call(() => {
       applyOrbitCopy(story, title, lead);
-      gsap.set(stage, { height: "auto" });
-      targetHeight = stage.getBoundingClientRect().height;
-      gsap.set(stage, {
-        height: startHeight,
-        overflow: "clip",
-        willChange: "height",
-      });
       gsap.set([title, lead], { autoAlpha: 0, y: 18 });
     })
-    .to(stage, {
-      height: () => targetHeight,
-      duration: 0.46,
-      ease: "power3.inOut",
-    })
+    .fromTo(
+      stage,
+      { height: startHeight },
+      {
+        height: targetHeight,
+        duration: 0.46,
+        ease: "power3.inOut",
+        immediateRender: false,
+      },
+    )
     .to([title, lead], {
       autoAlpha: 1,
       y: 0,

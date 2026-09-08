@@ -784,6 +784,8 @@ const categoryModelPromises = new Map();
 // Keep geometry inside the WebGL frustum. CSS enlarges the complete transparent
 // canvas for the remaining focus scale so wide models do not clip at its edges.
 const CATEGORY_MODEL_FOCUS_SCALE = 1.48;
+const CATEGORY_MODEL_RENDER_SIZE = 512;
+const CATEGORY_MODEL_PIXEL_RATIO = 2.5;
 // Orbiting models stay quiet and neutral. Focus introduces the product greens,
 // ordered from broad surfaces to smaller trim so the active asset stays light.
 const MODEL_IDLE_SWATCHES = [0xd7dcda, 0xc7cecb, 0xb7bfbc, 0xa5aeaa];
@@ -831,12 +833,25 @@ function fitModel(object, targetSize = 1.75) {
   object.updateMatrixWorld(true);
 }
 
+function prepareOrbitModelGeometry(mesh) {
+  const geometry = mesh.geometry;
+  if (!geometry?.attributes?.position) return;
+
+  // Imported assets often keep duplicated vertices across otherwise smooth
+  // faces. Weld those copies before rebuilding normals for continuous shading.
+  const smoothedGeometry = mergeVertices(geometry.clone(), 1e-4);
+  smoothedGeometry.computeVertexNormals();
+  smoothedGeometry.attributes.normal.needsUpdate = true;
+  mesh.geometry = smoothedGeometry;
+}
+
 function applyOrbitModelMaterials(object, offset = 0) {
   const materialMap = new Map();
   const materials = [];
 
   object.traverse((child) => {
     if (!child.isMesh) return;
+    prepareOrbitModelGeometry(child);
     child.castShadow = false;
     child.receiveShadow = false;
 
@@ -848,10 +863,15 @@ function applyOrbitModelMaterials(object, offset = 0) {
       const paletteIndex = (materials.length + offset) % MODEL_IDLE_SWATCHES.length;
       const materialName = sourceMaterial?.name || "";
       const hasGlow = /screen|display|emiss|part2|eye/i.test(materialName);
-      const material = new THREE.MeshStandardMaterial({
+      const material = new THREE.MeshPhysicalMaterial({
         color: MODEL_IDLE_SWATCHES[paletteIndex],
-        roughness: hasGlow ? 0.28 : THREE.MathUtils.clamp(sourceMaterial?.roughness ?? 0.52, 0.32, 0.76),
-        metalness: hasGlow ? 0.08 : THREE.MathUtils.clamp(sourceMaterial?.metalness ?? 0.04, 0, 0.24),
+        roughness: hasGlow ? 0.4 : 0.82,
+        metalness: 0,
+        clearcoat: hasGlow ? 0.08 : 0.04,
+        clearcoatRoughness: 0.42,
+        specularIntensity: hasGlow ? 0.46 : 0.2,
+        envMapIntensity: hasGlow ? 0.52 : 0.36,
+        flatShading: false,
         transparent: false,
         opacity: 1,
         side: sourceMaterial?.side ?? THREE.FrontSide,
@@ -929,21 +949,26 @@ function createCategoryModelView(host, reduce, modelKey) {
 
   renderer.setClearColor(0x000000, 0);
   renderer.setClearAlpha(0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(240, 240, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CATEGORY_MODEL_PIXEL_RATIO));
+  renderer.setSize(CATEGORY_MODEL_RENDER_SIZE, CATEGORY_MODEL_RENDER_SIZE, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
 
   const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environmentScene = new RoomEnvironment();
+  const environment = pmrem.fromScene(environmentScene, 0.04).texture;
+  scene.environment = environment;
+  environmentScene.dispose();
   const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 30);
   camera.position.set(0, 0.08, 6.2);
   camera.lookAt(0, 0, 0);
-  scene.add(new THREE.HemisphereLight(0xf3f8f4, 0x092328, 2.35));
-  const keyLight = new THREE.DirectionalLight(0xf0f7f1, 3.1);
+  scene.add(new THREE.HemisphereLight(0xf3f8f4, 0x092328, 1.55));
+  const keyLight = new THREE.DirectionalLight(0xfffbf3, 2.65);
   keyLight.position.set(-3.2, 4.6, 5.2);
   scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x67b982, 2.15);
+  const rimLight = new THREE.DirectionalLight(0x9bd8ab, 0.85);
   rimLight.position.set(4, 1.4, 3.2);
   scene.add(rimLight);
 
@@ -1076,7 +1101,12 @@ function createCategoryModelView(host, reduce, modelKey) {
     dispose() {
       disposed = true;
       if (frame) window.cancelAnimationFrame(frame);
+      model?.traverse((child) => {
+        if (child.isMesh) child.geometry?.dispose();
+      });
       materials.forEach((material) => material.dispose());
+      environment.dispose();
+      pmrem.dispose();
       renderer.dispose();
       canvas.remove();
     },
