@@ -9,6 +9,7 @@ const smoothScrollMedia = window.matchMedia("(min-width: 64rem)");
 
 const cluster = createCluster({
   canvas: document.getElementById("nadi-cluster"),
+  active: !document.getElementById("welcome-bumper"),
 });
 
 function bindHeroEntry() {
@@ -33,33 +34,45 @@ function bindHeroEntry() {
     gsap.set(actions, { autoAlpha: 0, y: 16, scale: 0.97 });
   }
 
-  gsap.set("#site-nav, #hero-copy", { autoAlpha: 1, y: 0 });
+  function reveal() {
+    gsap.set("#site-nav, #hero-copy", { autoAlpha: 1, y: 0 });
 
-  if (reduce) {
-    gsap.set(animatedElements, { autoAlpha: 1, clearProps: "transform" });
-    return () => {};
+    if (reduce) {
+      gsap.set(animatedElements, { autoAlpha: 1, clearProps: "transform" });
+      return;
+    }
+
+    timeline = gsap.timeline({ defaults: { ease: "power3.out" } })
+      .to(brand, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.08)
+      .to(titleLines, {
+        autoAlpha: 1,
+        yPercent: 0,
+        rotate: 0,
+        duration: 0.9,
+        stagger: 0.09,
+        ease: "expo.out",
+      }, 0.18)
+      .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.42)
+      .to(actions, {
+        autoAlpha: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.62,
+        stagger: 0.07,
+      }, 0.56);
   }
 
-  timeline = gsap.timeline({ defaults: { ease: "power3.out" } })
-    .to(brand, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.08)
-    .to(titleLines, {
-      autoAlpha: 1,
-      yPercent: 0,
-      rotate: 0,
-      duration: 0.9,
-      stagger: 0.09,
-      ease: "expo.out",
-    }, 0.18)
-    .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.42)
-    .to(actions, {
-      autoAlpha: 1,
-      y: 0,
-      scale: 1,
-      duration: 0.62,
-      stagger: 0.07,
-    }, 0.56);
+  const welcome = document.getElementById("welcome-bumper");
+  if (welcome) {
+    window.addEventListener("xstation:welcome-finished", reveal, { once: true });
+  } else {
+    reveal();
+  }
 
-  return () => timeline?.kill();
+  return () => {
+    window.removeEventListener("xstation:welcome-finished", reveal);
+    timeline?.kill();
+  };
 }
 
 function smooth() {
@@ -139,22 +152,31 @@ function stopSmooth() {
 
 function bindSmoothStart() {
   if (reduce || shot || typeof window.Lenis !== "function") return () => {};
+  let welcomeFinished = !document.getElementById("welcome-bumper");
 
   const sync = () => {
+    if (!welcomeFinished) return;
     if (smoothScrollMedia.matches) startSmooth();
     else stopSmooth();
   };
 
-  sync();
+  const onFinished = () => {
+    welcomeFinished = true;
+    sync();
+  };
+
+  if (welcomeFinished) {
+    sync();
+  } else {
+    window.addEventListener("xstation:welcome-finished", onFinished, { once: true });
+  }
+
   smoothScrollMedia.addEventListener("change", sync);
   return () => {
+    window.removeEventListener("xstation:welcome-finished", onFinished);
     smoothScrollMedia.removeEventListener("change", sync);
     stopSmooth();
   };
-}
-
-function clamp01(v) {
-  return Math.min(1, Math.max(0, v));
 }
 
 function bindHeroScroll() {
@@ -162,68 +184,8 @@ function bindHeroScroll() {
 
   const heroCopy = document.getElementById("hero-copy");
   const chapters = [...document.querySelectorAll(".chapter-panel")];
-  if (!heroCopy || !chapters.length) return;
-
-  gsap.set(chapters, { autoAlpha: 0, y: 28 });
-
-  const state = {
-    rest: 1,
-    alphas: chapters.map(() => 0),
-  };
-
-  function applyCopy(progress) {
-    const rest = clamp01(1 - progress / 0.12);
-    if (Math.abs(rest - state.rest) > 0.001) {
-      state.rest = rest;
-      gsap.set(heroCopy, {
-        autoAlpha: rest,
-        y: (1 - rest) * -36,
-      });
-    }
-
-    const chapterT = clamp01((progress - 0.1) / 0.9);
-    chapters.forEach((panel, i) => {
-      const start = i / chapters.length;
-      const end = (i + 1) / chapters.length;
-      const center = (start + end) / 2;
-      let alpha = 0;
-      if (progress >= 0.1) {
-        if (reduce) {
-          alpha = i === Math.min(chapters.length - 1, Math.floor(chapterT * 0.999 * chapters.length)) ? 1 : 0;
-        } else if (chapterT <= start) {
-          alpha = 0;
-        } else if (chapterT >= end) {
-          alpha = chapterT < end + 0.08 ? clamp01(1 - (chapterT - end) / 0.08) : 0;
-        } else {
-          const enter = start + 0.08;
-          alpha = chapterT < enter ? clamp01((chapterT - start) / 0.08) : 1;
-        }
-      }
-      if (Math.abs(alpha - state.alphas[i]) < 0.002) return;
-      state.alphas[i] = alpha;
-      gsap.set(panel, {
-        autoAlpha: alpha,
-        y: (1 - alpha) * (chapterT >= center ? -24 : 24),
-      });
-    });
-  }
-
-  ScrollTrigger.create({
-    id: "nadi-hero",
-    trigger: "#pin-slot",
-    start: "top top",
-    end: () => `+=${Math.round(window.innerHeight * 5)}`,
-    pin: true,
-    pinSpacing: true,
-    anticipatePin: 1,
-    scrub: 0.65,
-    invalidateOnRefresh: true,
-    onUpdate: (self) => {
-      applyCopy(self.progress);
-    },
-  });
-
-  applyCopy(0);
+  if (heroCopy) gsap.set(heroCopy, { autoAlpha: 1, y: 0 });
+  if (chapters.length) gsap.set(chapters, { autoAlpha: 0, y: 0 });
 
   ScrollTrigger.create({
     id: "nadi-cluster-cover",
@@ -620,5 +582,21 @@ if (gsap && !isShot) {
   window.addEventListener("pagehide", () => {
     cleanupSmoothStart();
     cluster.dispose();
+  }, { once: true });
+}
+
+if (!isShot && document.getElementById("welcome-bumper")) {
+  const dispatchReady = () => {
+    window.dispatchEvent(new CustomEvent("xstation:orbit-ready"));
+  };
+  if (cluster.ready && typeof cluster.ready.then === "function") {
+    cluster.ready.then(dispatchReady, dispatchReady);
+  } else {
+    dispatchReady();
+  }
+  window.addEventListener("xstation:welcome-exit-start", () => {
+    cluster.resize();
+    cluster.setActive(true);
+    ScrollTrigger?.refresh();
   }, { once: true });
 }

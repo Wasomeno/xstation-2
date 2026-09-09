@@ -1,4 +1,4 @@
-export function createCluster({ canvas } = {}) {
+export function createCluster({ canvas, active: startActive = true } = {}) {
   const host = canvas || document.getElementById("nadi-cluster");
   if (!host) {
     return {
@@ -45,10 +45,10 @@ export function createCluster({ canvas } = {}) {
   const NAMES = [
     "Marketing & Content",
     "Customer Engagement",
-    "Operations",
-    "Finance",
-    "Legal",
-    "HR & Hiring",
+    "Document Management",
+    "Talent Assessment",
+    "Prototyping",
+    "AI Agents",
   ];
   const stage = host.parentElement || host;
   const labels = NAMES.map((n, i) => {
@@ -399,7 +399,7 @@ export function createCluster({ canvas } = {}) {
   let lastNow = 0;
   let pauseShift = 0;
   let pausedAt = 0;
-  let active = true;
+  let active = startActive;
   let disposed = false;
   let raf = 0;
   const observer = new ResizeObserver(() => {

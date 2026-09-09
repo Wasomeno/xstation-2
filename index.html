@@ -114,11 +114,133 @@
         transform: translateY(0);
       }
 
+      #welcome-bumper {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        overflow: hidden;
+        background: #ffffff;
+        cursor: default;
+        isolation: isolate;
+        touch-action: none;
+      }
+
+      .welcome-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: #ffffff;
+      }
+
+      .welcome-atmosphere {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 50% 48%, rgb(255 255 255 / 0.86) 0%, rgb(255 255 255 / 0.2) 19%, transparent 43%),
+          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, rgb(255 255 255 / 0.64) 100%),
+          linear-gradient(to bottom, rgb(255 255 255 / 0.9) 0%, transparent 20%, transparent 64%, #ffffff 100%);
+      }
+
+      .welcome-field {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        perspective: 1100px;
+        perspective-origin: 50% 48%;
+        transform-style: preserve-3d;
+        pointer-events: none;
+      }
+
+      .welcome-slab {
+        --slab-glow: var(--signal);
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--slab-w);
+        height: var(--slab-h);
+        margin: 0;
+        color: var(--ink);
+        background: currentColor;
+        box-shadow:
+          0 0 14px color-mix(in srgb, var(--slab-glow) 58%, transparent),
+          0 0 42px color-mix(in srgb, var(--slab-glow) 22%, transparent);
+        backface-visibility: hidden;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+
+      .welcome-slab.is-gold {
+        color: var(--signal);
+        --slab-glow: var(--signal);
+        box-shadow:
+          0 0 16px color-mix(in srgb, var(--signal) 70%, transparent),
+          0 0 52px color-mix(in srgb, var(--signal) 28%, transparent);
+      }
+
+      .welcome-slab.is-peri {
+        color: var(--sage);
+        --slab-glow: var(--sage);
+      }
+
+      .welcome-slab.is-steel {
+        color: var(--deep-forest);
+        --slab-glow: var(--mist);
+      }
+
+      .welcome-slab.is-dim {
+        color: color-mix(in srgb, var(--deep-forest) 58%, var(--sage));
+        --slab-glow: color-mix(in srgb, var(--signal) 70%, var(--sage));
+      }
+
+      .welcome-title-layer {
+        position: absolute;
+        inset: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18svh 6vw 16svh;
+        pointer-events: none;
+      }
+
+      .welcome-title {
+        width: 100%;
+        max-width: min(22ch, 92vw);
+        margin: 0;
+        text-align: center;
+        font-family: var(--sans);
+        font-size: clamp(3.375rem, 5.7vw, 5.25rem);
+        font-weight: 400;
+        line-height: 1.12;
+        letter-spacing: -0.03em;
+        color: var(--ink);
+      }
+
+      .welcome-title-line {
+        display: flex;
+        justify-content: center;
+        gap: 0.22em;
+      }
+
+      .welcome-word-mask {
+        display: inline-block;
+        overflow: hidden;
+        padding-block: 0.08em;
+        margin-block: -0.08em;
+      }
+
+      .welcome-word {
+        display: block;
+        will-change: transform, opacity;
+      }
+
       #pin-slot {
         position: relative;
         z-index: 12;
-        height: 100svh;
-        min-height: 720px;
+        height: calc(100svh + var(--section-join));
+        min-height: calc(720px + var(--section-join));
       }
 
       #root {
@@ -419,11 +541,38 @@
         }
       }
 
+      @media (max-width: 767px) {
+        .welcome-title-layer {
+          padding: 12svh 1.1rem 0;
+        }
+
+        .welcome-title {
+          max-width: min(18ch, 92vw);
+          font-size: clamp(2.55rem, 11.1vw, 3.225rem);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .welcome-slab,
+        .welcome-atmosphere {
+          display: none;
+        }
+      }
+
+      :root #welcome-bumper,
+      :root .welcome-backdrop {
+        background: var(--page);
+      }
+
+      :root .welcome-atmosphere {
+        background:
+          radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--paper) 86%, transparent) 0%, color-mix(in srgb, var(--paper) 20%, transparent) 19%, transparent 43%),
+          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, color-mix(in srgb, var(--paper) 64%, transparent) 100%),
+          linear-gradient(to bottom, color-mix(in srgb, var(--paper) 90%, transparent) 0%, transparent 20%, transparent 64%, var(--page) 100%);
+      }
+
       #chapters {
-        position: absolute;
-        inset: 0;
-        z-index: 21;
-        pointer-events: none;
+        display: none;
       }
 
       .chapter-panel {
@@ -484,6 +633,7 @@
     <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
     <noscript>
       <style>
+        #welcome-bumper,
         #nadi-stage {
           display: none;
         }
@@ -516,6 +666,24 @@
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
+    <div id="welcome-bumper" aria-hidden="true">
+      <div class="welcome-backdrop"></div>
+      <div class="welcome-atmosphere"></div>
+      <div class="welcome-field"></div>
+      <div class="welcome-title-layer">
+        <p class="welcome-title">
+          <span class="welcome-title-line" aria-hidden="true">
+            <span class="welcome-word-mask"><span class="welcome-word">Your</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">Gateway</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">To</span></span>
+          </span>
+          <span class="welcome-title-line" aria-hidden="true">
+            <span class="welcome-word-mask"><span class="welcome-word">Intelligent</span></span>
+            <span class="welcome-word-mask"><span class="welcome-word">Products</span></span>
+          </span>
+        </p>
+      </div>
+    </div>
     <div id="nadi-stage">
       <canvas id="nadi-cluster" aria-hidden="true"></canvas>
     </div>
@@ -757,6 +925,7 @@
     </div>
     </main>
 
+    <script src="videos/gateway-hero/welcome.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
   </body>
 </html>
