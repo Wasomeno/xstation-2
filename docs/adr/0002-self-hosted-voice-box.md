@@ -1,0 +1,3 @@
+# Speech lives on an always-on box; interpretation is DeepSeek behind that box
+
+The live site is static GitHub Pages. Whisper (OpenAI weights, local runtime) runs on one always-on machine (this Mac + HTTPS tunnel now, Mac Mini later). After each Pause the browser sends a clip to that box. The box transcribes, then calls **DeepSeek’s API** (`deepseek-chat`, not reasoner) to pick a Show or a Clarification. The DeepSeek key stays on the box; it never ships in the Pages JS. Audio never leaves the box; the transcript does (to DeepSeek). A fully local qwen3 was dropped once DeepSeek-the-provider was chosen. Visitor-side Whisper was rejected so “local OpenAI Whisper” stays true. The box allows only the site origins and rate-limits; it does not keep audio.

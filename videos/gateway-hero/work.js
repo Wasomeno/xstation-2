@@ -199,6 +199,42 @@ function startSmooth() {
   return smoothInstance;
 }
 
+const VOICE_SECTIONS = new Set([
+  "hero",
+  "root",
+  "work",
+  "bikinkonten",
+  "lubna",
+  "crm-ai-agent",
+  "hireassess",
+  "arkiv",
+  "codev",
+  "coframe",
+  "cofinance",
+  "clients",
+  "contact",
+]);
+
+function showSection(id) {
+  const sectionId = id === "root" ? "hero" : id;
+  if (!VOICE_SECTIONS.has(sectionId)) return false;
+  const el = document.getElementById(sectionId);
+  if (!el) return false;
+  const duration = reduce ? 0.05 : 1.15;
+  if (smoothInstance) {
+    smoothInstance.scrollTo(el, { offset: -8, duration });
+  } else {
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
+  document.querySelectorAll(".is-voice-shown").forEach((node) => node.classList.remove("is-voice-shown"));
+  el.classList.add("is-voice-shown");
+  window.clearTimeout(showSection._timer);
+  showSection._timer = window.setTimeout(() => el.classList.remove("is-voice-shown"), 1800);
+  return true;
+}
+
+window.xstationShowSection = showSection;
+
 function bindSmoothStart() {
   if (reduce || shot || typeof window.Lenis !== "function") return () => {};
   if (!document.getElementById("welcome-bumper")) {

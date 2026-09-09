@@ -1,0 +1,110 @@
+"""Turn a model payload into a Show or a Clarification."""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+from sections import SECTION_BY_ID, catalog_for_prompt, resolve_section
+
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
+
+SYSTEM_PROMPT = f"""You are the Station Agent for the XTATION site. You are a driver, not a guide.
+
+A Command is an open-ended spoken request (English or Indonesian) to be taken to a Section.
+Never answer questions. Never chat. Never invent hands other than Show.
+
+If the Command names or clearly points at exactly one Section, return a Show.
+"What is Arkiv?" is a Show of arkiv. The page already explains it.
+If zero or several Sections fit, return a Clarification with at most two hypotheses.
+Off-topic (weather, jokes, prices with no product, code) → Clarification toward contact.
+
+Return JSON only, one of:
+{{"action":"show","section":"<id>"}}
+{{"action":"clarify","hypotheses":["<id>"],"text":"<short question naming the hypotheses>"}}
+
+Write Clarification text in the same language as the Command.
+
+Sections:
+{catalog_for_prompt()}
+"""
+
+
+def parse_model_json(text: str) -> dict[str, Any] | None:
+    if not text or not str(text).strip():
+        return None
+    raw = str(text).strip()
+    fenced = _FENCE.search(raw)
+    if fenced:
+        raw = fenced.group(1).strip()
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        payload = json.loads(raw[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _unique_sections(names: list[Any]) -> list[str]:
+    found: list[str] = []
+    for name in names:
+        section_id = resolve_section(str(name) if name is not None else None)
+        if section_id and section_id not in found:
+            found.append(section_id)
+    return found[:2]
+
+
+def _clarify(hypotheses: list[str], text: str | None) -> dict[str, Any]:
+    labels = [SECTION_BY_ID[item].label for item in hypotheses if item in SECTION_BY_ID]
+    prompt = (text or "").strip()
+    if not prompt:
+        if len(labels) == 2:
+            prompt = f"{labels[0]}, or {labels[1]}?"
+        elif len(labels) == 1:
+            prompt = f"{labels[0]}?"
+        else:
+            prompt = "A product, or contact?"
+    return {"action": "clarify", "hypotheses": hypotheses, "text": prompt}
+
+
+def decide(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Apply the single-clear-Hypothesis rule to a model payload."""
+    if not payload:
+        return _clarify([], "I didn't catch a section. A product, or contact?")
+
+    action = str(payload.get("action") or "").strip().lower()
+    hypotheses = payload.get("hypotheses") or payload.get("hypothesis") or []
+    if isinstance(hypotheses, str):
+        hypotheses = [hypotheses]
+    if not isinstance(hypotheses, list):
+        hypotheses = []
+
+    guessed = _unique_sections(hypotheses)
+    section = resolve_section(payload.get("section"))
+    text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
+
+    if action == "show" or action == "scroll":
+        if section:
+            return {"action": "show", "section": section}
+        if len(guessed) == 1:
+            return {"action": "show", "section": guessed[0]}
+        return _clarify(guessed, text if isinstance(text, str) else None)
+
+    if action in {"clarify", "clarification", "ask"}:
+        if len(guessed) == 1:
+            return {"action": "show", "section": guessed[0]}
+        return _clarify(guessed, text if isinstance(text, str) else None)
+
+    if section and not guessed:
+        return {"action": "show", "section": section}
+    if len(guessed) == 1:
+        return {"action": "show", "section": guessed[0]}
+    return _clarify(guessed, None)
+
+
+def decide_from_model_text(text: str) -> dict[str, Any]:
+    return decide(parse_model_json(text))
