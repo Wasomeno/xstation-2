@@ -219,7 +219,6 @@ function bindHeroScroll() {
     scrub: 0.65,
     invalidateOnRefresh: true,
     onUpdate: (self) => {
-      cluster.setProgress(clamp01((self.progress - 0.1) / 0.9));
       applyCopy(self.progress);
     },
   });

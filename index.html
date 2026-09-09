@@ -15,14 +15,6 @@
       window.addEventListener("pageshow", () => window.scrollTo(0, 0));
     </script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
-        }
-      }
-    </script>
     <style>
       @font-face {
         font-family: "Apfel Grotezk";
@@ -161,6 +153,55 @@
         display: block;
         width: 100%;
         height: 100%;
+      }
+
+      .nadi-lbl {
+        position: absolute;
+        z-index: 3;
+        pointer-events: none;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: var(--sans);
+        font-weight: 600;
+        font-size: 30.4px;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+        opacity: 0;
+        text-shadow: 0 0 10px var(--page), 0 1px 0 var(--page);
+        transform: translate(18px, -50%);
+      }
+
+      .nadi-lbl::before {
+        content: "";
+        width: 26px;
+        height: 1.5px;
+        background: linear-gradient(90deg, rgba(28, 133, 92, 0), var(--signal));
+        flex-shrink: 0;
+        transform-origin: left;
+        transform: scaleX(var(--k, 1));
+      }
+
+      .nadi-lbl small {
+        display: block;
+        font-family: ui-monospace, Menlo, monospace;
+        font-weight: 500;
+        font-size: 16px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--signal);
+        margin-bottom: 2px;
+      }
+
+      .nadi-lbl.is-left {
+        transform: translate(calc(-100% - 18px), -50%);
+        flex-direction: row-reverse;
+      }
+
+      .nadi-lbl.is-left::before {
+        transform-origin: right;
+        background: linear-gradient(270deg, rgba(28, 133, 92, 0), var(--signal));
       }
 
       #site-nav {

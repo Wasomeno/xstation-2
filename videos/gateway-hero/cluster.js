@@ -1,160 +1,3 @@
-import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-
-const PAPER = 0xf7f8f5;
-const SIGNAL = 0x1c855c;
-const FOREST = 0x083b28;
-const PULSE = 0xb8ffd4;
-const CORE = 0xeefff4;
-const CHAPTERS = 5;
-const BLOOM_LAYER = 1;
-
-const MAIN_DIRS = [
-  new THREE.Vector3(0.92, 0.34, 0.18),
-  new THREE.Vector3(0.88, 0.06, 0.46),
-  new THREE.Vector3(0.74, 0.62, 0.26),
-  new THREE.Vector3(0.9, -0.38, 0.22),
-  new THREE.Vector3(0.84, 0.28, -0.46),
-].map((v) => v.normalize());
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
-}
-
-function clamp01(v) {
-  return Math.min(1, Math.max(0, v));
-}
-
-function heartbeat(time, phase = 0) {
-  const period = 2.35;
-  const p = ((time + phase) % period) / period;
-  const lub = Math.exp(-(((p - 0.22) / 0.16) ** 2));
-  const dub = 0.38 * Math.exp(-(((p - 0.46) / 0.18) ** 2));
-  const breath = 0.28 * (0.5 + 0.5 * Math.sin(((time + phase) / period) * Math.PI * 2));
-  return Math.min(1, lub * 0.72 + dub + breath);
-}
-
-function basis(heading) {
-  const dir = heading.clone().normalize();
-  const up = Math.abs(dir.y) > 0.88 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const side = new THREE.Vector3().crossVectors(dir, up).normalize();
-  const lift = new THREE.Vector3().crossVectors(side, dir).normalize();
-  return { dir, side, lift };
-}
-
-function growCurve(origin, heading, length, rand) {
-  const { dir, side, lift } = basis(heading);
-  const amp = length * (0.16 + rand() * 0.12);
-  const sign = rand() > 0.5 ? 1 : -1;
-  const p0 = origin.clone();
-  const p1 = origin.clone()
-    .addScaledVector(dir, length * 0.3)
-    .addScaledVector(side, sign * amp)
-    .addScaledVector(lift, (rand() - 0.5) * amp * 0.45);
-  const p2 = origin.clone()
-    .addScaledVector(dir, length * 0.68)
-    .addScaledVector(side, -sign * amp * 0.65)
-    .addScaledVector(lift, (rand() - 0.42) * amp * 0.35);
-  const p3 = origin.clone()
-    .addScaledVector(dir, length)
-    .addScaledVector(side, sign * amp * 0.12)
-    .addScaledVector(lift, (rand() - 0.5) * amp * 0.18);
-
-  return {
-    curve: new THREE.CubicBezierCurve3(p0, p1, p2, p3),
-    heading: p3.clone().sub(p2).normalize(),
-  };
-}
-
-function taperedTube(curve, tubularSegments, radiusStart, radiusEnd, radialSegments) {
-  const frames = curve.computeFrenetFrames(tubularSegments, false);
-  const positions = new Float32Array((tubularSegments + 1) * radialSegments * 3);
-  const normals = new Float32Array(positions.length);
-  const indices = [];
-  const point = new THREE.Vector3();
-
-  for (let i = 0; i <= tubularSegments; i += 1) {
-    const t = i / tubularSegments;
-    const fall = t * t;
-    const radius = radiusStart * (1 - fall) + radiusEnd * fall;
-    curve.getPointAt(t, point);
-    const N = frames.normals[i];
-    const B = frames.binormals[i];
-    for (let j = 0; j < radialSegments; j += 1) {
-      const a = (j / radialSegments) * Math.PI * 2;
-      const cos = Math.cos(a);
-      const sin = Math.sin(a);
-      const nx = cos * N.x + sin * B.x;
-      const ny = cos * N.y + sin * B.y;
-      const nz = cos * N.z + sin * B.z;
-      const idx = (i * radialSegments + j) * 3;
-      positions[idx] = point.x + radius * nx;
-      positions[idx + 1] = point.y + radius * ny;
-      positions[idx + 2] = point.z + radius * nz;
-      normals[idx] = nx;
-      normals[idx + 1] = ny;
-      normals[idx + 2] = nz;
-    }
-  }
-
-  for (let i = 0; i < tubularSegments; i += 1) {
-    for (let j = 0; j < radialSegments; j += 1) {
-      const a = i * radialSegments + j;
-      const b = i * radialSegments + ((j + 1) % radialSegments);
-      const c = (i + 1) * radialSegments + j;
-      const d = (i + 1) * radialSegments + ((j + 1) % radialSegments);
-      indices.push(a, b, c, b, d, c);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-  geo.setIndex(indices);
-  return geo;
-}
-
-function radiusForGen(gen) {
-  return [
-    [0.019, 0.009],
-    [0.009, 0.0042],
-    [0.0042, 0.0018],
-    [0.0018, 0.0007],
-  ][gen] ?? [0.0012, 0.0005];
-}
-
-function makeRadialTexture(stops) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-  stops.forEach(([t, color]) => gradient.addColorStop(t, color));
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 256, 256);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function markBloom(obj) {
-  obj.layers.enable(BLOOM_LAYER);
-}
-
 export function createCluster({ canvas } = {}) {
   const host = canvas || document.getElementById("nadi-cluster");
   if (!host) {
@@ -167,881 +10,707 @@ export function createCluster({ canvas } = {}) {
     };
   }
 
-  const paperColor = new THREE.Color(PAPER);
-  const blackColor = new THREE.Color(0x000000);
-  const forestColor = new THREE.Color(FOREST);
-  const signalColor = new THREE.Color(SIGNAL);
-  const pulseColor = new THREE.Color(PULSE);
-  const coreColor = new THREE.Color(CORE);
+  const ctx = host.getContext("2d");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const scene = new THREE.Scene();
-  scene.background = paperColor.clone();
-  scene.fog = new THREE.FogExp2(PAPER, 0.014);
-
-  const camera = new THREE.PerspectiveCamera(28, 1, 0.08, 80);
-  camera.position.set(-1.85, 0.18, 6.9);
-
-  const renderer = new THREE.WebGLRenderer({
-    canvas: host,
-    antialias: true,
-    alpha: false,
-    powerPreference: "high-performance",
+  // topology / timing: approved Nadi hero constants — do not change without owner
+  const FOV = 980;
+  const BEAT = 0.75;
+  const WAKE = BEAT * 2;
+  const REVEAL = 1.2;
+  const ORBIT = 2.6;
+  const INTRO = WAKE + REVEAL;
+  const TOUR = WAKE + ORBIT;
+  const VISIT = 3.0;
+  const BREATH = 1.6;
+  const OUT = 1.15;
+  const HOLD_END = 1.95;
+  const BACK = 1.0;
+  const AMBIENT_PERIOD = 5.4;
+  const ORBIT_SWEEP = 1.75;
+  const SEQ = [];
+  [0, 3].forEach((s) => {
+    for (let i = 0; i < 3; i++) SEQ.push({ type: "visit", agent: s + i, dur: VISIT });
+    SEQ.push({ type: "wide", dur: BREATH });
   });
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.NoToneMapping;
-  renderer.setClearColor(PAPER, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const LOOP = SEQ.reduce((a, s) => a + s.dur, 0);
 
-  const hemi = new THREE.HemisphereLight(0xf7f8f5, 0xc8d8c8, 0.9);
-  scene.add(hemi);
-  const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
-  keyLight.position.set(-2.4, 1.8, 4.2);
-  scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0x90b0a0, 0.28);
-  fillLight.position.set(3.2, -0.6, 1.4);
-  scene.add(fillLight);
-  const rimLight = new THREE.DirectionalLight(0xd9ffe8, 0.22);
-  rimLight.position.set(1.2, 2.4, -3.2);
-  scene.add(rimLight);
-
-  const cluster = new THREE.Group();
-  cluster.position.set(2.72, 0.06, 0.04);
-  cluster.rotation.x = THREE.MathUtils.degToRad(11);
-  cluster.rotation.z = THREE.MathUtils.degToRad(-8);
-  scene.add(cluster);
-
-  const mistTex = makeRadialTexture([
-    [0, "rgba(200,216,200,0.42)"],
-    [0.32, "rgba(144,176,160,0.18)"],
-    [0.62, "rgba(247,248,245,0.08)"],
-    [1, "rgba(247,248,245,0)"],
-  ]);
-  const mistMat = new THREE.SpriteMaterial({
-    map: mistTex,
-    transparent: true,
-    depthWrite: false,
-    opacity: 0.85,
-    toneMapped: false,
-    fog: false,
+  // paper retune: color and compositing only. Nadi drew additive rgb(110,240,178) on #04100B.
+  const G = [8, 59, 40];
+  const PULSE = [28, 133, 92];
+  const HEAD = [28, 133, 92];
+  const PAPER_GAIN = 1.35;
+  const FAR_ALPHA_MUL = 0.32;
+  const CORE_BLOOM = 0.42;
+  const NAMES = [
+    "Marketing & Content",
+    "Customer Engagement",
+    "Operations",
+    "Finance",
+    "Legal",
+    "HR & Hiring",
+  ];
+  const stage = host.parentElement || host;
+  const labels = NAMES.map((n, i) => {
+    const d = document.createElement("div");
+    d.className = "nadi-lbl";
+    d.innerHTML = `<span><small>AGENT 0${i + 1}</small>${n}</span>`;
+    stage.appendChild(d);
+    return d;
   });
-  const mist = new THREE.Sprite(mistMat);
-  mist.scale.set(9.2, 9.2, 1);
-  mist.position.set(0.15, 0.04, -1.7);
-  cluster.add(mist);
-
-  const groundTex = makeRadialTexture([
-    [0, "rgba(200,216,200,0.28)"],
-    [0.45, "rgba(232,239,232,0.12)"],
-    [1, "rgba(247,248,245,0)"],
-  ]);
-  const groundMat = new THREE.MeshBasicMaterial({
-    map: groundTex,
-    transparent: true,
-    depthWrite: false,
-    toneMapped: false,
-    fog: false,
-    side: THREE.DoubleSide,
-  });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(8.2, 64), groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0.35, -1.85, 0.15);
-  cluster.add(ground);
-
-  const glowTex = makeRadialTexture([
-    [0, "rgba(238,255,244,1)"],
-    [0.1, "rgba(140,255,196,0.95)"],
-    [0.28, "rgba(28,133,92,0.55)"],
-    [0.55, "rgba(8,59,40,0.16)"],
-    [1, "rgba(8,59,40,0)"],
-  ]);
-  const glowSpriteMat = new THREE.SpriteMaterial({
-    map: glowTex,
-    color: 0xffffff,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    opacity: 1,
-    toneMapped: false,
-    fog: false,
-  });
-
-  const hubLight = new THREE.PointLight(0x7dffc0, 2.4, 8, 2);
-  cluster.add(hubLight);
-
-  const hubMat = new THREE.MeshPhongMaterial({
-    color: CORE,
-    emissive: PULSE,
-    emissiveIntensity: 1.35,
-    specular: 0xffffff,
-    shininess: 120,
-    transparent: true,
-    opacity: 1,
-  });
-  const hub = new THREE.Mesh(new THREE.SphereGeometry(0.048, 20, 20), hubMat);
-  markBloom(hub);
-  cluster.add(hub);
-
-  const hubGlow = new THREE.Sprite(glowSpriteMat.clone());
-  hubGlow.scale.setScalar(1.05);
-  markBloom(hubGlow);
-  hub.add(hubGlow);
-  const hubGlow2 = new THREE.Sprite(glowSpriteMat.clone());
-  hubGlow2.material.opacity = 0.28;
-  hubGlow2.scale.setScalar(1.8);
-  hub.add(hubGlow2);
-
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: PULSE,
-    transparent: true,
-    opacity: 0.42,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  });
-  const hubRing = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.184, 96), ringMat);
-  hub.add(hubRing);
-  const hubRing2 = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.318, 96), ringMat.clone());
-  hubRing2.material.opacity = 0.2;
-  hub.add(hubRing2);
-
-  const branches = [];
-  const satellites = [];
-  const junctions = [];
-  const accents = [];
-
-  const junctionGeo = new THREE.SphereGeometry(1, 10, 10);
-  const junctionMat = new THREE.MeshPhongMaterial({
-    color: PULSE,
-    emissive: SIGNAL,
-    emissiveIntensity: 1.4,
-    transparent: true,
-    opacity: 0.8,
-  });
-
-  function addJunction(position, scale) {
-    const mesh = new THREE.Mesh(junctionGeo, junctionMat);
-    mesh.position.copy(position);
-    mesh.scale.setScalar(scale);
-    cluster.add(mesh);
-    junctions.push(mesh);
-  }
-
-  function addQuietNode(position, scale, phase, bloom = false) {
-    const node = new THREE.Mesh(
-      new THREE.SphereGeometry(0.018, 12, 12),
-      new THREE.MeshPhongMaterial({
-        color: CORE,
-        emissive: PULSE,
-        emissiveIntensity: 0.55,
-        transparent: true,
-        opacity: 0.58,
-      }),
-    );
-    node.position.copy(position);
-    node.scale.setScalar(scale);
-    const sprite = new THREE.Sprite(glowSpriteMat.clone());
-    sprite.scale.setScalar(0.42);
-    sprite.material.opacity = 0.22;
-    node.add(sprite);
-    if (bloom) markBloom(node);
-    cluster.add(node);
-    accents.push({ mesh: node, sprite, phase, baseScale: scale });
-  }
-
-  function addBranch({
-    origin,
-    heading,
-    length,
-    generation,
-    chapter,
-    seed,
-    decorative = false,
-    maxGen = 3,
-    opacityMul = 1,
-  }) {
-    const localRand = mulberry32(seed);
-    const grown = growCurve(origin, heading, length, localRand);
-    const [r0, r1] = radiusForGen(generation);
-    const radial = generation === 0 ? 10 : 8;
-    const tubular = generation === 0 ? 48 : generation === 1 ? 36 : 24;
-    const geo = taperedTube(grown.curve, tubular, r0, r1, radial);
-    const mat = new THREE.MeshPhongMaterial({
-      color: signalColor.clone().lerp(pulseColor, 0.18),
-      emissive: SIGNAL,
-      emissiveIntensity: [1.15, 0.85, 0.5, 0.28][generation] ?? 0.18,
-      specular: 0xd2ffe6,
-      shininess: 90,
-      transparent: true,
-      opacity: ([0.38, 0.28, 0.18, 0.12][generation] ?? 0.08) * opacityMul,
-      depthWrite: false,
+  const hideLabels = () => {
+    labels.forEach((Lb) => {
+      Lb.style.opacity = "0";
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    cluster.add(mesh);
+    labelSide = null;
+    labelAgent = -1;
+  };
+  let labelSide = null;
+  let labelAgent = -1;
 
-    let halo = null;
-    let haloMatInst = null;
-    if (generation <= 1) {
-      const haloGeo = taperedTube(grown.curve, tubular, r0 * 2.35, r1 * 2.8, 8);
-      haloMatInst = new THREE.MeshBasicMaterial({
-        color: PULSE,
-        transparent: true,
-        opacity: generation === 0 ? 0.12 : 0.06,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-        fog: false,
-      });
-      halo = new THREE.Mesh(haloGeo, haloMatInst);
-      cluster.add(halo);
+  let seed = 720260909;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+  const rr = (a, b) => a + rnd() * (b - a);
+  const add = (a, b, k = 1) => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const norm = (v) => {
+    const m = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / m, v[1] / m, v[2] / m];
+  };
+  const cross = (a, b) => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  const rotAround = (v, k, ang) => {
+    const c = Math.cos(ang);
+    const s = Math.sin(ang);
+    const d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+    const cr = cross(k, v);
+    return [
+      v[0] * c + cr[0] * s + k[0] * d * (1 - c),
+      v[1] * c + cr[1] * s + k[1] * d * (1 - c),
+      v[2] * c + cr[2] * s + k[2] * d * (1 - c),
+    ];
+  };
+  const bez = (p0, p1, p2, p3, n) => {
+    const out = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const u = 1 - t;
+      const a = u * u * u;
+      const b = 3 * u * u * t;
+      const c = 3 * u * t * t;
+      const d = t * t * t;
+      out.push([
+        a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+        a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1],
+        a * p0[2] + b * p1[2] + c * p2[2] + d * p3[2],
+      ]);
     }
-
-    const record = {
-      curve: grown.curve,
-      mesh,
-      mat,
-      halo,
-      haloMat: haloMatInst,
-      generation,
-      chapter,
-      ambient: decorative,
-      opacityMul,
+    return out;
+  };
+  function curve(origin, dir, len, bow1, bow2, n) {
+    const d = norm(dir);
+    const p1 = norm(cross(d, Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+    const p2 = norm(cross(d, p1));
+    const end = add(origin, d, len);
+    return {
+      pts: bez(
+        origin,
+        add(add(origin, d, len * 0.32), p1, bow1),
+        add(add(origin, d, len * 0.70), p2, bow2),
+        end,
+        n,
+      ),
+      end,
+      dir: d,
     };
-    branches.push(record);
+  }
+  const tangentAt = (pts, i) =>
+    norm(sub(pts[Math.min(pts.length - 1, i + 1)], pts[Math.max(0, i - 1)]));
 
-    if (generation === 0 && decorative) {
-      addQuietNode(grown.curve.getPointAt(0.62), 0.85, seed * 0.0001);
+  const MAIN_DIRS = [
+    { dir: [-0.52, -0.80, 0.30], len: 400, bow: [84, -40] },
+    { dir: [0.62, -0.60, -0.50], len: 470, bow: [-66, 58] },
+    { dir: [0.96, -0.08, 0.28], len: 360, bow: [52, 36] },
+    { dir: [0.56, 0.70, -0.44], len: 440, bow: [-92, -30] },
+    { dir: [-0.22, 0.90, 0.38], len: 372, bow: [62, 48] },
+    { dir: [-0.90, 0.28, -0.34], len: 330, bow: [-54, 40] },
+  ];
+
+  function grow(scale, widthMul, alphaMul, origin, deep) {
+    const all = [];
+    const primaries = MAIN_DIRS.map((m) => {
+      const c = curve(origin, m.dir, m.len * scale, m.bow[0] * scale, m.bow[1] * scale, 44);
+      const v = { ...c, gen: 0, w: 2.9 * widthMul, a: 0.40 * alphaMul, kids: [], dur: OUT, origin };
+      all.push(v);
+      [0.52, 0.70, 0.86].forEach((at, j) => {
+        const i0 = Math.round(at * 44);
+        const base = c.pts[i0];
+        const tan = tangentAt(c.pts, i0);
+        const dir = rotAround(
+          tan,
+          norm(cross(tan, [rr(-1, 1), rr(-1, 1), rr(-1, 1)])),
+          rr(0.55, 1.0) * (j % 2 ? 1 : -1),
+        );
+        const len = m.len * scale * rr(0.34, 0.52);
+        const sc = curve(base, dir, len, rr(-60, 60) * scale, rr(-50, 50) * scale, 18);
+        const sv = { ...sc, gen: 1, w: 1.7 * widthMul, a: 0.30 * alphaMul, kids: [], parent: v, at, dur: 0.40, origin };
+        all.push(sv);
+        v.kids.push(sv);
+        if (deep) {
+          [0.48, 0.78].forEach((at2, k) => {
+            const i1 = Math.round(at2 * 18);
+            const b2 = sc.pts[i1];
+            const t2 = tangentAt(sc.pts, i1);
+            const d2 = rotAround(
+              t2,
+              norm(cross(t2, [rr(-1, 1), rr(-1, 1), rr(-1, 1)])),
+              rr(0.6, 1.1) * (k % 2 ? -1 : 1),
+            );
+            const tc = curve(b2, d2, len * rr(0.38, 0.6), rr(-30, 30) * scale, rr(-24, 24) * scale, 10);
+            const tv = { ...tc, gen: 2, w: 1.05 * widthMul, a: 0.20 * alphaMul, kids: [], parent: sv, at: at2, dur: 0.28, origin };
+            all.push(tv);
+            sv.kids.push(tv);
+          });
+        }
+      });
+      for (let k = 0; k < (deep ? 3 : 0); k++) {
+        const tan = tangentAt(c.pts, 43);
+        const dir = rotAround(tan, norm(cross(tan, [rr(-1, 1), rr(-1, 1), rr(-1, 1)])), rr(0.5, 1.2));
+        const tw = curve(c.end, dir, m.len * scale * rr(0.14, 0.24), rr(-20, 20) * scale, rr(-16, 16) * scale, 7);
+        const wv = { ...tw, gen: 3, w: 0.8 * widthMul, a: 0.18 * alphaMul, kids: [], parent: v, at: 1, dur: 0.22, origin };
+        all.push(wv);
+        v.kids.push(wv);
+      }
+      return v;
+    });
+    for (const v of all) {
+      v.rad = v.pts.map((p) => Math.hypot(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]));
     }
+    return { all, primaries };
+  }
 
-    if (generation === 0 && !decorative) {
-      const nodeT = 0.7;
-      const nodePos = grown.curve.getPointAt(nodeT);
-      const nodeMat = new THREE.MeshPhongMaterial({
-        color: CORE,
-        emissive: PULSE,
-        emissiveIntensity: 1.5,
-        specular: 0xffffff,
-        shininess: 140,
-        transparent: true,
-        opacity: 1,
-      });
-      const node = new THREE.Mesh(new THREE.SphereGeometry(0.032, 18, 18), nodeMat);
-      node.position.copy(nodePos);
-      node.userData.base = nodePos.clone();
-      node.userData.phase = chapter * 0.19;
-      node.userData.azimuth = Math.atan2(MAIN_DIRS[chapter].x, MAIN_DIRS[chapter].z);
-      node.userData.t = nodeT;
-      markBloom(node);
-      cluster.add(node);
+  const NEAR = grow(1, 1, 1, [0, 0, 0], true);
+  const FAR = grow(1.7, 1.3, FAR_ALPHA_MUL, [0, 0, 860], false);
 
-      const sprite = new THREE.Sprite(glowSpriteMat.clone());
-      sprite.scale.setScalar(0.72);
-      node.add(sprite);
+  const easeOut = (t) => 1 - Math.pow(1 - t, 2.7);
+  const invEaseOut = (y) => 1 - Math.pow(1 - y, 1 / 2.7);
+  function schedule(v, start) {
+    v.start = start;
+    v.kids.forEach((k) =>
+      schedule(k, start + v.dur * (v.gen === 0 ? invEaseOut(Math.min(1, k.at)) : k.at)),
+    );
+  }
+  NEAR.primaries.forEach((p) => schedule(p, 0));
+  FAR.primaries.forEach((p) => schedule(p, 0));
 
-      const haloRingMat = new THREE.MeshBasicMaterial({
-        color: PULSE,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      });
-      const haloRing = new THREE.Mesh(new THREE.RingGeometry(0.09, 0.118, 72), haloRingMat);
-      node.add(haloRing);
-      const haloRing2 = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.184, 72), haloRingMat.clone());
-      node.add(haloRing2);
+  let W = 0;
+  let Ht = 0;
+  let DPR = 1;
+  let CX = 0;
+  let CY = 0;
+  let SC = 1;
 
-      const nodeLight = new THREE.PointLight(0x9effd0, 0.85, 2.8, 2);
-      node.add(nodeLight);
+  function size() {
+    const r = host.getBoundingClientRect();
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width;
+    Ht = r.height;
+    if (!W || !Ht) return;
+    host.width = Math.round(W * DPR);
+    host.height = Math.round(Ht * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const narrow = W < 820;
+    CX = narrow ? W * 0.52 : W * 0.665;
+    CY = narrow ? Ht * 0.40 : Ht * 0.50;
+    SC = (Math.min(W, Ht) / 720) * (narrow ? 0.78 : 1.0);
+  }
 
-      satellites.push({
-        mesh: node,
-        sprite,
-        halo: haloRing,
-        halo2: haloRing2,
-        light: nodeLight,
-        branch: record,
-      });
+  let tmx = 0;
+  let tmy = 0;
+  let mx = 0;
+  let my = 0;
+
+  function onPointerMove(e) {
+    const r = host.getBoundingClientRect();
+    if (
+      e.clientX < r.left ||
+      e.clientX > r.right ||
+      e.clientY < r.top ||
+      e.clientY > r.bottom
+    ) {
+      tmx = 0;
+      tmy = 0;
+      return;
     }
+    tmx = ((e.clientX - r.left) / r.width - 0.5) * 2;
+    tmy = ((e.clientY - r.top) / r.height - 0.5) * 2;
+  }
 
-    if (generation <= 2) {
-      addJunction(grown.curve.getPointAt(0.02), r0 * 0.95);
+  function onPointerLeave() {
+    tmx = 0;
+    tmy = 0;
+  }
+
+  const cam = { look: [0, 0, 0], yaw: 0.2, pitch: 0.1, dist: 1180 };
+  const tgt = { look: [0, 0, 0], yaw: 0.2, pitch: 0.1, dist: 1180 };
+  let cy_ = 1;
+  let sy_ = 0;
+  let cx_ = 1;
+  let sx_ = 0;
+  const P = [0, 0, 0, 0];
+  function project(p) {
+    const qx = p[0] - cam.look[0];
+    const qy = p[1] - cam.look[1];
+    const qz = p[2] - cam.look[2];
+    const x1 = qx * cy_ + qz * sy_;
+    const z1 = -qx * sy_ + qz * cy_;
+    const y2 = qy * cx_ - z1 * sx_;
+    const z2 = qy * sx_ + z1 * cx_;
+    const depth = Math.max(60, z2 + cam.dist);
+    const k = FOV / depth;
+    P[0] = CX + x1 * k * SC;
+    P[1] = CY + y2 * k * SC;
+    P[2] = k;
+    P[3] = depth;
+    return P;
+  }
+  const nearestYaw = (t, cur) => {
+    while (t - cur > Math.PI) t -= Math.PI * 2;
+    while (t - cur < -Math.PI) t += Math.PI * 2;
+    return t;
+  };
+
+  const frac = (x) => x - Math.floor(x);
+  const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const fog = (depth) => Math.max(0.16, Math.min(1, 1.32 - depth / 2300));
+  let focusDepth = 1180;
+  let treeA = 1;
+  let revealR = 1e9;
+
+  function rgba(rgb, a) {
+    return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+  }
+
+  function vesselStroke(v, extraAlpha = 0) {
+    const pts = v.pts;
+    const n = pts.length;
+    const proj = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const q = project(pts[i]);
+      proj[i] = [q[0], q[1], q[2], q[3]];
     }
-
-    if (generation >= maxGen) return;
-
-    const childCount = decorative
-      ? (generation === 0 ? 3 : 1)
-      : generation === 0 ? 3 : generation === 1 ? 2 : 1;
-    const tangentTmp = new THREE.Vector3();
-    const binormal = new THREE.Vector3();
-    const worldUp = new THREE.Vector3(0, 1, 0);
-
-    for (let c = 0; c < childCount; c += 1) {
-      const t = generation === 0
-        ? [0.32, 0.56, 0.78][c] + (localRand() - 0.5) * 0.03
-        : 0.5 + (localRand() - 0.5) * 0.08;
-      const fork = grown.curve.getPointAt(t);
-      grown.curve.getTangentAt(t, tangentTmp);
-      binormal.crossVectors(tangentTmp, worldUp);
-      if (binormal.lengthSq() < 0.0001) binormal.set(1, 0, 0);
-      binormal.normalize();
-      const lift = new THREE.Vector3().crossVectors(binormal, tangentTmp).normalize();
-      const axis = binormal.clone().lerp(lift, 0.28 + localRand() * 0.22).normalize();
-      const angle = (c % 2 === 0 ? 1 : -1) * (0.34 + localRand() * 0.12);
-      const childHeading = tangentTmp.clone().applyAxisAngle(axis, angle);
-      childHeading.addScaledVector(heading, 0.82).normalize();
-      addJunction(fork, r0 * 0.7);
-      addBranch({
-        origin: fork,
-        heading: childHeading,
-        length: length * (generation === 0 ? 0.5 : generation === 1 ? 0.42 : 0.32) + localRand() * 0.06,
-        generation: generation + 1,
-        chapter,
-        seed: seed * 17 + c * 131 + generation * 19,
-        decorative,
-        maxGen,
-        opacityMul,
-      });
+    const CH_ = 4;
+    let front = -1;
+    for (let i = 0; i < n - 1; i += CH_) {
+      const j = Math.min(n - 1, i + CH_);
+      if (v.rad[i] > revealR) {
+        front = i;
+        break;
+      }
+      const mid = proj[Math.min(n - 1, i + (CH_ >> 1))];
+      const k = mid[2];
+      const depth = mid[3];
+      const w = v.w * k * (1 - 0.42 * (i / n)) * 1.15;
+      const df = Math.min(1, Math.abs(depth - focusDepth) / 430);
+      const al = (v.a + extraAlpha) * fog(depth) * (1 - df * 0.35) * treeA * PAPER_GAIN;
+      const passes = df > 0.08
+        ? [[1 + df * 4.6, al * 0.10], [1 + df * 2.3, al * 0.16], [1 + df * 1.2, al * 0.38]]
+        : [[1, al]];
+      for (const [wm, a] of passes) {
+        ctx.beginPath();
+        ctx.moveTo(proj[i][0], proj[i][1]);
+        for (let m = i + 1; m <= j; m++) ctx.lineTo(proj[m][0], proj[m][1]);
+        ctx.lineWidth = Math.min(13, Math.max(0.25, w * wm));
+        ctx.strokeStyle = rgba(G, a);
+        ctx.stroke();
+      }
+    }
+    if (front > 0) {
+      const q = proj[front];
+      glow(q[0], q[1], 14 * q[2], 0.55 * fog(q[3]) * PAPER_GAIN, PULSE);
     }
   }
 
-  MAIN_DIRS.forEach((dir, i) => {
-    addBranch({
-      origin: dir.clone().multiplyScalar(0.045),
-      heading: dir,
-      length: 4.15 + (i % 3) * 0.22,
-      generation: 0,
-      chapter: i,
-      seed: 0x51ed + i * 7919,
-    });
+  function glow(x, y, r, a, rgb = G) {
+    if (r < 0.6 || a < 0.004) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, rgba(rgb, a));
+    g.addColorStop(0.4, rgba(rgb, a * 0.32));
+    g.addColorStop(1, rgba(rgb, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 6.2832);
+    ctx.fill();
+  }
+
+  function spark(v, f, strength, tail, headR, withHead) {
+    const n = v.pts.length - 1;
+    const fade = 1 - Math.pow(Math.min(1, f), 6);
+    for (let i = tail; i >= 0; i--) {
+      const ff = f - i * (1.0 / (n * 0.9)) * (v.gen === 0 ? 1.0 : 1.6);
+      if (ff < 0) continue;
+      const pr = project(v.pts[Math.round(Math.min(1, ff) * n)]);
+      const kk = 1 - i / (tail + 1);
+      const df = Math.min(1, Math.abs(pr[3] - focusDepth) / 430);
+      glow(
+        pr[0],
+        pr[1],
+        (headR * 0.5 + headR * 3.2 * kk) * pr[2] * (1 + df * 1.5),
+        Math.pow(kk, 1.7) * strength * fade * fog(pr[3]) * (1 - df * 0.5),
+        PULSE,
+      );
+    }
+    if (withHead) {
+      const pr = project(v.pts[Math.round(Math.min(1, f) * n)]);
+      const df = Math.min(1, Math.abs(pr[3] - focusDepth) / 430);
+      ctx.fillStyle = rgba(
+        HEAD,
+        0.95 * strength * fade * (1 - df * 0.6) * fog(pr[3]),
+      );
+      ctx.beginPath();
+      ctx.arc(pr[0], pr[1], (headR * 0.5 + df * 2.2) * pr[2], 0, 6.2832);
+      ctx.fill();
+    }
+  }
+
+  function runPulse(root, t, gain, withHead) {
+    const walk = (v) => {
+      const lt = (t - v.start) / v.dur;
+      if (lt >= 0 && lt <= 1.25) {
+        const f = v.gen === 0 ? easeOut(Math.min(1, lt)) : Math.min(1, lt);
+        spark(
+          v,
+          f,
+          gain * (v.gen === 0 ? 1 : v.gen === 1 ? 0.66 : 0.46),
+          v.gen === 0 ? 18 : v.gen === 1 ? 9 : 5,
+          v.gen === 0 ? 7.5 : v.gen === 1 ? 4.6 : 3.2,
+          withHead && v.gen === 0,
+        );
+      }
+      v.kids.forEach(walk);
+    };
+    walk(root);
+  }
+
+  let t0 = 0;
+  let lastNow = 0;
+  let pauseShift = 0;
+  let pausedAt = 0;
+  let active = true;
+  let disposed = false;
+  let raf = 0;
+  const observer = new ResizeObserver(() => {
+    size();
+    if (reduce) draw(performance.now());
   });
 
-  [
-    {
-      origin: new THREE.Vector3(0.42, 1.58, -0.28),
-      dirs: [
-        new THREE.Vector3(0.18, 0.96, 0.12),
-        new THREE.Vector3(0.62, 0.68, -0.28),
-        new THREE.Vector3(-0.28, 0.9, 0.26),
-        new THREE.Vector3(0.48, 0.58, 0.46),
-      ],
-      length: 1.72,
-      seed: 0xa101,
-    },
-    {
-      origin: new THREE.Vector3(0.58, -1.62, 0.22),
-      dirs: [
-        new THREE.Vector3(0.28, -0.94, 0.14),
-        new THREE.Vector3(0.72, -0.58, -0.26),
-        new THREE.Vector3(-0.22, -0.9, 0.3),
-        new THREE.Vector3(0.52, -0.66, 0.4),
-      ],
-      length: 1.78,
-      seed: 0xa202,
-    },
-    {
-      origin: new THREE.Vector3(-1.28, -1.42, 0.26),
-      dirs: [
-        new THREE.Vector3(-0.58, -0.76, 0.18),
-        new THREE.Vector3(-0.88, -0.28, -0.22),
-        new THREE.Vector3(-0.26, -0.9, 0.28),
-        new THREE.Vector3(-0.7, -0.48, 0.4),
-      ],
-      length: 1.58,
-      seed: 0xa303,
-    },
-    {
-      origin: new THREE.Vector3(-1.62, 0.38, -0.32),
-      dirs: [
-        new THREE.Vector3(-0.92, 0.2, 0.18),
-        new THREE.Vector3(-0.66, 0.68, -0.24),
-        new THREE.Vector3(-0.74, -0.4, 0.3),
-        new THREE.Vector3(-0.82, 0.06, -0.42),
-      ],
-      length: 1.52,
-      seed: 0xa404,
-    },
-    {
-      origin: new THREE.Vector3(-1.48, 1.08, -0.18),
-      dirs: [
-        new THREE.Vector3(-0.78, 0.58, 0.16),
-        new THREE.Vector3(-0.52, 0.82, -0.22),
-        new THREE.Vector3(-0.88, 0.12, 0.28),
-      ],
-      length: 1.38,
-      seed: 0xa505,
-    },
-  ].forEach((pack, p) => {
-    const stem = pack.origin.clone().normalize();
-    addBranch({
-      origin: stem.clone().multiplyScalar(0.05),
-      heading: stem,
-      length: pack.origin.length() - 0.08,
-      generation: 0,
-      chapter: -1,
-      seed: pack.seed,
-      decorative: true,
-      maxGen: 0,
-      opacityMul: 0.7,
-    });
-    addQuietNode(pack.origin, 1.2, p * 0.37, true);
-    pack.dirs.forEach((raw, i) => {
-      const heading = raw.clone().normalize();
-      addBranch({
-        origin: pack.origin.clone().addScaledVector(heading, 0.05),
-        heading,
-        length: pack.length + i * 0.1,
-        generation: 0,
-        chapter: -1,
-        seed: pack.seed + i * 97,
-        decorative: true,
-        maxGen: 2,
-        opacityMul: 0.74,
+  function nowClock(now) {
+    return now - pauseShift;
+  }
+
+  function draw(now) {
+    if (disposed || !W || !Ht) return;
+    if (!t0) {
+      t0 = nowClock(now) - (reduce ? (INTRO + 3) * 1000 : 0);
+      lastNow = nowClock(now);
+    }
+    const clock = nowClock(now);
+    const T = (clock - t0) / 1000;
+    const dt = Math.min(0.05, (clock - lastNow) / 1000);
+    lastNow = clock;
+
+    const waking = T < WAKE;
+    const revealing = T >= WAKE && T < INTRO;
+    const orbiting = T >= WAKE && T < TOUR;
+    const Ltime = Math.max(0, T - TOUR);
+    const L = frac(Ltime / LOOP) * LOOP;
+    let acc = 0;
+    let seg = SEQ[0];
+    let tt = 0;
+    for (const s of SEQ) {
+      if (L < acc + s.dur) {
+        seg = s;
+        tt = L - acc;
+        break;
+      }
+      acc += s.dur;
+    }
+    const agent = seg.type === "visit" ? NEAR.primaries[seg.agent] : null;
+
+    treeA = waking ? 0 : revealing ? easeOut((T - WAKE) / REVEAL) : 1;
+    revealR = waking ? 0 : revealing ? easeOut((T - WAKE) / REVEAL) * 1500 : 1e9;
+
+    const orbT = Math.min(1, Math.max(0, (T - WAKE) / ORBIT));
+    const orbEase = 1 - Math.pow(1 - orbT, 3.2);
+    const yawOff = orbiting || T < WAKE ? 0 : ORBIT_SWEEP;
+    const sway = yawOff + 0.30 * Math.sin(T * 0.085) + 0.22 * Math.sin(T * 0.037 + 1.3);
+    const swayP = 0.10 * Math.sin(T * 0.071 + 0.4);
+    if (orbiting) {
+      tgt.look = [0, 0, 0];
+      tgt.yaw = 0.2 + ORBIT_SWEEP * orbEase;
+      tgt.pitch = 0.10 + 0.22 * Math.sin(orbEase * Math.PI);
+      tgt.dist = 1320 - 140 * orbEase;
+    } else if (agent && T >= TOUR) {
+      const e = agent.end;
+      tgt.look = [e[0] * 0.82, e[1] * 0.82, e[2] * 0.82];
+      tgt.yaw = nearestYaw(Math.atan2(agent.dir[2], agent.dir[0]) + (seg.agent % 2 ? 0.45 : -0.45), cam.yaw);
+      tgt.pitch = swayP + (agent.dir[1] > 0 ? -0.18 : 0.18);
+      tgt.dist = 720;
+    } else {
+      tgt.look = [0, 0, 0];
+      tgt.yaw = nearestYaw(sway, cam.yaw);
+      tgt.pitch = swayP;
+      tgt.dist = waking ? 1320 : 1180;
+    }
+    const speed = orbiting ? 9 : agent ? (tt < OUT ? 3.1 : 2.2) : 2.0;
+    const kk = 1 - Math.exp(-dt * speed);
+    for (let i = 0; i < 3; i++) cam.look[i] += (tgt.look[i] - cam.look[i]) * kk;
+    cam.yaw += (tgt.yaw - cam.yaw) * kk;
+    cam.pitch += (tgt.pitch - cam.pitch) * kk;
+    cam.dist += (tgt.dist - cam.dist) * kk;
+    mx += (tmx - mx) * 0.05;
+    my += (tmy - my) * 0.05;
+    const yaw = cam.yaw + mx * 0.22;
+    const pitch = cam.pitch + my * 0.14;
+    cy_ = Math.cos(yaw);
+    sy_ = Math.sin(yaw);
+    cx_ = Math.cos(pitch);
+    sx_ = Math.sin(pitch);
+    focusDepth += (cam.dist - focusDepth) * kk;
+
+    ctx.clearRect(0, 0, W, Ht);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalCompositeOperation = "source-over";
+
+    if (!waking) {
+      const saveA = treeA;
+      const saveR = revealR;
+      treeA = revealing ? easeOut(Math.max(0, (T - WAKE - 0.35) / REVEAL)) : 1;
+      revealR = revealing ? treeA * 2600 : 1e9;
+      for (const v of FAR.all) vesselStroke(v);
+      if (T >= TOUR) {
+        FAR.primaries.forEach((v, i) =>
+          runPulse(v, frac(Ltime / (AMBIENT_PERIOD * 1.6) + i * 0.29) * AMBIENT_PERIOD * 1.6, 0.09, false),
+        );
+      }
+      treeA = saveA;
+      revealR = saveR;
+    }
+
+    if (!waking) {
+      for (const v of NEAR.all) {
+        const lit = agent && (v === agent || (v.parent && (v.parent === agent || v.parent.parent === agent)));
+        vesselStroke(v, lit ? 0.12 : 0);
+      }
+
+      NEAR.primaries.forEach((v) => {
+        if (v === agent) return;
+        const ep = project(v.end);
+        const df = Math.min(1, Math.abs(ep[3] - focusDepth) / 430);
+        const a = fog(ep[3]) * (1 - df * 0.5) * treeA * PAPER_GAIN;
+        glow(ep[0], ep[1], 12 * ep[2] * (1 + df), 0.28 * a, PULSE);
+        ctx.beginPath();
+        ctx.arc(ep[0], ep[1], Math.min(9, 7 * ep[2]), 0, 6.2832);
+        ctx.lineWidth = Math.max(0.3, Math.min(1.2, 0.9 * ep[2]));
+        ctx.strokeStyle = rgba(PULSE, 0.30 * a);
+        ctx.stroke();
       });
-    });
-  });
 
-  const pulsePaths = branches.filter((b) => b.generation <= 1);
-  const pulsesPerPath = 3;
-  const trail = 3;
-  const pulseCount = pulsePaths.length * pulsesPerPath * trail;
-  const pulseGeo = new THREE.SphereGeometry(0.012, 10, 10);
-  const pulseMat = new THREE.MeshBasicMaterial({
-    color: CORE,
-    transparent: true,
-    opacity: 1,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-    fog: false,
-  });
-  const pulses = new THREE.InstancedMesh(pulseGeo, pulseMat, pulseCount);
-  pulses.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  markBloom(pulses);
-  cluster.add(pulses);
-
-  const pulseGlowGeo = new THREE.SphereGeometry(0.028, 8, 8);
-  const pulseGlowMat = new THREE.MeshBasicMaterial({
-    color: SIGNAL,
-    transparent: true,
-    opacity: 0.42,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-    fog: false,
-  });
-  const pulseGlows = new THREE.InstancedMesh(pulseGlowGeo, pulseGlowMat, pulseCount);
-  pulseGlows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  cluster.add(pulseGlows);
-
-  const dummy = new THREE.Object3D();
-  const pulseMeta = [];
-  pulsePaths.forEach((path, pathIndex) => {
-    for (let i = 0; i < pulsesPerPath; i += 1) {
-      for (let k = 0; k < trail; k += 1) {
-        pulseMeta.push({
-          pathIndex,
-          chapter: path.chapter,
-          offset: i / pulsesPerPath + pathIndex * 0.017,
-          trail: k,
-          speed: 0.055 + (i % 5) * 0.008,
+      if (T >= TOUR) {
+        NEAR.primaries.forEach((v, i) => {
+          if (v === agent) return;
+          runPulse(v, frac(Ltime / AMBIENT_PERIOD + i * 0.173) * AMBIENT_PERIOD, 0.22, false);
         });
       }
     }
-  });
 
-  const riders = branches.filter((b) => b.generation === 0).map((path, i) => {
-    const light = new THREE.PointLight(0xa8ffd8, 0, 2.8, 2);
-    cluster.add(light);
-    return { light, path, offset: i * 0.18 };
-  });
+    if (agent && T >= TOUR) {
+      runPulse(agent, tt, 0.62, true);
 
-  const bloomLayer = new THREE.Layers();
-  bloomLayer.set(BLOOM_LAYER);
-  const bloomHidden = [];
-  const bloomBackground = blackColor.clone();
-
-  const renderScene = new RenderPass(scene, camera);
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.48, 0.28, 0.42);
-  const bloomComposer = new EffectComposer(renderer);
-  bloomComposer.renderToScreen = false;
-  bloomComposer.addPass(renderScene);
-  bloomComposer.addPass(bloomPass);
-
-  const mixPass = new ShaderPass(
-    new THREE.ShaderMaterial({
-      uniforms: {
-        baseTexture: { value: null },
-        bloomTexture: { value: bloomComposer.renderTarget2.texture },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D baseTexture;
-        uniform sampler2D bloomTexture;
-        varying vec2 vUv;
-        void main() {
-          vec4 base = texture2D(baseTexture, vUv);
-          vec4 bloom = texture2D(bloomTexture, vUv);
-          gl_FragColor = vec4(base.rgb + bloom.rgb * 0.7, 1.0);
-        }
-      `,
-    }),
-    "baseTexture",
-  );
-  mixPass.needsSwap = true;
-
-  const finalComposer = new EffectComposer(renderer);
-  finalComposer.addPass(new RenderPass(scene, camera));
-  finalComposer.addPass(mixPass);
-
-  const clock = new THREE.Clock();
-  const look = new THREE.Vector3();
-  const camPos = new THREE.Vector3();
-  const fromPos = new THREE.Vector3();
-  const toPos = new THREE.Vector3();
-  const fromLook = new THREE.Vector3();
-  const toLook = new THREE.Vector3();
-  const pulled = new THREE.Vector3();
-  const axonPoint = new THREE.Vector3();
-  const worldHub = new THREE.Vector3();
-  const worldSat = new THREE.Vector3();
-
-  let progress = 0;
-  let active = true;
-  let raf = 0;
-  let disposed = false;
-  let smoothBeat = 0;
-  const smoothNode = satellites.map(() => 0);
-  const smoothNodeWeight = satellites.map(() => 0.35);
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  function size() {
-    const width = host.clientWidth || window.innerWidth;
-    const height = host.clientHeight || window.innerHeight;
-    if (!width || !height) return;
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height, false);
-    bloomComposer.setSize(width, height);
-    finalComposer.setSize(width, height);
-    bloomPass.setSize(width, height);
-    mixPass.material.uniforms.bloomTexture.value = bloomComposer.renderTarget2.texture;
-  }
-
-  function restPose() {
-    camPos.set(-1.85, 0.18, 6.9);
-    look.set(2.55, 0.08, 0.02);
-  }
-
-  function closePose(index) {
-    const sat = satellites[index];
-    sat.mesh.getWorldPosition(worldSat);
-    look.set(worldSat.x - 0.22, worldSat.y + 0.04, worldSat.z * 0.15);
-    camPos.set(worldSat.x - 0.95, worldSat.y + 0.2, worldSat.z + 1.72);
-  }
-
-  function applyCamera(elapsed) {
-    const idleYaw = reduce ? 0 : Math.sin(elapsed * 0.06) * 0.02;
-    const travel = progress * CHAPTERS;
-    const index = Math.min(CHAPTERS - 1, Math.floor(travel));
-    const local = reduce ? 1 : easeInOut(Math.min(1, travel - index));
-    let yaw = 0;
-
-    if (progress <= 0) {
-      yaw = 0;
-    } else if (index === 0) {
-      yaw = THREE.MathUtils.lerp(0, -satellites[0].mesh.userData.azimuth * 0.12, local);
-    } else {
-      yaw = THREE.MathUtils.lerp(
-        -satellites[index - 1].mesh.userData.azimuth * 0.12,
-        -satellites[index].mesh.userData.azimuth * 0.12,
-        local,
+      const ep = project(agent.end);
+      const arr = (tt - OUT) / 0.95;
+      const epdf = Math.min(1, Math.abs(ep[3] - focusDepth) / 430);
+      glow(
+        ep[0],
+        ep[1],
+        26 * ep[2] * (1 + epdf),
+        (0.10 + (arr >= 0 && arr <= 1 ? (1 - arr) * 0.55 : 0)) * fog(ep[3]),
+        PULSE,
       );
-    }
+      if (arr >= 0 && arr <= 1) {
+        ctx.beginPath();
+        ctx.arc(ep[0], ep[1], (6 + easeOut(arr) * 30) * ep[2], 0, 6.2832);
+        ctx.lineWidth = 1.1 * ep[2];
+        ctx.strokeStyle = rgba(PULSE, (1 - arr) * 0.28);
+        ctx.stroke();
+      }
+      labels.forEach((Lb, i) => {
+        if (i !== seg.agent) {
+          Lb.style.opacity = "0";
+          return;
+        }
+        const lo = arr >= 0 && arr <= 1.9 ? Math.min(1, arr * 3.2) * Math.min(1, (1.9 - arr) * 2.4) : 0;
+        Lb.style.opacity = lo.toFixed(3);
+        Lb.style.setProperty("--k", Math.min(1, Math.max(0, arr * 2.6)).toFixed(3));
+        if (lo > 0.01) {
+          if (labelAgent !== i || labelSide === null) {
+            labelAgent = i;
+            labelSide = ep[0] > W * 0.74;
+          }
+          Lb.classList.toggle("is-left", labelSide);
+          Lb.style.left = ep[0].toFixed(1) + "px";
+          Lb.style.top = ep[1].toFixed(1) + "px";
+        } else {
+          labelSide = null;
+          labelAgent = -1;
+        }
+      });
 
-    cluster.rotation.y = yaw + idleYaw;
-    cluster.updateMatrixWorld(true);
-    hub.getWorldPosition(worldHub);
-
-    if (progress <= 0 || (reduce && progress < 0.02)) {
-      restPose();
-    } else if (reduce) {
-      closePose(index);
-    } else if (index === 0) {
-      restPose();
-      fromPos.copy(camPos);
-      fromLook.copy(look);
-      closePose(0);
-      toPos.copy(camPos);
-      toLook.copy(look);
-      camPos.copy(fromPos).lerp(toPos, local);
-      look.copy(fromLook).lerp(toLook, local);
+      const bo = (tt - HOLD_END) / BACK;
+      if (bo >= 0 && bo <= 1) {
+        const bf = 1 - easeIO(bo);
+        const n = agent.pts.length - 1;
+        for (let i = 10; i >= 0; i--) {
+          const ff = bf + i * 0.018;
+          if (ff > 1) continue;
+          const pr = project(agent.pts[Math.round(ff * n)]);
+          const kq = 1 - i / 11;
+          glow(
+            pr[0],
+            pr[1],
+            (4 + 18 * kq) * pr[2],
+            Math.pow(kq, 1.5) * 0.26 * Math.sin(Math.PI * bo) * fog(pr[3]),
+            PULSE,
+          );
+        }
+      }
     } else {
-      closePose(index - 1);
-      fromPos.copy(camPos);
-      fromLook.copy(look);
-      closePose(index);
-      toPos.copy(camPos);
-      toLook.copy(look);
-      pulled.copy(fromPos).lerp(toPos, 0.5);
-      pulled.y += 0.12;
-      if (local < 0.5) {
-        const t = local * 2;
-        camPos.copy(fromPos).lerp(pulled, t);
-        look.copy(fromLook).lerp(toLook, t * 0.45);
-      } else {
-        const t = (local - 0.5) * 2;
-        camPos.copy(pulled).lerp(toPos, t);
-        look.copy(fromLook).lerp(toLook, 0.45 + t * 0.55);
+      hideLabels();
+    }
+
+    const cp = project([0, 0, 0]);
+    const cdf = Math.min(1, Math.abs(cp[3] - focusDepth) / 430);
+    const cf = fog(cp[3]);
+    let beat;
+    let coreGain;
+    if (waking) {
+      const bt = frac(T / BEAT);
+      const nth = Math.floor(T / BEAT);
+      beat = (Math.exp(-bt * 7) + Math.exp(-Math.max(0, bt - 0.17) * 10) * 0.45) * (0.4 + nth * 0.3);
+      coreGain = 0.55;
+    } else {
+      const burst = revealing ? Math.exp(-(T - WAKE) * 3.2) * 2.4 : 0;
+      const bt = T < TOUR ? 1 : agent ? tt / VISIT : tt / BREATH;
+      beat = Math.exp(-bt * 9) + Math.exp(-Math.max(0, bt - 0.14) * 12) * 0.5 + burst;
+      coreGain = 1;
+    }
+    glow(cp[0], cp[1], 200 * CORE_BLOOM * cp[2] * (1 + beat * 0.08), (0.12 + beat * 0.08) * cf * coreGain, PULSE);
+    glow(cp[0], cp[1], 56 * CORE_BLOOM * cp[2] * (1 + beat * 0.12), (0.44 + beat * 0.26) * cf * coreGain, PULSE);
+    glow(cp[0], cp[1], (22 + cdf * 30) * CORE_BLOOM * cp[2], (0.5 + beat * 0.2) * cf * coreGain, PULSE);
+    if (!waking) {
+      for (let k = 0; k < 2; k++) {
+        const q = frac(T / 3.6 + k * 0.5);
+        ctx.beginPath();
+        ctx.arc(cp[0], cp[1], (30 + q * 110) * CORE_BLOOM * cp[2], 0, 6.2832);
+        ctx.lineWidth = 1.0 * cp[2];
+        ctx.strokeStyle = rgba(PULSE, (1 - q) * 0.09 * cf);
+        ctx.stroke();
       }
     }
-
-    camera.position.copy(camPos);
-    camera.lookAt(look);
-    mist.lookAt(camera.position);
-    hubRing.lookAt(camera.position);
-    hubRing2.lookAt(camera.position);
-    satellites.forEach((sat) => {
-      sat.halo.lookAt(camera.position);
-      sat.halo2.lookAt(camera.position);
-    });
-  }
-
-  function applyEnergy(elapsed) {
-    smoothBeat += (heartbeat(elapsed) - smoothBeat) * 0.065;
-    const beat = smoothBeat;
-    const restWeight = clamp01(1 - progress * 3.4);
-    mist.material.opacity = 0.55 + restWeight * 0.3;
-    mist.scale.setScalar(8.4 + restWeight * 0.9 + beat * 0.05);
-    ground.material.opacity = 0.45 + restWeight * 0.25;
-
-    hubMat.emissiveIntensity = 1.05 + beat * 0.55;
-    hubGlow.scale.setScalar(1.02 + beat * 0.18);
-    hubGlow.material.opacity = 0.48 + beat * 0.16;
-    hubGlow2.scale.setScalar(1.62 + beat * 0.28);
-    hubGlow2.material.opacity = 0.14 + beat * 0.1;
-    hubLight.intensity = 1.5 + beat * 0.85 + restWeight * 0.35;
-    hubLight.color.copy(signalColor).lerp(pulseColor, 0.22 + beat * 0.18);
-    hub.scale.setScalar(1 + beat * 0.06);
-    ringMat.opacity = 0.12 + beat * 0.12 + restWeight * 0.05;
-    hubRing.scale.setScalar(1 + beat * 0.12);
-    hubRing2.material.opacity = 0.05 + beat * 0.07;
-    hubRing2.scale.setScalar(1 + beat * 0.16);
-
-    const chapter = progress * CHAPTERS;
-    const activeIndex = Math.min(CHAPTERS - 1, Math.floor(chapter));
-    satellites.forEach((sat, i) => {
-      const targetWeight = progress <= 0.02 ? 0.35 : (i === activeIndex ? 1 : 0.06);
-      smoothNodeWeight[i] += (targetWeight - smoothNodeWeight[i]) * 0.075;
-      const weight = smoothNodeWeight[i];
-      smoothNode[i] += (heartbeat(elapsed, sat.mesh.userData.phase) - smoothNode[i]) * 0.06;
-      const nodeBeat = smoothNode[i] * weight;
-      sat.mesh.material.opacity = 0.16 + weight * 0.84;
-      sat.mesh.material.emissiveIntensity = 0.12 + weight * 1.35 + nodeBeat * 0.4;
-      sat.sprite.material.opacity = 0.04 + weight * 0.52 + nodeBeat * 0.12;
-      sat.sprite.scale.setScalar(0.28 + weight * 0.42 + nodeBeat * 0.14);
-      sat.halo.scale.setScalar(1 + nodeBeat * 0.22);
-      sat.halo.material.opacity = weight * (0.08 + nodeBeat * 0.22);
-      sat.halo2.scale.setScalar(1 + nodeBeat * 0.3);
-      sat.halo2.material.opacity = weight * (0.03 + nodeBeat * 0.12);
-      sat.light.intensity = 0.04 + weight * 1.05 + nodeBeat * 0.4;
-      sat.light.color.copy(signalColor).lerp(coreColor, 0.12 + nodeBeat * 0.22);
-      const bob = reduce ? 0 : Math.sin(elapsed * 0.42 + sat.mesh.userData.phase) * 0.006 * weight;
-      sat.mesh.position.copy(sat.mesh.userData.base);
-      sat.mesh.position.y += bob;
-      sat.mesh.scale.setScalar(0.72 + weight * 0.36 + nodeBeat * 0.08);
-    });
-
-    branches.forEach((branch) => {
-      const weight = branch.ambient
-        ? 0.72
-        : progress <= 0.02 ? 1 : branch.chapter === activeIndex ? 1 : 0.28;
-      const mul = branch.opacityMul ?? 1;
-      const base = ([0.38, 0.28, 0.18, 0.12][branch.generation] ?? 0.08) * mul;
-      const emit = [0.7, 0.5, 0.32, 0.18][branch.generation] ?? 0.12;
-      branch.mat.opacity = base * (0.7 + weight * 0.3);
-      branch.mat.emissiveIntensity = emit * (0.55 + weight * 0.35 + beat * 0.1);
-      branch.mat.color.copy(signalColor).lerp(pulseColor, 0.1 + weight * 0.22 + beat * 0.05);
-      branch.mat.emissive.copy(forestColor).lerp(signalColor, 0.5 + weight * 0.35);
-      if (branch.haloMat) {
-        branch.haloMat.opacity = (branch.generation === 0 ? 0.1 : 0.05) * weight * mul * (0.7 + beat * 0.18);
-        branch.haloMat.color.copy(signalColor).lerp(pulseColor, 0.32 + beat * 0.14);
-      }
-    });
-
-    accents.forEach((accent) => {
-      const pulse = heartbeat(elapsed, accent.phase);
-      accent.mesh.material.emissiveIntensity = 0.42 + pulse * 0.28;
-      accent.mesh.material.opacity = 0.42 + pulse * 0.16;
-      accent.mesh.scale.setScalar(accent.baseScale * (0.92 + pulse * 0.1));
-      accent.sprite.material.opacity = 0.14 + pulse * 0.12;
-    });
-  }
-
-  function applyPulses(elapsed) {
-    const chapter = progress * CHAPTERS;
-    const activeIndex = Math.min(CHAPTERS - 1, Math.floor(chapter));
-    const beat = smoothBeat;
-    pulseMat.color.copy(coreColor).lerp(pulseColor, 0.14 + beat * 0.18);
-    pulseGlowMat.color.copy(signalColor).lerp(pulseColor, 0.22 + beat * 0.18);
-    pulseMat.opacity = 0.62 + beat * 0.16;
-    pulseGlowMat.opacity = 0.24 + beat * 0.16;
-
-    for (let i = 0; i < pulseCount; i += 1) {
-      const meta = pulseMeta[i];
-      const path = pulsePaths[meta.pathIndex];
-      const live = progress <= 0.02 ? 1 : meta.chapter === activeIndex ? 1 : 0.14;
-      const speed = (reduce ? 0 : meta.speed) * (0.85 + live * 0.2);
-      const t = (elapsed * speed + meta.offset - meta.trail * 0.038 + 1) % 1;
-      path.curve.getPointAt(t, axonPoint);
-      const head = meta.trail === 0;
-      const envelope = Math.pow(Math.sin(t * Math.PI), 1.35);
-      const trailFade = head ? 1 : 0.62 ** meta.trail;
-      const swell = 0.82 + beat * 0.18;
-      const scale = (0.42 + envelope * 0.48) * swell * live * trailFade * (head ? 1.08 : 0.62);
-      dummy.position.copy(axonPoint);
-      dummy.scale.setScalar(Math.max(0.04, scale));
-      dummy.updateMatrix();
-      pulses.setMatrixAt(i, dummy.matrix);
-      dummy.scale.setScalar(Math.max(0.04, scale * (head ? 1.7 : 1.15)));
-      dummy.updateMatrix();
-      pulseGlows.setMatrixAt(i, dummy.matrix);
-    }
-    pulses.instanceMatrix.needsUpdate = true;
-    pulseGlows.instanceMatrix.needsUpdate = true;
-
-    riders.forEach((rider, i) => {
-      const live = progress <= 0.02 ? 1 : rider.path.chapter === activeIndex ? 1 : 0.12;
-      const t = reduce ? 0.55 : (elapsed * 0.07 + rider.offset) % 1;
-      rider.path.curve.getPointAt(t, axonPoint);
-      rider.light.position.copy(axonPoint);
-      rider.light.intensity = (0.4 + heartbeat(elapsed, i * 0.22) * 0.7) * live;
-    });
-  }
-
-  function hideNonBloom(obj) {
-    if (obj.isScene || obj.isCamera || obj.isLight) return;
-    if (obj.layers.test(bloomLayer)) return;
-    if ((obj.isMesh || obj.isSprite) && obj.visible) {
-      obj.visible = false;
-      bloomHidden.push(obj);
+    if (cdf < 0.85) {
+      ctx.fillStyle = rgba(
+        HEAD,
+        (0.55 + beat * 0.15) * Math.pow(1 - cdf, 2) * cf * coreGain,
+      );
+      ctx.beginPath();
+      ctx.arc(cp[0], cp[1], 9 * cp[2] * (1 + beat * 0.16) * (1 - cdf * 0.7), 0, 6.2832);
+      ctx.fill();
     }
   }
 
-  function showNonBloom() {
-    for (let i = 0; i < bloomHidden.length; i += 1) bloomHidden[i].visible = true;
-    bloomHidden.length = 0;
+  function shouldRun() {
+    return active && !document.hidden && !disposed && !reduce;
   }
 
-  function renderFrame() {
-    scene.background.copy(bloomBackground);
-    scene.fog.color.copy(bloomBackground);
-    scene.traverse(hideNonBloom);
-    bloomComposer.render();
-    showNonBloom();
-    scene.background.copy(paperColor);
-    scene.fog.color.copy(paperColor);
-    finalComposer.render();
-  }
-
-  function frame() {
-    if (disposed) return;
-    if (!active) {
-      raf = requestAnimationFrame(frame);
+  function frame(now) {
+    if (!shouldRun()) {
+      raf = 0;
       return;
     }
-    const elapsed = clock.getElapsedTime();
-    cluster.updateMatrixWorld(true);
-    applyEnergy(elapsed);
-    applyPulses(elapsed);
-    applyCamera(elapsed);
-    renderFrame();
+    draw(now);
     raf = requestAnimationFrame(frame);
   }
 
-  function onResize() {
-    size();
+  function kick() {
+    if (disposed) return;
+    if (reduce) {
+      draw(performance.now());
+      return;
+    }
+    if (shouldRun() && !raf) raf = requestAnimationFrame(frame);
   }
 
   function onVisibility() {
-    if (document.hidden) clock.getDelta();
+    if (document.hidden) {
+      if (!pausedAt) pausedAt = performance.now();
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+      return;
+    }
+    if (pausedAt) {
+      pauseShift += performance.now() - pausedAt;
+      pausedAt = 0;
+      lastNow = 0;
+    }
+    kick();
   }
 
   size();
-  window.addEventListener("resize", onResize);
+  observer.observe(host);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerleave", onPointerLeave);
   document.addEventListener("visibilitychange", onVisibility);
-  raf = requestAnimationFrame(frame);
+  kick();
 
   return {
-    setProgress(next) {
-      progress = clamp01(Number(next) || 0);
-    },
+    setProgress() {},
     setActive(next) {
-      active = Boolean(next);
-      if (active) clock.getDelta();
+      const on = Boolean(next);
+      if (on === active) return;
+      active = on;
+      if (!active) {
+        if (!pausedAt) pausedAt = performance.now();
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+        hideLabels();
+        return;
+      }
+      if (pausedAt) {
+        pauseShift += performance.now() - pausedAt;
+        pausedAt = 0;
+        lastNow = 0;
+      }
+      kick();
     },
     resize: size,
     dispose() {
       disposed = true;
       active = false;
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      observer.disconnect();
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerleave", onPointerLeave);
       document.removeEventListener("visibilitychange", onVisibility);
-      bloomComposer.dispose();
-      finalComposer.dispose();
-      renderer.dispose();
-      mistTex.dispose();
-      mistMat.dispose();
-      groundTex.dispose();
-      ground.geometry.dispose();
-      groundMat.dispose();
-      glowTex.dispose();
-      hub.geometry.dispose();
-      hubMat.dispose();
-      glowSpriteMat.dispose();
-      hubGlow.material.dispose();
-      hubGlow2.material.dispose();
-      hubRing.geometry.dispose();
-      ringMat.dispose();
-      hubRing2.geometry.dispose();
-      hubRing2.material.dispose();
-      pulseGeo.dispose();
-      pulseMat.dispose();
-      pulseGlowGeo.dispose();
-      pulseGlowMat.dispose();
-      junctionGeo.dispose();
-      junctionMat.dispose();
-      mixPass.material.dispose();
-      branches.forEach((branch) => {
-        branch.mesh.geometry.dispose();
-        branch.mat.dispose();
-        if (branch.halo) {
-          branch.halo.geometry.dispose();
-          branch.haloMat.dispose();
-        }
-      });
-      satellites.forEach((sat) => {
-        sat.mesh.geometry.dispose();
-        sat.mesh.material.dispose();
-        sat.sprite.material.dispose();
-        sat.halo.geometry.dispose();
-        sat.halo.material.dispose();
-        sat.halo2.geometry.dispose();
-        sat.halo2.material.dispose();
-      });
-      accents.forEach((accent) => {
-        accent.mesh.geometry.dispose();
-        accent.mesh.material.dispose();
-        accent.sprite.material.dispose();
-      });
+      labels.forEach((Lb) => Lb.remove());
     },
     ready: Promise.resolve(),
   };
