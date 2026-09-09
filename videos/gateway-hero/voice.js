@@ -61,6 +61,93 @@ function floatToPcm16Base64(float32) {
   return btoa(binary);
 }
 
+const WAVE_BARS = 52;
+const WAVE_SIZE = 116;
+
+function createWaveform(canvas) {
+  const ctx = canvas.getContext("2d");
+  const bins = new Float32Array(WAVE_BARS);
+  const freq = new Uint8Array(128);
+  const time = new Uint8Array(256);
+  let analyser = null;
+  let raf = 0;
+
+  const fit = () => {
+    const css = canvas.clientWidth || WAVE_SIZE;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(css * dpr);
+    canvas.height = Math.round(css * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  };
+
+  const draw = () => {
+    const size = canvas.clientWidth || WAVE_SIZE;
+    const cx = size / 2;
+    const cy = size / 2;
+    const inner = size * 0.2;
+    const reach = size * 0.26;
+    const state = canvas.closest("#voice-surface")?.dataset.state || "idle";
+    ctx.clearRect(0, 0, size, size);
+
+    let rms = 0;
+    if (analyser && (state === "listening" || state === "speaking")) {
+      analyser.getByteFrequencyData(freq);
+      analyser.getByteTimeDomainData(time);
+      for (let i = 0; i < time.length; i += 1) {
+        const n = (time[i] - 128) / 128;
+        rms += n * n;
+      }
+      rms = Math.sqrt(rms / time.length);
+    }
+
+    const now = performance.now() / 1000;
+    for (let i = 0; i < WAVE_BARS; i += 1) {
+      let target = 0.045;
+      if (state === "listening" || state === "speaking") {
+        const index = Math.floor((i / WAVE_BARS) * freq.length * 0.42);
+        const mag = Math.pow((freq[index] || 0) / 255, 1.18);
+        target = Math.min(1, mag * 0.82 + rms * 2.4);
+      } else if (state === "thinking") {
+        target = 0.16 + 0.2 * Math.abs(Math.sin(now * 2.4 + i * 0.24));
+      }
+      bins[i] += (target - bins[i]) * 0.32;
+    }
+
+    ctx.lineCap = "round";
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgb(18 34 37 / 0.38)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, inner, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.lineWidth = Math.max(1.6, size / 64);
+    for (let i = 0; i < WAVE_BARS; i += 1) {
+      const angle = (i / WAVE_BARS) * Math.PI * 2 - Math.PI / 2;
+      const energy = bins[i];
+      if (energy < 0.08) continue;
+      const outer = inner + energy * reach;
+      ctx.strokeStyle = `rgb(${Math.round(18 + 10 * energy)} ${Math.round(34 + 99 * energy)} ${Math.round(37 + 55 * energy)})`;
+      ctx.globalAlpha = 0.42 + energy * 0.58;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
+      ctx.lineTo(cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    raf = requestAnimationFrame(draw);
+  };
+
+  fit();
+  window.addEventListener("resize", fit);
+  draw();
+  return {
+    setAnalyser(node) {
+      analyser = node;
+    },
+  };
+}
+
 function createSurface() {
   const root = document.createElement("div");
   root.id = "voice-surface";
@@ -71,14 +158,18 @@ function createSurface() {
       <p class="voice-status" aria-live="polite"></p>
       <p class="voice-transcript"></p>
     </div>
-    <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan"></button>
+    <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
+      <canvas class="voice-wave" width="116" height="116"></canvas>
+    </button>
   `;
   document.body.append(root);
+  const canvas = root.querySelector(".voice-wave");
   return {
     root,
     button: root.querySelector(".voice-orb"),
     status: root.querySelector(".voice-status"),
     transcript: root.querySelector(".voice-transcript"),
+    wave: createWaveform(canvas),
   };
 }
 
@@ -92,6 +183,7 @@ function bindVoice() {
   let socket = null;
   let audioContext = null;
   let processor = null;
+  let analyser = null;
 
   const setState = (state) => {
     ui.root.dataset.state = state;
@@ -121,6 +213,8 @@ function bindVoice() {
       }
       processor = null;
     }
+    ui.wave.setAnalyser(null);
+    analyser = null;
     if (audioContext) {
       audioContext.close().catch(() => {});
       audioContext = null;
@@ -176,6 +270,10 @@ function bindVoice() {
 
   const startCapture = () => {
     const source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.62;
+    ui.wave.setAnalyser(analyser);
     processor = audioContext.createScriptProcessor(4096, 1, 1);
     const mute = audioContext.createGain();
     mute.gain.value = 0;
@@ -191,7 +289,6 @@ function bindVoice() {
       let sum = 0;
       for (let i = 0; i < input.length; i += 1) sum += input[i] * input[i];
       const rms = Math.sqrt(sum / input.length);
-      ui.root.style.setProperty("--level", String(Math.min(1, rms / 0.12)));
       const now = performance.now();
       if (rms >= 0.03) {
         if (!talking) {
@@ -210,6 +307,7 @@ function bindVoice() {
         talking = false;
       }
     };
+    source.connect(analyser);
     source.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
