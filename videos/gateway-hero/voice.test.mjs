@@ -11,6 +11,23 @@ const flatSource = (await readFile(new URL("./voice-variant-1.js", import.meta.u
 const smoothSource = (await readFile(new URL("./voice-variant-2.js", import.meta.url), "utf8"))
   .replace("export default function", "function");
 const flush = () => new Promise(setImmediate);
+test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
+  const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
+  for (const [page, expected] of [
+    ["https://nadi.example/", "https://nadi.example/voice"],
+    ["https://nadi.example/products/", "https://nadi.example/voice"],
+    ["http://127.0.0.1:4174/", "http://127.0.0.1:4175"],
+    ["http://localhost:4174/", "http://127.0.0.1:4175"],
+    ["http://localhost:8080/", "http://localhost:8080/voice"],
+    ["https://nadi.example/?box=https://tunnel.example/", "https://tunnel.example"],
+  ]) {
+    const result = vm.runInNewContext(`${config}; [VOICE_BOX_URL, VOICE_BOX_WS]`, {
+      window: { location: new URL(page) }, URLSearchParams,
+    });
+    assert.equal(result[0], expected);
+    assert.equal(result[1], `${expected.replace(/^http/, "ws")}/v1/stream`);
+  }
+});
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });

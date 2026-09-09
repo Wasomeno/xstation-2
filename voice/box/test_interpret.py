@@ -9,6 +9,13 @@ import server
 
 
 class InterpretTests(unittest.IsolatedAsyncioTestCase):
+    def test_origin_checks_require_an_exact_configured_domain(self):
+        with patch.object(server, "ALLOWED_ORIGINS", ("https://nadi.example",)):
+            self.assertTrue(server._origin_ok("https://nadi.example"))
+            self.assertTrue(server._origin_ok(""))
+            for origin in ("https://nadi.example.evil.test", "http://nadi.example", "https://wasomeno.github.io.evil.test"):
+                self.assertFalse(server._origin_ok(origin))
+
     async def test_deepseek_request_and_validated_navigation(self):
         client = AsyncMock()
         client.post.return_value = httpx.Response(200, json={

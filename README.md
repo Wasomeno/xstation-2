@@ -31,6 +31,33 @@ npm run voice      # box on :4175
 
 Point the live site at a tunneled box with `?box=https://your-tunnel`.
 
+## Deploy on one domain
+
+Production uses `/voice` on the frontend's origin automatically. Local preview on port 4174 still connects directly to port 4175; `?box=` remains an override.
+
+Run the Python voice backend as a persistent service on the same host as Nginx, with these environment variables (or `voice/box/.env`):
+
+```dotenv
+DEEPSEEK_API_KEY=your-deepseek-key
+OPENAI_API_KEY=your-openai-key
+DEEPSEEK_MODEL=deepseek-v4-flash
+VOICE_BOX_HOST=127.0.0.1
+VOICE_BOX_PORT=4175
+VOICE_BOX_ALLOWED_ORIGINS=https://your-domain.com
+```
+
+Use comma-separated exact origins if both apex and www domains serve the site. Keep the backend directory and its `.env` outside the public static files.
+
+Include `deploy/nginx-voice.conf` inside your existing frontend HTTPS `server {}` block, using its absolute installed path:
+
+```nginx
+include /path/to/nadi/deploy/nginx-voice.conf;
+```
+
+Validate with `sudo nginx -t`, then reload Nginx. The config strips `/voice/`, so `/voice/health` reaches `/health` and `/voice/v1/stream` reaches `/v1/stream`. It forwards WebSocket upgrade headers following the [Nginx WebSocket documentation](https://nginx.org/en/docs/http/websocket.html).
+
+Check `https://your-domain.com/voice/health`, then try the voice control and verify `/voice/v1/stream` upgrades with status 101. Static-only hosting needs a separate proxy-capable server for this setup. If Nginx and the backend run in separate containers, replace the upstream loopback address with the backend container's service address and bind the backend to `0.0.0.0`.
+
 Voice visuals: [Variant 1 — flat flowing bands](http://127.0.0.1:4174/?voice-variant=1) and [Variant 2 — smooth flowing colors](http://127.0.0.1:4174/?voice-variant=2) are preserved in `videos/gateway-hero/voice-variant-1.js` and `voice-variant-2.js`. [Variant 3 — earlier flat layered circles](http://127.0.0.1:4174/?voice-variant=3) is the default. All three use the same voice session and controls.
 
 ## Live site

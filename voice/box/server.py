@@ -44,11 +44,10 @@ from decide import SYSTEM_PROMPT, decide_from_model_text
 from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
 from streaming import relay_transcripts
 
-ALLOWED_ORIGINS = (
-    "http://127.0.0.1:4174",
-    "http://localhost:4174",
-    "https://wasomeno.github.io",
-)
+ALLOWED_ORIGINS = tuple(origin.strip().rstrip("/") for origin in os.environ.get(
+    "VOICE_BOX_ALLOWED_ORIGINS",
+    "http://127.0.0.1:4174,http://localhost:4174,https://wasomeno.github.io",
+).split(",") if origin.strip())
 RATE_WINDOW_S = 60
 RATE_MAX = 20
 DEEPSEEK_URL = os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
@@ -99,7 +98,6 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(ALLOWED_ORIGINS),
-    allow_origin_regex=r"https://wasomeno\.github\.io",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -218,7 +216,7 @@ def health():
 @app.post("/v1/command")
 async def command(request: Request, audio: UploadFile = File(...)):
     origin = request.headers.get("origin", "")
-    if origin and origin not in ALLOWED_ORIGINS and not origin.startswith("https://wasomeno.github.io"):
+    if not _origin_ok(origin):
         raise HTTPException(status_code=403, detail="origin")
     ip = _client_ip(request)
     if not _rate_ok(ip):
@@ -276,7 +274,7 @@ async def command(request: Request, audio: UploadFile = File(...)):
 def _origin_ok(origin: str) -> bool:
     if not origin:
         return True
-    return origin in ALLOWED_ORIGINS or origin.startswith("https://wasomeno.github.io")
+    return origin in ALLOWED_ORIGINS
 
 
 @app.websocket("/v1/stream")
