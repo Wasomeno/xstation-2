@@ -14,12 +14,6 @@ async def relay_transcripts(upstream, client, interpret):
     tasks = set()
     retired_items = set()
 
-    def cancel_pending():
-        nonlocal pending
-        if pending is not None:
-            pending.cancel()
-            pending = None
-
     def finished(task):
         tasks.discard(task)
         if not task.cancelled():
@@ -41,17 +35,21 @@ async def relay_transcripts(upstream, client, interpret):
             event = json.loads(raw)
             kind = event.get("type")
             item_id = event.get("item_id")
-            starts_turn = kind == "input_audio_buffer.speech_started" or (
+            starts_turn = (kind == "input_audio_buffer.speech_started" and item_id != current_item) or (
                 kind in {"conversation.item.input_audio_transcription.delta", "conversation.item.input_audio_transcription.completed"}
                 and item_id != current_item and item_id not in retired_items
             )
+            if item_id in retired_items:
+                continue
+            if pending is not None and not pending.done() and item_id and item_id != current_item:
+                retired_items.add(item_id)
+                continue
             if starts_turn:
                 if current_item is not None:
                     retired_items.add(current_item)
                 current_item = item_id
                 partial = ""
                 completed = False
-                cancel_pending()
                 await client.send_json({"type": "speech_started", "item_id": item_id})
                 if kind == "input_audio_buffer.speech_started":
                     continue

@@ -128,12 +128,12 @@ test("energy smoothing attacks faster than release and is frame-rate independent
 
 test("all three variants preserve their visuals, react to audio, and respect reduced motion", () => {
   const render = (state, reduced = false, loud = false, variant = "2") => {
-    let pixels, nextFrame, radius;
-    const paths = [], fills = [];
+    let pixels, nextFrame, radius, squash;
+    const paths = [], fills = [], arcs = [];
     const surface = { dataset: { state, variant } };
     const ctx = {
-      save() {}, restore() {}, translate() {}, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; },
-      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; },
+      save() {}, restore() {}, translate() {}, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
+      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; },
       moveTo(...point) { paths.push(point); }, lineTo(...point) { paths.push(point); },
       closePath() {}, fill() { fills.push(this.fillStyle); },
       rotate(angle) { paths.push(["rotate", angle]); }, setTransform() {}, drawImage() {},
@@ -161,10 +161,13 @@ test("all three variants preserve their visuals, react to audio, and respect red
     });
     for (let i = 1; i <= 30 && nextFrame; i++) nextFrame(1000 + i * 34);
     if (variant === "3") {
-      assert.ok(paths.length > 0, "Variant 3 restores the earlier layered contours");
+      if (state === "thinking") {
+        assert.equal(arcs.length, 1, "Processing keeps one continuous fluid silhouette");
+        assert.ok(squash >= 0.48 && squash < 0.55, "Processing is a wide, flattened shape");
+      } else assert.ok(paths.length > 0, "Variant 3 restores the earlier layered contours");
       assert.equal(fills.length, 3);
       assert.ok(fills.every((fill) => Object.values(colors).includes(fill)));
-      return { paths: paths.slice(), radius };
+      return { paths: paths.slice(), radius, squash, arcs: arcs.slice() };
     }
     assert.ok(pixels?.length, "Render a continuous fluid color field");
     const flatColors = new Set(["8,59,40", "28,133,92", "144,176,160", "200,216,200"]);
@@ -191,6 +194,7 @@ test("all three variants preserve their visuals, react to audio, and respect red
     }
     assert.notDeepEqual(hearing, render("listening", false, true, variant));
     assert.notDeepEqual(hearing, render("thinking", false, false, variant));
+    assert.deepEqual(render("thinking", true, false, variant), render("thinking", true, true, variant));
     assert.deepEqual(render("listening", true, false, variant), render("listening", true, true, variant));
   }
 });
@@ -353,25 +357,57 @@ test("protocol keeps transcripts in listening, navigates decisions, and sends PC
   assert.deepEqual(socket.messages.at(-1), { type: "stop" });
 });
 
-test("new speech keeps its transcript and ignores a previous turn's late navigation", async () => {
+test("processing pauses audio streaming and ignores interruptions until the original result", async () => {
   const h = browser();
-  const { socket } = await h.connect();
+  const { socket, context } = await h.connect();
+  const frame = () => context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) } });
   socket.message({ type: "ready" });
   socket.message({ type: "speech_started", item_id: "first" });
+  frame();
   socket.message({ type: "final", item_id: "first" });
-  socket.message({ type: "speech_started", item_id: "second" });
-  socket.message({ type: "delta", item_id: "second", text: "bukan, buka Arkiv" });
-  socket.message({ type: "decision", item_id: "first", action: "show", section: "hero" });
-  socket.message({ type: "final", item_id: "first" });
-  assert.deepEqual(h.sections, []);
-  assert.equal(h.ui.root.dataset.state, "listening");
-  assert.equal(h.ui.transcript.textContent, "bukan, buka Arkiv");
-  socket.message({ type: "speech_stopped", item_id: "second" });
+  const sent = socket.messages.length;
+  frame();
+  assert.equal(socket.messages.length, sent);
+  socket.message({ type: "speech_started", item_id: "interruption" });
+  socket.message({ type: "delta", item_id: "interruption", text: "bukan, buka Arkiv" });
+  socket.message({ type: "final", item_id: "interruption" });
   assert.equal(h.ui.root.dataset.state, "thinking");
   assert.equal(h.ui.transcript.textContent, "");
-  socket.message({ type: "decision", item_id: "second", action: "show", section: "arkiv" });
-  assert.deepEqual(h.sections, ["arkiv"]);
+  socket.message({ type: "decision", item_id: "first", action: "show", section: "codev" });
+  assert.deepEqual(h.sections, ["codev"]);
   assert.equal(h.ui.root.dataset.state, "listening");
+  socket.message({ type: "delta", item_id: "interruption", text: "late caption" });
+  assert.equal(h.ui.transcript.textContent, "");
+  frame();
+  assert.equal(socket.messages.length, sent + 1);
+  socket.message({ type: "speech_started", item_id: "next" });
+  socket.message({ type: "delta", item_id: "next", text: "buka Arkiv" });
+  assert.equal(h.ui.transcript.textContent, "buka Arkiv");
+  h.escape();
+});
+
+test("successive requests accept their first caption after the audio was submitted", async () => {
+  const h = browser();
+  const { socket, context } = await h.connect();
+  socket.message({ type: "ready" });
+  const frame = (level, now) => {
+    h.sandbox.performance.now = () => now;
+    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
+  };
+  for (const [item, start] of [["A", 1000], ["B", 5000]]) {
+    frame(0.1, start);
+    for (let now = start + 100; now <= start + 1900; now += 100) frame(0, now);
+    assert.equal(h.ui.root.dataset.state, "thinking");
+    const sent = socket.messages.length;
+    socket.message({ type: "speech_started", item_id: item });
+    socket.message({ type: "delta", item_id: item, text: "CoDev" });
+    frame(0.1, start + 2000);
+    assert.equal(socket.messages.length, sent);
+    socket.message({ type: "final", item_id: item });
+    socket.message({ type: "decision", item_id: item, action: "show", section: "codev" });
+    assert.equal(h.ui.root.dataset.state, "listening");
+  }
+  assert.deepEqual(h.sections, ["codev", "codev"]);
   h.escape();
 });
 
@@ -414,13 +450,15 @@ test("short quiet commands and transcript-only speech finish once after a natura
   assert.equal(pause.update(quiet, 1000), null);
   assert.equal(pause.update(speech, 1170), "start");
   assert.equal(pause.update(quiet, 1870), null);
-  assert.equal(pause.update(quiet, 2370), "commit");
+  assert.equal(pause.update(quiet, 2370), null);
+  assert.equal(pause.update(quiet, 3070), "commit");
   assert.equal(pause.update(quiet, 3700), null);
   pause.transcript(4000);
   assert.equal(pause.update(quiet, 4500), null);
   pause.transcript(4600);
   assert.equal(pause.update(quiet, 5100), null);
-  assert.equal(pause.update(quiet, 5800), "commit");
+  assert.equal(pause.update(quiet, 5800), null);
+  assert.equal(pause.update(quiet, 6500), "commit");
   assert.equal(pause.update(quiet, 7000), null);
   pause.transcript(7200);
   pause.reset();
@@ -443,7 +481,7 @@ test("background noise and trailing captions cannot keep a finished foreground c
       break;
     }
   }
-  assert.ok(committedAt >= 4000 && committedAt <= 4300, `Expected a natural pause, got ${committedAt}`);
+  assert.ok(committedAt >= 4700 && committedAt <= 5000, `Expected a natural pause, got ${committedAt}`);
   pause.reset();
   for (let now = 5100; now <= 8000; now += 100) {
     assert.equal(pause.update(frame(0.024), now), null, "Learned room noise should stay idle");
@@ -460,6 +498,24 @@ test("a long foreground sentence and brief pauses are not cut by a fixed timeout
   }
 });
 
+test("a breathing pause in background noise keeps the sentence open until speech resumes", () => {
+  const create = vm.runInContext("createPauseDetector", browser().sandbox);
+  const pause = create();
+  const frame = level => new Float32Array(4096).fill(level);
+  for (let now = 1000; now <= 2000; now += 100) pause.update(frame(0.1), now);
+  for (let now = 2100; now <= 3400; now += 100) {
+    assert.notEqual(pause.update(frame(0.024), now), "commit", "A breath should not submit half a sentence");
+  }
+  for (let now = 3500; now <= 5000; now += 100) {
+    assert.notEqual(pause.update(frame(0.09), now), "commit");
+  }
+  let commits = 0;
+  for (let now = 5100; now <= 7100; now += 100) {
+    if (pause.update(frame(0.024), now) === "commit") commits++;
+  }
+  assert.equal(commits, 1, "Background noise must not hold the completed sentence open");
+});
+
 test("late captions cannot reopen a turn that was already submitted", async () => {
   const h = browser();
   const { socket, context } = await h.connect();
@@ -471,12 +527,13 @@ test("late captions cannot reopen a turn that was already submitted", async () =
   };
   frame(0.1, 1000);
   socket.message({ type: "delta", item_id: "A", text: "Buka CoDev" });
-  for (let now = 1100; now <= 2200; now += 100) frame(0.02, now);
+  for (let now = 1100; now <= 2900; now += 100) frame(0.02, now);
   assert.ok(socket.messages.some(message => message.type === "commit"));
   assert.equal(h.ui.root.dataset.state, "thinking");
   socket.message({ type: "delta", item_id: "A", text: "Buka CoDev suara latar" });
   assert.equal(h.ui.root.dataset.state, "thinking");
   assert.equal(h.ui.transcript.textContent, "");
+  socket.message({ type: "decision", item_id: "A", action: "show", section: "codev" });
   socket.message({ type: "speech_started", item_id: "B" });
   socket.message({ type: "delta", item_id: "B", text: "Sekarang Arkiv" });
   assert.equal(h.ui.transcript.textContent, "Sekarang Arkiv");

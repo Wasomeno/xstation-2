@@ -96,7 +96,8 @@ function createPauseDetector() {
         lastSpeech = now;
         return started ? "start" : null;
       }
-      if (active && now - lastSpeech >= 1100) {
+      // Allow a breath mid-sentence without letting background captions extend the turn.
+      if (active && now - lastSpeech >= 1800) {
         active = false;
         heardVoice = false;
         return "commit";
@@ -127,6 +128,7 @@ function createWaveform(canvas) {
   let energy = 0;
   let phase = 0;
   let visualRadius = 24;
+  let visualSquash = 1;
   let lastTime = 0;
   let raf = 0;
   let size = 88;
@@ -150,13 +152,17 @@ function createWaveform(canvas) {
     const speed = state === "thinking" ? 1.05 : state === "connecting" ? 0.65 : listening ? 0.55 + energy * 0.85 : 0.08;
     if (!motion.matches && !failed) phase += seconds * speed;
     const t = motion.matches || failed ? 0 : phase;
-    const targetRadius = listening ? 34 : processing ? 30 : 24;
+    const targetRadius = listening ? 34 : state === "thinking" ? 32 : processing ? 30 : 24;
     visualRadius = motion.matches || failed ? targetRadius
       : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.2));
+    const targetSquash = state === "thinking" ? 0.48 : 1;
+    visualSquash = motion.matches || failed ? targetSquash
+      : visualSquash + (targetSquash - visualSquash) * (1 - Math.exp(-seconds / 0.18));
     const radius = size * (visualRadius / 88);
     ctx.clearRect(0, 0, size, size);
     ctx.save();
     ctx.translate(size / 2, size / 2);
+    ctx.scale(1, visualSquash);
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
     ctx.clip();
@@ -345,7 +351,7 @@ function bindVoice() {
     mute.gain.value = 0;
     const pause = createPauseDetector();
     processor.onaudioprocess = (event) => {
-      if (!isReady() || !socket || socket.readyState !== 1) return;
+      if (!isReady() || ui.root.dataset.state !== "listening" || !socket || socket.readyState !== 1) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
       if (!pcm.length) return;
@@ -406,7 +412,14 @@ function bindVoice() {
       let captureReady = false;
       let currentItem = null;
       let submittedItem = null;
+      const ignoredItems = new Set();
       let pause = null;
+      const finishTurn = () => {
+        pause?.reset();
+        if (currentItem) ignoredItems.add(currentItem);
+        currentItem = null;
+        submittedItem = null;
+      };
       const isReady = () => isCurrent() && backendReady && captureReady;
       const listenWhenReady = () => {
         if (isReady()) showHearing();
@@ -426,7 +439,7 @@ function bindVoice() {
         if (payload.type === "error") {
           if (payload.recoverable && isReady()) {
             if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
-            pause?.reset();
+            finishTurn();
             showHearing();
             return;
           }
@@ -439,7 +452,12 @@ function bindVoice() {
           return;
         }
         if (!isReady()) return;
-        // Only a new transcript turn supersedes a decision; microphone energy may be noise.
+        if (payload.item_id && ignoredItems.has(payload.item_id)) return;
+        if (ui.root.dataset.state === "thinking" && (payload.type === "speech_started" || payload.type === "delta")) {
+          if (!currentItem) currentItem = payload.item_id || null;
+          else if (payload.item_id && payload.item_id !== currentItem) ignoredItems.add(payload.item_id);
+          return;
+        }
         if (payload.type === "speech_started") {
           feedbackAnimation?.cancel();
           currentItem = payload.item_id || null;
@@ -450,7 +468,7 @@ function bindVoice() {
         if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
         if (payload.item_id) currentItem = payload.item_id;
         if (payload.type === "noop") {
-          pause?.reset();
+          finishTurn();
           if (ui.root.dataset.state === "thinking") showNoAction();
           else showHearing();
         }
@@ -464,7 +482,10 @@ function bindVoice() {
           pause?.reset();
           setCopy(COPY.thinking, "", "thinking");
         }
-        else if (payload.type === "decision") applyDecision(payload);
+        else if (payload.type === "decision") {
+          finishTurn();
+          applyDecision(payload);
+        }
       });
       ws.addEventListener("close", fail);
       ws.addEventListener("error", fail);

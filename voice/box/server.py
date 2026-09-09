@@ -52,7 +52,7 @@ ALLOWED_ORIGINS = (
 RATE_WINDOW_S = 60
 RATE_MAX = 20
 DEEPSEEK_URL = os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 OPENAI_TRANSCRIBE_URL = os.environ.get(
     "OPENAI_TRANSCRIBE_URL",
     "https://api.openai.com/v1/audio/transcriptions",
@@ -208,6 +208,7 @@ def health():
         "transcribe": OPENAI_TRANSCRIBE_MODEL,
         "openai": has_openai,
         "deepseek": has_deepseek,
+        "model": DEEPSEEK_MODEL,
     }
     if not payload["ok"]:
         return JSONResponse(payload, status_code=503)
