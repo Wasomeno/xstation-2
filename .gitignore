@@ -3,3 +3,6 @@
 skills-lock.json
 __pycache__/
 .DS_Store
+voice/box/.venv/
+voice/box/.env
+*.pyc

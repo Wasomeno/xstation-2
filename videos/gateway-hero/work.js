@@ -18,7 +18,7 @@ function bindHeroEntry() {
   const brand = document.getElementById("brand");
   const titleLines = document.querySelectorAll("#doctrine-title .hero-title-line > span");
   const lead = document.getElementById("doctrine-lead");
-  const actions = document.querySelectorAll(".station-actions .station-cta");
+  const actions = document.querySelectorAll("#hero-copy .station-actions .station-cta");
   const animatedElements = [brand, ...titleLines, lead, ...actions].filter(Boolean);
   let timeline = null;
 
@@ -143,6 +143,46 @@ function startSmooth() {
   if (!smoothInstance) smoothStarted = false;
   return smoothInstance;
 }
+
+const VOICE_SECTIONS = new Set([
+  "hero",
+  "root",
+  "work",
+  "bikinkonten",
+  "lubna",
+  "crm-ai-agent",
+  "hireassess",
+  "arkiv",
+  "codev",
+  "coframe",
+  "cofinance",
+  "clients",
+  "contact",
+]);
+
+function showSection(id) {
+  const sectionId = id === "root" ? "hero" : id;
+  if (!VOICE_SECTIONS.has(sectionId)) return false;
+  const el = document.getElementById(sectionId);
+  if (!el) return false;
+  const duration = reduce ? 0.05 : 1.15;
+  const bounds = el.getBoundingClientRect();
+  const headerHeight = document.getElementById("site-nav")?.getBoundingClientRect().height || 0;
+  const offset = sectionId === "work" ? -(headerHeight + 16)
+    : sectionId === "hero" ? 0 : (bounds.height - window.innerHeight) / 2;
+  if (smoothInstance) {
+    smoothInstance.scrollTo(el, { offset, duration });
+  } else {
+    window.scrollTo({ top: window.scrollY + bounds.top + offset, behavior: reduce ? "auto" : "smooth" });
+  }
+  document.querySelectorAll(".is-voice-shown").forEach((node) => node.classList.remove("is-voice-shown"));
+  el.classList.add("is-voice-shown");
+  window.clearTimeout(showSection._timer);
+  showSection._timer = window.setTimeout(() => el.classList.remove("is-voice-shown"), 1800);
+  return true;
+}
+
+window.xstationShowSection = showSection;
 
 function stopSmooth() {
   smoothInstance?.__nadiDestroy?.();
