@@ -56,7 +56,7 @@ class OpenAITranscriptionTests(unittest.TestCase):
 
     def test_prompt_echo_is_silence(self):
         result = parse_openai_transcription({
-            "text": "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance",
+            "text": "NADI BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance",
             "language": "indonesian",
         })
         self.assertTrue(result["silence"])

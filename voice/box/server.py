@@ -72,9 +72,9 @@ SESSION_UPDATE = {
                 "format": {"type": "audio/pcm", "rate": 24000},
                 "transcription": {
                     "model": "gpt-live-transcribe",
-                    "prompt": "Pengunjung situs XTATION berbicara dalam Bahasa Indonesia.",
+                    "prompt": "Pengunjung situs NADI berbicara dalam Bahasa Indonesia.",
                     "keywords": [
-                        "XTATION",
+                        "NADI",
                         "BikinKonten",
                         "Lubna",
                         "CRM AI Agent",

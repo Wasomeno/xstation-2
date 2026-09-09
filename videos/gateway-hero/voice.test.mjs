@@ -576,25 +576,25 @@ test("voice navigation starts at the project list and centers individual content
     for (const smooth of [true, false]) {
       let target, options;
       const element = {
-        getBoundingClientRect: () => ({ height }),
-        scrollIntoView(value) { target = this; options = value; },
+        getBoundingClientRect: () => ({ height, top: 500 }),
         classList: { add() {}, remove() {} },
       };
       const sandbox = vm.createContext({
         reduce: !smooth,
         smoothInstance: smooth ? { scrollTo(node, value) { target = node; options = value; } } : null,
-        window: { innerHeight: 800, clearTimeout() {}, setTimeout() {} },
-        document: { getElementById: id => ['codev', 'work'].includes(id) ? element : null, querySelectorAll: () => [] },
+        window: { innerHeight: 800, scrollY: 1000, scrollTo(value) { options = value; }, clearTimeout() {}, setTimeout() {} },
+        document: { getElementById: id => id === 'site-nav' ? { getBoundingClientRect: () => ({ height: 72 }) } : ['codev', 'work', 'hero'].includes(id) ? element : null, querySelectorAll: () => [] },
       });
       const show = vm.runInContext(`${navigation}\nshowSection`, sandbox);
       assert.equal(show('codev'), true);
-      assert.equal(target, element);
-      if (smooth) assert.equal(options.offset, (height - 800) / 2);
-      else { assert.equal(options.block, 'center'); assert.equal(options.behavior, 'auto'); }
+      if (smooth) { assert.equal(target, element); assert.equal(options.offset, (height - 800) / 2); }
+      else { assert.equal(options.top, 1500 + (height - 800) / 2); assert.equal(options.behavior, 'auto'); }
       assert.equal(show('work'), true);
-      assert.equal(target, element);
+      if (smooth) { assert.equal(target, element); assert.equal(options.offset, -88); }
+      else { assert.equal(options.top, 1412); assert.equal(options.behavior, 'auto'); }
+      assert.equal(show('root'), true);
       if (smooth) assert.equal(options.offset, 0);
-      else { assert.equal(options.block, 'start'); assert.equal(options.behavior, 'auto'); }
+      else assert.equal(options.top, 1500);
       assert.equal(show('unknown'), false);
     }
   }

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>XTATION - Your Gateway To Intelligent Products</title>
+    <title>NADI - Your Gateway To Intelligent Products</title>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <script type="importmap">
       {
@@ -183,18 +183,15 @@ background: var(--page);
 
       #brand {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         gap: 10px;
         color: inherit;
       }
 
-      #brand em {
-        font-family: var(--sans);
-        font-style: normal;
-        font-weight: 400;
-        font-size: 18px;
-        letter-spacing: 0.04em;
-        text-transform: none;
+      #brand .brand-logo {
+        display: block;
+        width: clamp(5.75rem, 7vw, 6.75rem);
+        height: auto;
       }
 
       #title-layer {
@@ -281,9 +278,8 @@ background: var(--page);
         <div id="veil"></div>
         <div id="edge-fade"></div>
         <header id="site-nav">
-          <a id="brand" href="#root">
-            <span>01</span>
-            <em>XTATION</em>
+          <a id="brand" href="#root" aria-label="NADI home">
+            <img class="brand-logo" src="media/brand/nadi-wordmark.svg" alt="NADI" />
           </a>
         </header>
         <div id="title-layer">

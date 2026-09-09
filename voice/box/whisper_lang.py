@@ -4,9 +4,9 @@ from __future__ import annotations
 
 ID_FAMILY = frozenset({"id", "ms"})
 
-ID_PROMPT = "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
+ID_PROMPT = "NADI BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
 
-HOTWORDS = "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
+HOTWORDS = "NADI BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
 
 FOREIGN_ASK = "Bahasanya belum ketangkap. Coba ulangi dalam Bahasa Indonesia?"
 

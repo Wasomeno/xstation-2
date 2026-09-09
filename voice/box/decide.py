@@ -12,7 +12,7 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
 UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
 
-SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs XTATION. Kamu driver, bukan pemandu.
+SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs NADI. Kamu driver, bukan pemandu.
 
 Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk dibawa ke sebuah Section.
 Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog.

@@ -1,6 +1,6 @@
-# XTATION
+# NADI
 
-Landing page (`index.html`) for XTATION - a station for company projects and apps.
+Landing page (`index.html`) for NADI — a portfolio of intelligent products for business.
 
 ## Run locally
 

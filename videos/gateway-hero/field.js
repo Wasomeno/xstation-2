@@ -122,7 +122,7 @@ function svgEl(name, attrs) {
 function metrics() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const compact = w < 720;
+  const compact = w < 768 || h < 500;
   const r = Math.min(w * (compact ? 0.48 : 0.4), h * (compact ? 0.4 : 0.48), compact ? 380 : 540);
   return {
     w,
@@ -1869,7 +1869,8 @@ export function createField({ root, gsap, reduce }) {
 
   const dock = document.createElement("div");
   dock.className = "dock";
-  dock.setAttribute("aria-hidden", "true");
+  dock.setAttribute("role", "group");
+  dock.setAttribute("aria-label", "Explore product categories");
   root.appendChild(dock);
 
   const svg = svgEl("svg", {
@@ -1908,9 +1909,12 @@ svg.append(spokeGroup, ringCore, ringMid, ringOuter, alignLine);
   };
 
   const nodes = STATION_NODES.map((spec, index) => {
-    const el = document.createElement("div");
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "dock-node" + (spec.accent ? " is-accent" : "");
     if (spec.label === "Products") el.setAttribute("data-dock", "products");
+    el.setAttribute("aria-pressed", "false");
+    el.setAttribute("aria-controls", "doctrine-copy-stage");
     const label = document.createElement("span");
     label.className = "dock-node-label";
     label.textContent = spec.label;
@@ -1948,6 +1952,18 @@ svg.append(spokeGroup, ringCore, ringMid, ringOuter, alignLine);
   const productsNode = nodes.find((node) => node.el.dataset.dock === "products") || null;
 
   let orbView = null;
+  const interactionBindings = [];
+
+  function bindInteraction(element, type, handler, options) {
+    element.addEventListener(type, handler, options);
+    interactionBindings.push([element, type, handler, options]);
+  }
+
+  function emitOrbitInteraction(state, index = -1) {
+    window.dispatchEvent(new CustomEvent("xstation:orbit-interaction", {
+      detail: { state, index },
+    }));
+  }
   if (!reduce) {
     try {
       orbView = createOrbViewSlot(root, gsap, initialRenderActive, sharedRenderer);
@@ -2213,16 +2229,29 @@ function ringRadius(name) {
   }
 
   function bindHover() {
-    nodes.forEach((node) => {
-      node.el.addEventListener("pointerenter", () => setHover(node));
-      node.el.addEventListener("pointerleave", () => {
-        if (hover === node) setHover(null);
+    nodes.forEach((node, index) => {
+      bindInteraction(node.el, "pointerenter", () => {
+        setHover(node);
+        emitOrbitInteraction("engage", index);
       });
+      bindInteraction(node.el, "pointerleave", () => {
+        if (hover === node) setHover(null);
+        emitOrbitInteraction("release", index);
+      });
+      bindInteraction(node.el, "focus", () => {
+        setHover(node);
+        emitOrbitInteraction("engage", index);
+      });
+      bindInteraction(node.el, "blur", () => {
+        if (hover === node) setHover(null);
+        emitOrbitInteraction("release", index);
+      });
+      bindInteraction(node.el, "click", () => emitOrbitInteraction("select", index));
     });
     const canvas = orbView && orbView.canvas;
     if (canvas) {
-      canvas.addEventListener("pointerenter", () => setHover("orb"));
-      canvas.addEventListener("pointerleave", () => {
+      bindInteraction(canvas, "pointerenter", () => setHover("orb"));
+      bindInteraction(canvas, "pointerleave", () => {
         if (hover === "orb") setHover(null);
       });
     }
@@ -2328,6 +2357,9 @@ function ringRadius(name) {
   function setFocusIndex(nextIndex) {
     if (nextIndex === focusIndex) return;
     focusIndex = nextIndex;
+    nodes.forEach((node, index) => {
+      node.el.setAttribute("aria-pressed", String(index === nextIndex));
+    });
     if (nextIndex < 0) {
       focusRotationTarget = 0;
       return;
@@ -2743,6 +2775,7 @@ function ringRadius(name) {
 
   bindHover();
   window.addEventListener("resize", handleResize);
+  window.visualViewport?.addEventListener("resize", handleResize);
 
   const controller = {
     items: slabs,
@@ -2796,7 +2829,11 @@ function ringRadius(name) {
     },
     destroy() {
       window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleResize);
       window.clearTimeout(resizeTimer);
+      interactionBindings.forEach(([element, type, handler, options]) => {
+        element.removeEventListener(type, handler, options);
+      });
       if (idleTl) idleTl.kill();
       if (whisperTl) whisperTl.kill();
     if (focusSnapTween) focusSnapTween.kill();

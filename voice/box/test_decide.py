@@ -1,6 +1,9 @@
 import unittest
+from html.parser import HTMLParser
+from pathlib import Path
 
 from decide import decide, decide_from_model_text, parse_model_json
+from sections import SECTION_IDS
 
 
 class ParseModelJsonTests(unittest.TestCase):
@@ -17,6 +20,16 @@ class ParseModelJsonTests(unittest.TestCase):
 
 
 class DecideTests(unittest.TestCase):
+    def test_catalog_destinations_exist_in_the_landing_page(self):
+        ids = set()
+
+        class Page(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                ids.add(dict(attrs).get("id"))
+
+        Page().feed((Path(__file__).resolve().parents[2] / "index.html").read_text())
+        self.assertFalse(set(SECTION_IDS) - ids)
+
     def test_removed_poc_actions_are_rejected(self):
         for target in ("bikinkonten-demo", "talk-to-us"):
             self.assertEqual(decide({"action": "activate", "target": target})["action"], "clarify")
