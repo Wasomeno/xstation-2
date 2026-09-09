@@ -65,24 +65,18 @@ function createSurface() {
   const root = document.createElement("div");
   root.id = "voice-surface";
   root.hidden = true;
+  root.dataset.state = "idle";
   root.innerHTML = `
-    <button class="voice-mic" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
-      <svg class="voice-mic-mark" viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"></rect>
-        <path d="M7 11a5 5 0 0 0 10 0" fill="none" stroke="currentColor" stroke-width="2"></path>
-        <path d="M12 16v4M9 21h6" fill="none" stroke="currentColor" stroke-width="2"></path>
-      </svg>
-    </button>
-    <div class="voice-panel" hidden>
+    <div class="voice-copy">
       <p class="voice-status" aria-live="polite"></p>
       <p class="voice-transcript"></p>
     </div>
+    <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan"></button>
   `;
   document.body.append(root);
   return {
     root,
-    button: root.querySelector(".voice-mic"),
-    panel: root.querySelector(".voice-panel"),
+    button: root.querySelector(".voice-orb"),
     status: root.querySelector(".voice-status"),
     transcript: root.querySelector(".voice-transcript"),
   };
@@ -99,15 +93,22 @@ function bindVoice() {
   let audioContext = null;
   let processor = null;
 
-  const setCopy = (status, transcript = "") => {
+  const setState = (state) => {
+    ui.root.dataset.state = state;
+  };
+
+  const setCopy = (status, transcript = "", state) => {
     ui.status.textContent = status || "";
     ui.transcript.textContent = transcript || "";
-    ui.panel.hidden = !status && !transcript;
+    if (state) setState(state);
   };
 
   const setPressed = (on) => {
     ui.button.setAttribute("aria-pressed", on ? "true" : "false");
     ui.button.setAttribute("aria-label", on ? COPY.stop : COPY.start);
+    if (!on && ui.root.dataset.state !== "deaf" && ui.root.dataset.state !== "blocked") {
+      setState("idle");
+    }
   };
 
   const teardownAudio = () => {
@@ -144,35 +145,33 @@ function bindVoice() {
     closing = true;
     setPressed(false);
     teardownAudio();
-    if (status) setCopy(status);
-    else {
-      ui.panel.hidden = true;
-      ui.status.textContent = "";
-      ui.transcript.textContent = "";
-    }
+    if (status === COPY.deaf) setCopy(status, "", "deaf");
+    else if (status === COPY.blocked) setCopy(status, "", "blocked");
+    else if (status) setCopy(status, "", "idle");
+    else setCopy("", "", "idle");
   };
 
   const applyDecision = (decision) => {
     const transcript = decision?.transcript || "";
     if (decision?.action === "noop") {
-      setCopy(COPY.listen);
+      setCopy(COPY.listen, "", "listening");
       return;
     }
     if (decision?.action === "busy") {
-      setCopy(COPY.busy, transcript);
+      setCopy(COPY.busy, transcript, "thinking");
       return;
     }
     if (decision?.action === "show" && decision.section) {
       const shown = window.xstationShowSection?.(decision.section);
       const label = SECTION_LABELS[decision.section] || decision.section;
-      setCopy(shown ? label : COPY.cantShow, transcript);
+      setCopy(shown ? label : COPY.cantShow, transcript, shown ? "shown" : "clarify");
       return;
     }
     if (decision?.action === "clarify" && decision.text) {
-      setCopy(decision.text, transcript);
+      setCopy(decision.text, transcript, "clarify");
       return;
     }
-    setCopy(COPY.listen, transcript);
+    setCopy(COPY.listen, transcript, "listening");
   };
 
   const startCapture = () => {
@@ -192,6 +191,7 @@ function bindVoice() {
       let sum = 0;
       for (let i = 0; i < input.length; i += 1) sum += input[i] * input[i];
       const rms = Math.sqrt(sum / input.length);
+      ui.root.style.setProperty("--level", String(Math.min(1, rms / 0.12)));
       const now = performance.now();
       if (rms >= 0.03) {
         if (!talking) {
@@ -205,7 +205,7 @@ function bindVoice() {
         if (lastLoudAt - speechStartedAt >= 700) {
           socket.send(JSON.stringify({ type: "commit" }));
         } else {
-          setCopy(COPY.listen);
+          setCopy(COPY.listen, "", "listening");
         }
         talking = false;
       }
@@ -217,7 +217,7 @@ function bindVoice() {
 
   const startSession = async () => {
     closing = false;
-    setCopy(DISCLOSURE);
+    setCopy(DISCLOSURE, "", "listening");
     const micRequest = navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
@@ -261,23 +261,23 @@ function bindVoice() {
         return;
       }
       if (payload.type === "ready") {
-        setCopy(COPY.listen);
+        setCopy(COPY.listen, "", "listening");
         return;
       }
       if (payload.type === "speech_started") {
-        setCopy(COPY.listen, "");
+        setCopy(COPY.listen, "", "listening");
         return;
       }
       if (payload.type === "delta") {
-        setCopy(COPY.listen, payload.text || "");
+        setCopy(COPY.listen, payload.text || "", payload.text ? "speaking" : "listening");
         return;
       }
       if (payload.type === "final") {
-        setCopy(COPY.think, payload.transcript || "");
+        setCopy(COPY.think, payload.transcript || "", "thinking");
         return;
       }
       if (payload.type === "noop") {
-        setCopy(COPY.listen);
+        setCopy(COPY.listen, "", "listening");
         return;
       }
       if (payload.type === "decision") {
@@ -285,7 +285,7 @@ function bindVoice() {
         return;
       }
       if (payload.type === "error") {
-        setCopy(COPY.deaf);
+        setCopy(COPY.deaf, "", "deaf");
       }
     });
     socket.addEventListener("close", () => {
@@ -311,7 +311,7 @@ function bindVoice() {
     startCapture();
     session = true;
     setPressed(true);
-    setCopy(COPY.listen);
+    setCopy(COPY.listen, "", "listening");
   };
 
   ui.button.addEventListener("click", () => {

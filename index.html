@@ -865,7 +865,7 @@
     </style>
     <link rel="stylesheet" href="videos/gateway-hero/field.css" />
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
-    <link rel="stylesheet" href="videos/gateway-hero/voice.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=orb" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
@@ -1091,6 +1091,13 @@
 
     <script src="videos/gateway-hero/welcome.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
-    <script type="module" src="videos/gateway-hero/voice.js"></script>
+    <script type="module">
+      const variant = new URLSearchParams(location.search).get("variant");
+      if (variant) {
+        import("./videos/gateway-hero/voice-ui-prototype.js");
+      } else {
+        import("./videos/gateway-hero/voice.js");
+      }
+    </script>
   </body>
 </html>
