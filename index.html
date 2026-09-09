@@ -1091,13 +1091,6 @@
 
     <script src="videos/gateway-hero/welcome.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
-    <script type="module">
-      const variant = new URLSearchParams(location.search).get("variant");
-      if (variant) {
-        import("./videos/gateway-hero/voice-ui-prototype.js");
-      } else {
-        import("./videos/gateway-hero/voice.js?v=siri-wave");
-      }
-    </script>
+    <script type="module" src="videos/gateway-hero/voice.js?v=siri-wave"></script>
   </body>
 </html>
