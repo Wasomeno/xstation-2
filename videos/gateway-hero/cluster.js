@@ -13,7 +13,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   const ctx = host.getContext("2d");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // topology / timing: approved Nadi hero constants — do not change without owner
+  // Keep the six agent anchors and camera/pulse timing stable as the canopy grows.
   const FOV = 980;
   const BEAT = 0.75;
   const WAKE = BEAT * 2;
@@ -35,13 +35,13 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   });
   const LOOP = SEQ.reduce((a, s) => a + s.dur, 0);
 
-  // paper retune: color and compositing only. Nadi drew additive rgb(110,240,178) on #04100B.
-  const G = [8, 59, 40];
-  const PULSE = [28, 133, 92];
-  const HEAD = [28, 133, 92];
-  const PAPER_GAIN = 1.35;
-  const FAR_ALPHA_MUL = 0.32;
-  const CORE_BLOOM = 0.42;
+  // Sage structure and emerald signals retain definition on the warm paper.
+  const G = [72, 108, 91];
+  const PULSE = [62, 145, 109];
+  const HEAD = [18, 105, 70];
+  const PAPER_GAIN = 1.45;
+  const FAR_ALPHA_MUL = 0.26;
+  const CORE_BLOOM = 0.34;
   const NAMES = [
     "Marketing & Content",
     "Customer Engagement",
@@ -137,13 +137,19 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     { dir: [0.56, 0.70, -0.44], len: 440, bow: [-92, -30] },
     { dir: [-0.22, 0.90, 0.38], len: 372, bow: [62, 48] },
     { dir: [-0.90, 0.28, -0.34], len: 330, bow: [-54, 40] },
+    // Supporting limbs fill the gaps at different depths, without new tour stops.
+    { dir: [0.12, -0.96, -0.24], len: 425, bow: [48, -32] },
+    { dir: [0.78, 0.43, 0.45], len: 315, bow: [-58, 26] },
+    { dir: [-0.73, -0.37, -0.57], len: 385, bow: [42, 54] },
   ];
 
   function grow(scale, widthMul, alphaMul, origin, deep) {
     const all = [];
-    const primaries = MAIN_DIRS.map((m) => {
+    const primaries = MAIN_DIRS.map((m, mainIndex) => {
       const c = curve(origin, m.dir, m.len * scale, m.bow[0] * scale, m.bow[1] * scale, 44);
-      const v = { ...c, gen: 0, w: 2.9 * widthMul, a: 0.40 * alphaMul, kids: [], dur: OUT, origin };
+      const supporting = mainIndex >= NAMES.length;
+      const v = { ...c, gen: 0, w: (supporting ? 2.3 : 2.9) * widthMul,
+        a: (supporting ? 0.30 : 0.40) * alphaMul, kids: [], dur: OUT, origin };
       all.push(v);
       [0.52, 0.70, 0.86].forEach((at, j) => {
         const i0 = Math.round(at * 44);
@@ -186,6 +192,38 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       }
       return v;
     });
+    // Grow from existing tangents, with uneven lengths and sparse forks.
+    // Add these after the original skeleton so its seeded shapes stay stable.
+    if (deep) {
+      const tips = all.filter((v) => v.gen === 1 || v.gen === 3);
+      tips.forEach((parent, index) => {
+        if (parent.gen === 3 && index % 3 === 0) return;
+        const tan = tangentAt(parent.pts, parent.pts.length - 1);
+        const axis = norm(cross(tan, [0.3, 0.9, -0.4]));
+        const len = rr(42, 92) * scale * (parent.gen === 1 ? 1.25 : 0.85);
+        const dir = rotAround(tan, axis, rr(-0.24, 0.24));
+        const end = add(parent.end, dir, len);
+        const pts = bez(parent.end, add(parent.end, tan, len * 0.34),
+          add(end, dir, -len * 0.30), end, 12);
+        const extension = {
+          pts, end, dir, gen: parent.gen + 1,
+          w: parent.w * 0.58, a: parent.a * 0.85,
+          kids: [], parent, at: 1, dur: 0.22, origin,
+        };
+        all.push(extension);
+        parent.kids.push(extension);
+        if (parent.gen !== 1 || index % 2 !== 0) return;
+        const at = 0.58;
+        const forkDir = rotAround(tangentAt(pts, 7), axis, index % 4 ? -0.64 : 0.52);
+        const fork = {
+          ...curve(pts[7], forkDir, len * 0.56, 8 * scale, -5 * scale, 8),
+          gen: extension.gen + 1, w: extension.w * 0.64, a: extension.a * 0.8,
+          kids: [], parent: extension, at, dur: 0.18, origin,
+        };
+        all.push(fork);
+        extension.kids.push(fork);
+      });
+    }
     for (const v of all) {
       v.rad = v.pts.map((p) => Math.hypot(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]));
     }
@@ -212,6 +250,63 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   let CX = 0;
   let CY = 0;
   let SC = 1;
+  // Cache the scenery on resize; only gentle parallax moves each frame.
+  const scenery = document.createElement("canvas");
+  const sceneryCtx = scenery.getContext("2d");
+  function paintScenery() {
+    scenery.width = host.width;
+    scenery.height = host.height;
+    sceneryCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const haze = (x, y, rx, ry, color, alpha) => {
+      sceneryCtx.save();
+      sceneryCtx.translate(W * x, Ht * y);
+      sceneryCtx.scale(W * rx, Ht * ry);
+      const wash = sceneryCtx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      wash.addColorStop(0, rgba(color, alpha));
+      wash.addColorStop(0.45, rgba(color, alpha * 0.55));
+      wash.addColorStop(1, rgba(color, 0));
+      sceneryCtx.fillStyle = wash;
+      sceneryCtx.fillRect(-1, -1, 2, 2);
+      sceneryCtx.restore();
+    };
+    haze(0.80, 0.40, 0.43, 0.55, [186, 209, 194], 0.32);
+    haze(0.61, 0.84, 0.46, 0.22, [158, 187, 172], 0.20);
+    haze(0.95, 0.68, 0.31, 0.30, [206, 211, 191], 0.26);
+    // Fine paper grain, generated once per resize rather than animated noise.
+    // A separate seed keeps texture changes independent of branch geometry.
+    const grain = document.createElement("canvas");
+    grain.width = scenery.width;
+    grain.height = scenery.height;
+    const grainCtx = grain.getContext("2d");
+    const pixels = grainCtx.createImageData(grain.width, grain.height);
+    let grainSeed = 9137;
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      grainSeed = (Math.imul(grainSeed, 1664525) + 1013904223) >>> 0;
+      const noise = grainSeed / 4294967296;
+      const light = noise > 0.5;
+      pixels.data[i] = light ? 255 : 92;
+      pixels.data[i + 1] = light ? 255 : 110;
+      pixels.data[i + 2] = light ? 250 : 98;
+      pixels.data[i + 3] = Math.round(Math.abs(noise - 0.5) * 28);
+    }
+    grainCtx.putImageData(pixels, 0, 0);
+    sceneryCtx.drawImage(grain, 0, 0, W, Ht);
+    // Widely spaced contours suggest a distant ground plane.
+    for (let i = 0; i < 3; i++) {
+      const y = Ht * (0.77 + i * 0.075);
+      const ink = sceneryCtx.createLinearGradient(W * 0.34, 0, W, 0);
+      ink.addColorStop(0, "rgba(130,160,142,0)");
+      ink.addColorStop(0.55, `rgba(130,160,142,${0.10 - i * 0.02})`);
+      ink.addColorStop(1, "rgba(130,160,142,0)");
+      sceneryCtx.beginPath();
+      sceneryCtx.moveTo(W * 0.28, y + Ht * 0.07);
+      sceneryCtx.bezierCurveTo(W * 0.55, y - Ht * 0.08,
+        W * 0.72, y + Ht * 0.05, W * 1.05, y - Ht * 0.11);
+      sceneryCtx.strokeStyle = ink;
+      sceneryCtx.lineWidth = 0.8;
+      sceneryCtx.stroke();
+    }
+  }
 
   function size() {
     const r = host.getBoundingClientRect();
@@ -222,6 +317,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     host.width = Math.round(W * DPR);
     host.height = Math.round(Ht * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    paintScenery();
     const narrow = W < 820;
     CX = narrow ? W * 0.52 : W * 0.665;
     CY = narrow ? Ht * 0.40 : Ht * 0.50;
@@ -485,6 +581,12 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.globalCompositeOperation = "source-over";
+    ctx.save();
+    ctx.globalAlpha = waking ? 0.18 : 0.18 + treeA * 0.82;
+    const sceneryX = reduce ? 0 : mx * 5 + Math.sin(cam.yaw) * 9;
+    const sceneryY = reduce ? 0 : my * 3 + Math.sin(cam.pitch) * 6;
+    ctx.drawImage(scenery, sceneryX - W * 0.02, sceneryY - Ht * 0.02, W * 1.04, Ht * 1.04);
+    ctx.restore();
 
     if (!waking) {
       const saveA = treeA;
@@ -512,11 +614,15 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         const ep = project(v.end);
         const df = Math.min(1, Math.abs(ep[3] - focusDepth) / 430);
         const a = fog(ep[3]) * (1 - df * 0.5) * treeA * PAPER_GAIN;
-        glow(ep[0], ep[1], 12 * ep[2] * (1 + df), 0.28 * a, PULSE);
+        glow(ep[0], ep[1], 10 * ep[2] * (1 + df), 0.24 * a, PULSE);
+        ctx.beginPath();
+        ctx.arc(ep[0], ep[1], Math.max(1, 2.2 * ep[2]), 0, 6.2832);
+        ctx.fillStyle = rgba(HEAD, 0.62 * a);
+        ctx.fill();
         ctx.beginPath();
         ctx.arc(ep[0], ep[1], Math.min(9, 7 * ep[2]), 0, 6.2832);
         ctx.lineWidth = Math.max(0.3, Math.min(1.2, 0.9 * ep[2]));
-        ctx.strokeStyle = rgba(PULSE, 0.30 * a);
+        ctx.strokeStyle = rgba(PULSE, 0.46 * a);
         ctx.stroke();
       });
 
