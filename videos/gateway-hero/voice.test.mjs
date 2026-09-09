@@ -23,7 +23,7 @@ const microphone = () => {
 };
 
 function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
-  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [];
+  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], activations = [];
   const button = Object.assign(new EventTarget(), {
     attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -64,9 +64,10 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   const window = Object.assign(new EventTarget(), {
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
+    xstationActivateCTA(target) { activations.push(target); return target === "bikinkonten-demo"; },
     matchMedia: () => ({ matches: reducedMotion }),
   });
-  const document = new EventTarget();
+  const document = Object.assign(new EventTarget(), { querySelector: () => null });
   const sandbox = vm.createContext({
     window, document, ui, Event, AbortController,
     navigator: { mediaDevices: unsupported ? undefined : { getUserMedia() {
@@ -80,7 +81,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   });
   vm.runInContext(`${source}\ncreateSurface = () => ui; bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, sandbox,
+    ui, microphones, health, sockets, contexts, sections, animations, activations, sandbox,
     copy: vm.runInContext("COPY", sandbox),
     click: () => emit(button, "click"),
     escape: () => emit(document, "keydown", { key: "Escape" }),
@@ -512,7 +513,7 @@ test("unmatched commands shake once, successful navigation and idle silence do n
   reduced.escape();
 });
 
-test("voice navigation centers the target in smooth and native scrolling", async () => {
+test("voice navigation starts at the project list and centers individual content in smooth and native scrolling", async () => {
   const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
   const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
   for (const height of [400, 1200]) {
@@ -527,14 +528,34 @@ test("voice navigation centers the target in smooth and native scrolling", async
         reduce: !smooth,
         smoothInstance: smooth ? { scrollTo(node, value) { target = node; options = value; } } : null,
         window: { innerHeight: 800, clearTimeout() {}, setTimeout() {} },
-        document: { getElementById: id => id === 'codev' ? element : null, querySelectorAll: () => [] },
+        document: { getElementById: id => ['codev', 'work'].includes(id) ? element : null, querySelectorAll: () => [] },
       });
       const show = vm.runInContext(`${navigation}\nshowSection`, sandbox);
       assert.equal(show('codev'), true);
       assert.equal(target, element);
       if (smooth) assert.equal(options.offset, (height - 800) / 2);
       else { assert.equal(options.block, 'center'); assert.equal(options.behavior, 'auto'); }
+      assert.equal(show('work'), true);
+      assert.equal(target, element);
+      if (smooth) assert.equal(options.offset, 0);
+      else { assert.equal(options.block, 'start'); assert.equal(options.behavior, 'auto'); }
       assert.equal(show('unknown'), false);
     }
   }
+});
+
+test("voice can activate the demo CTA and Escape leaves an open dialog's session running", async () => {
+  const h = browser();
+  const { socket, track } = await h.connect();
+  socket.message({ type: 'ready' });
+  socket.message({ type: 'decision', action: 'activate', target: 'bikinkonten-demo' });
+  assert.deepEqual(h.activations, ['bikinkonten-demo']);
+  assert.equal(h.animations.length, 0);
+  assert.equal(h.ui.root.dataset.state, 'listening');
+  h.sandbox.document.querySelector = () => ({ open: true });
+  h.escape();
+  assert.equal(track.stopped, false);
+  h.sandbox.document.querySelector = () => null;
+  h.escape();
+  assert.equal(track.stopped, true);
 });

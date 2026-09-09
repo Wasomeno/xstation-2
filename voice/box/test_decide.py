@@ -17,6 +17,12 @@ class ParseModelJsonTests(unittest.TestCase):
 
 
 class DecideTests(unittest.TestCase):
+    def test_demo_activation_is_limited_to_the_registered_cta(self):
+        self.assertEqual(decide({"action": "activate", "target": "bikinkonten-demo"}),
+                         {"action": "activate", "target": "bikinkonten-demo"})
+        for target in (None, "contact", "#bikinkonten", "https://example.com", "delete"):
+            self.assertEqual(decide({"action": "activate", "target": target})["action"], "clarify")
+
     def test_show_known_section(self):
         self.assertEqual(
             decide({"action": "show", "section": "hireassess"}),

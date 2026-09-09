@@ -14,8 +14,8 @@ UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
 
 SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs XTATION. Kamu driver, bukan pemandu.
 
-Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk dibawa ke sebuah Section.
-Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog.
+Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk melihat Section atau mengaktifkan CTA yang terdaftar.
+Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section atau CTA dari katalog di bawah.
 
 Kalau Command menunjuk tepat satu Section, kembalikan Show.
 "Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
@@ -28,10 +28,17 @@ Hormati penyangkalan: "jangan ke beranda" tidak boleh Show hero.
 "kelola dokumen" adalah Show arkiv. "buat prototype" adalah Show coframe.
 Untuk konten sosial yang belum membedakan BikinKonten dan Lubna, Clarification; jangan pilih sembarang.
 
+CTA interaktif yang tersedia: "Coba BikinKonten", target "bikinkonten-demo", membuka overlay pratinjau tanpa mengirim data.
+"coba BikinKonten", "buka demo BikinKonten", "tampilkan overlay BikinKonten", "buka overlay", atau "klik tombol Coba BikinKonten": activate bikinkonten-demo.
+Permintaan melihat atau mengenal BikinKonten ("apa itu BikinKonten", "lihat BikinKonten") tetap Show bikinkonten.
+Permintaan demo produk lain tetap mengikuti aturan contact, jangan buka demo BikinKonten untuk produk lain.
+Jangan membuat target CTA, selector, URL, atau aksi lain. Hormati penyangkalan seperti "jangan buka demo".
+
 Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
 {{"action":"noop"}}
+{{"action":"activate","target":"bikinkonten-demo"}}
 
 Tulis teks Clarification dalam Bahasa Indonesia.
 
@@ -116,6 +123,10 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
         return _clarify([], UNCLEAR_ASK)
 
     action = str(payload.get("action") or "").strip().lower()
+    if action == "activate":
+        if payload.get("target") == "bikinkonten-demo":
+            return {"action": "activate", "target": "bikinkonten-demo"}
+        return _clarify([], UNCLEAR_ASK)
     if action == "noop":
         return {"action": "noop"}
     hypotheses = payload.get("hypotheses") or payload.get("hypothesis") or []

@@ -220,12 +220,13 @@ function showSection(id) {
   if (!VOICE_SECTIONS.has(sectionId)) return false;
   const el = document.getElementById(sectionId);
   if (!el) return false;
+  if (document.getElementById("bikinkonten-demo")?.open) setBikinKontenDemo(false);
   const duration = reduce ? 0.05 : 1.15;
   if (smoothInstance) {
-    const offset = (el.getBoundingClientRect().height - window.innerHeight) / 2;
+    const offset = sectionId === "work" ? 0 : (el.getBoundingClientRect().height - window.innerHeight) / 2;
     smoothInstance.scrollTo(el, { offset, duration });
   } else {
-    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: sectionId === "work" ? "start" : "center" });
   }
   document.querySelectorAll(".is-voice-shown").forEach((node) => node.classList.remove("is-voice-shown"));
   el.classList.add("is-voice-shown");
@@ -235,6 +236,44 @@ function showSection(id) {
 }
 
 window.xstationShowSection = showSection;
+
+function setBikinKontenDemo(open) {
+  const dialog = document.getElementById("bikinkonten-demo");
+  if (!dialog || dialog.open === open) return;
+  const voice = document.getElementById("voice-surface");
+  if (open) {
+    dialog.showModal();
+    if (voice) dialog.append(voice);
+    smoothInstance?.stop();
+  } else {
+    if (voice) document.body.append(voice);
+    dialog.close();
+    smoothInstance?.start();
+  }
+}
+
+window.xstationActivateCTA = (target) => {
+  if (target !== "bikinkonten-demo") return false;
+  const button = document.getElementById("bikinkonten-demo-cta");
+  if (!button) return false;
+  button.click();
+  return true;
+};
+
+document.getElementById("bikinkonten-demo-cta")?.addEventListener("click", () => setBikinKontenDemo(true));
+const demoDialog = document.getElementById("bikinkonten-demo");
+demoDialog?.querySelector(".product-demo-close")?.addEventListener("click", () => setBikinKontenDemo(false));
+demoDialog?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  setBikinKontenDemo(false);
+});
+demoDialog?.addEventListener("click", (event) => {
+  if (event.target !== demoDialog) return;
+  const rect = demoDialog.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
+    setBikinKontenDemo(false);
+  }
+});
 
 function bindSmoothStart() {
   if (reduce || shot || typeof window.Lenis !== "function") return () => {};
