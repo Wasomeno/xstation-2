@@ -241,7 +241,7 @@ html.lenis body {
   grid-template-columns: 1fr 1fr;
   min-height: 80dvh;
   gap: 0;
-  padding: 0 var(--pad);
+  padding: 0;
   background: #ffffff;
 }
 
@@ -865,9 +865,10 @@ html.lenis body {
 }
 
 /* Project detail treatment: keep the reference hierarchy inside XTATION's light green theme. */
-.space {
+.space,
+.space.is-flip {
   align-items: stretch;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: clamp(34rem, 70dvh, 46rem);
   background: #ffffff;
 }
@@ -884,6 +885,7 @@ html.lenis body {
 
 .space-copy {
   justify-content: flex-start;
+  width: 100%;
 }
 
 .field-mark {
@@ -940,6 +942,30 @@ html.lenis body {
   line-height: 1.5;
 }
 
+.project-cta {
+  align-self: flex-start;
+  margin-top: clamp(1.75rem, 3vw, 2.5rem);
+}
+
+.project-cta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.project-cta-icon {
+  display: inline-block;
+  font-size: 0.92em;
+  line-height: 1;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .project-cta:hover .project-cta-icon {
+    transform: translate(0.16rem, -0.16rem);
+  }
+}
+
 @media (max-width: 1024px) {
   .space-panel {
     min-height: 20.8rem;
@@ -981,6 +1007,10 @@ html.lenis body {
 
   .lede {
     margin-top: 1.35rem;
+  }
+
+  .project-cta {
+    min-height: 44px;
   }
 
 }
