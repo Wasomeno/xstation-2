@@ -37,6 +37,7 @@ import httpx
 import uvicorn
 
 from decide import SYSTEM_PROMPT, decide_from_model_text
+from whisper_lang import HOTWORDS, ID_PROMPT, resolve_asr_language
 
 ALLOWED_ORIGINS = (
     "http://127.0.0.1:4174",
@@ -93,11 +94,25 @@ def _whisper_model():
 
 
 def transcribe_path(path: str) -> str:
-    segments, _info = _whisper_model().transcribe(
-        path,
-        language=None,
+    from faster_whisper.audio import decode_audio
+
+    model = _whisper_model()
+    audio = decode_audio(path, sampling_rate=16000)
+    try:
+        detected, probability, _probs = model.detect_language(audio, vad_filter=True)
+    except Exception:
+        detected, probability = "id", 1.0
+    language = resolve_asr_language(detected, probability)
+    segments, _info = model.transcribe(
+        audio,
+        language=language,
+        task="transcribe",
         vad_filter=True,
         without_timestamps=True,
+        condition_on_previous_text=False,
+        initial_prompt=ID_PROMPT if language == "id" else None,
+        hotwords=HOTWORDS,
+        multilingual=False,
     )
     return " ".join(segment.text.strip() for segment in segments).strip()
 
