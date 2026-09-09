@@ -1,10 +1,17 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js";
+import createFlatWaveform from "./voice-variant-1.js";
+import createSmoothWaveform from "./voice-variant-2.js";
 
 const TARGET_RATE = 24000;
 
 const COPY = {
-  deaf: "Tidak bisa mendengar",
-  blocked: "Mikrofon diblokir",
+  deaf: "Koneksi suara terputus. Ketuk untuk mencoba lagi.",
+  blocked: "Izinkan mikrofon di browser, lalu ketuk untuk mencoba lagi.",
+  unsupported: "Mikrofon tidak tersedia. Coba browser lain.",
+  connecting: "Menghubungkan…",
+  listening: "Mendengarkan…",
+  thinking: "Memproses…",
+  cancel: "Batalkan koneksi",
   start: "Mulai mendengarkan",
   stop: "Berhenti mendengarkan",
 };
@@ -40,105 +47,154 @@ function floatToPcm16Base64(float32) {
   return btoa(binary);
 }
 
-const WAVE_BARS = 52;
-const WAVE_SIZE = 116;
+function voiceEnergy(waveform, frequency) {
+  let sum = 0;
+  for (const sample of waveform) sum += ((sample - 128) / 128) ** 2;
+  const rms = Math.sqrt(sum / (waveform.length || 1));
+  let band = 0;
+  const count = Math.min(48, frequency.length);
+  for (let i = 0; i < count; i += 1) band += frequency[i] / 255;
+  // A small noise floor keeps a quiet room calm even with analyser smoothing.
+  return Math.min(1, Math.max(0, rms - 0.008) * (5 + band / (count || 1) * 3));
+}
 
+function smoothVoiceEnergy(current, target, seconds) {
+  const duration = target > current ? 0.075 : 0.3;
+  return current + (target - current) * (1 - Math.exp(-seconds / duration));
+}
+
+// Variant 3: the earlier flat, layered-circle animation.
 function createWaveform(canvas) {
+  const variant = canvas.closest("#voice-surface")?.dataset.variant;
+  if (variant === "1") {
+    return createFlatWaveform(canvas, voiceEnergy, smoothVoiceEnergy);
+  }
+  if (variant === "2") {
+    return createSmoothWaveform(canvas, voiceEnergy, smoothVoiceEnergy);
+  }
   const ctx = canvas.getContext("2d");
-  const bins = new Float32Array(WAVE_BARS);
-  const freq = new Uint8Array(128);
-  const time = new Uint8Array(256);
+  if (!ctx) return { setAnalyser() {}, refresh() {} };
+  const root = canvas.closest("#voice-surface");
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const tokens = getComputedStyle(root);
+  const palette = ["--deep-forest", "--signal", "--sage", "--mist"].map((name) => tokens.getPropertyValue(name).trim());
+  let frequency = new Uint8Array(128);
+  let waveform = new Uint8Array(256);
   let analyser = null;
+  let energy = 0;
+  let phase = 0;
+  let visualRadius = 24;
+  let lastTime = 0;
   let raf = 0;
+  let size = 88;
 
-  const fit = () => {
-    const css = canvas.clientWidth || WAVE_SIZE;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(css * dpr);
-    canvas.height = Math.round(css * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  };
-
-  const draw = () => {
-    const size = canvas.clientWidth || WAVE_SIZE;
-    const cx = size / 2;
-    const cy = size / 2;
-    const inner = size * 0.2;
-    const reach = size * 0.26;
-    const state = canvas.closest("#voice-surface")?.dataset.state || "idle";
+  const draw = (now = performance.now()) => {
+    raf = 0;
+    if (document.hidden) return;
+    const state = root.dataset.state;
+    const failed = state === "deaf" || state === "blocked";
+    const listening = state === "listening";
+    const processing = state === "thinking" || state === "connecting";
+    const seconds = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 1 / 60;
+    lastTime = now;
+    let target = 0;
+    if (analyser && listening && !motion.matches) {
+      analyser.getByteTimeDomainData(waveform);
+      analyser.getByteFrequencyData(frequency);
+      target = Math.pow(voiceEnergy(waveform, frequency), 0.65);
+    }
+    energy = motion.matches || failed ? 0 : smoothVoiceEnergy(energy, target, seconds);
+    const speed = state === "thinking" ? 1.05 : state === "connecting" ? 0.65 : listening ? 0.55 + energy * 0.85 : 0.08;
+    if (!motion.matches && !failed) phase += seconds * speed;
+    const t = motion.matches || failed ? 0 : phase;
+    const targetRadius = listening ? 34 : processing ? 30 : 24;
+    visualRadius = motion.matches || failed ? targetRadius
+      : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.2));
+    const radius = size * (visualRadius / 88);
     ctx.clearRect(0, 0, size, size);
-
-    let rms = 0;
-    if (analyser && (state === "listening" || state === "speaking")) {
-      analyser.getByteFrequencyData(freq);
-      analyser.getByteTimeDomainData(time);
-      for (let i = 0; i < time.length; i += 1) {
-        const n = (time[i] - 128) / 128;
-        rms += n * n;
-      }
-      rms = Math.sqrt(rms / time.length);
-    }
-
-    const now = performance.now() / 1000;
-    for (let i = 0; i < WAVE_BARS; i += 1) {
-      let target = 0.045;
-      if (state === "listening" || state === "speaking") {
-        const index = Math.floor((i / WAVE_BARS) * freq.length * 0.42);
-        const mag = Math.pow((freq[index] || 0) / 255, 1.18);
-        target = Math.min(1, mag * 0.82 + rms * 2.4);
-      } else if (state === "thinking") {
-        target = 0.16 + 0.2 * Math.abs(Math.sin(now * 2.4 + i * 0.24));
-      }
-      bins[i] += (target - bins[i]) * 0.32;
-    }
-
-    ctx.lineCap = "round";
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = "rgb(18 34 37 / 0.38)";
-    ctx.lineWidth = 1;
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
     ctx.beginPath();
-    ctx.arc(cx, cy, inner, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.lineWidth = Math.max(1.6, size / 64);
-    for (let i = 0; i < WAVE_BARS; i += 1) {
-      const angle = (i / WAVE_BARS) * Math.PI * 2 - Math.PI / 2;
-      const energy = bins[i];
-      if (energy < 0.08) continue;
-      const outer = inner + energy * reach;
-      ctx.strokeStyle = `rgb(${Math.round(18 + 10 * energy)} ${Math.round(34 + 99 * energy)} ${Math.round(37 + 55 * energy)})`;
-      ctx.globalAlpha = 0.42 + energy * 0.58;
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = failed ? palette[0] : palette[1];
+    ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+    // Three flat overlapping contours.
+    for (let layer = 0; layer < 3; layer += 1) {
+      const rotation = t * (!processing && layer === 1 ? -0.7 : 1) + layer * 2.1;
+      const amplitude = processing ? 0.08 : listening ? 0.1 + energy * 0.15 : 0.025;
+      ctx.save();
+      ctx.rotate(rotation);
+      ctx.translate(radius * (0.3 - layer * 0.25), radius * 0.22);
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
-      ctx.lineTo(cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer);
-      ctx.stroke();
+      for (let i = 0; i <= 80; i += 1) {
+        const angle = i / 80 * Math.PI * 2;
+        const wave = Math.sin(angle * 2 + t + layer) + Math.sin(angle * 3 - t * 0.8) * 0.35;
+        const reach = radius * (1.06 - layer * 0.19) * (1 + wave * amplitude);
+        const x = Math.cos(angle) * reach;
+        const y = Math.sin(angle) * reach;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = failed ? palette[0] : [palette[0], palette[2], palette[3]][layer];
+      ctx.fill();
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
-    raf = requestAnimationFrame(draw);
+    ctx.restore();
+    if (!motion.matches && !failed) raf = requestAnimationFrame(draw);
   };
 
-  fit();
+  const refresh = () => {
+    cancelAnimationFrame(raf);
+    raf = 0;
+    lastTime = 0;
+    draw();
+  };
+  const fit = () => {
+    size = canvas.clientWidth || 88;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = canvas.height = Math.round(size * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    refresh();
+  };
   window.addEventListener("resize", fit);
-  draw();
+  document.addEventListener("visibilitychange", refresh);
+  motion.addEventListener("change", refresh);
+  fit();
   return {
+    refresh,
     setAnalyser(node) {
       analyser = node;
+      energy = 0;
+      if (node) {
+        frequency = new Uint8Array(node.frequencyBinCount);
+        waveform = new Uint8Array(node.fftSize);
+      }
+      refresh();
     },
   };
 }
 
+
 function createSurface() {
   const root = document.createElement("div");
   root.id = "voice-surface";
+  root.lang = "id";
   root.hidden = true;
   root.dataset.state = "idle";
+  const variant = new URLSearchParams(window.location.search).get("voice-variant");
+  root.dataset.variant = ["1", "2"].includes(variant) ? variant : "3";
   root.innerHTML = `
-    <div class="voice-copy" aria-live="polite">
+    <div class="voice-copy" aria-live="polite" aria-atomic="true">
       <p class="voice-status"></p>
       <p class="voice-transcript"></p>
     </div>
     <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
-      <canvas class="voice-wave" width="116" height="116"></canvas>
+      <canvas class="voice-wave" width="88" height="88" aria-hidden="true"></canvas>
+      <span class="voice-hint" aria-hidden="true">Mulai mendengarkan</span>
+      <span class="voice-stop" aria-hidden="true"></span>
+      <span class="voice-error" aria-hidden="true">!</span>
     </button>
   `;
   document.body.append(root);
@@ -157,37 +213,24 @@ function bindVoice() {
   ui.root.hidden = false;
 
   let session = false;
-  let closing = false;
+  let generation = 0;
   let stream = null;
   let socket = null;
   let audioContext = null;
   let processor = null;
-  let analyser = null;
-
-  const setState = (state) => {
-    ui.root.dataset.state = state;
-  };
-
-  const setCopy = (status, transcript = "", state) => {
+  const setCopy = (status, transcript = "", state = "idle") => {
     ui.status.textContent = status || "";
-    ui.transcript.textContent = transcript || "";
-    if (state) setState(state);
+    ui.transcript.textContent = state === "listening" ? transcript : "";
+    ui.root.dataset.state = state;
+    ui.button.setAttribute("aria-pressed", session ? "true" : "false");
+    ui.button.setAttribute("aria-label", session
+      ? (state === "connecting" ? COPY.cancel : COPY.stop)
+      : (state === "deaf" || state === "blocked" ? "Coba lagi" : COPY.start));
+    ui.wave.refresh();
   };
 
   const showHearing = (transcript = "") => {
-    setCopy("", transcript, transcript ? "speaking" : "listening");
-  };
-
-  const hideCopy = (state) => {
-    setCopy("", "", state);
-  };
-
-  const setPressed = (on) => {
-    ui.button.setAttribute("aria-pressed", on ? "true" : "false");
-    ui.button.setAttribute("aria-label", on ? COPY.stop : COPY.start);
-    if (!on && ui.root.dataset.state !== "deaf" && ui.root.dataset.state !== "blocked") {
-      setState("idle");
-    }
+    setCopy(COPY.listening, transcript, "listening");
   };
 
   const teardownAudio = () => {
@@ -201,7 +244,6 @@ function bindVoice() {
       processor = null;
     }
     ui.wave.setAnalyser(null);
-    analyser = null;
     if (audioContext) {
       audioContext.close().catch(() => {});
       audioContext = null;
@@ -221,27 +263,23 @@ function bindVoice() {
     socket = null;
   };
 
-  const endSession = (status) => {
+  const endSession = (state = "idle", status = COPY[state]) => {
     session = false;
-    closing = true;
-    setPressed(false);
+    generation += 1;
     teardownAudio();
-    if (status === COPY.deaf) setCopy(status, "", "deaf");
-    else if (status === COPY.blocked) setCopy(status, "", "blocked");
-    else if (status) setCopy(status, "", "idle");
-    else setCopy("", "", "idle");
+    setCopy(status, "", state);
   };
 
   const applyDecision = (decision) => {
-    if (decision?.action === "show" && decision.section) {
+    if (decision?.action === "show" && typeof decision.section === "string" && decision.section) {
       window.xstationShowSection?.(decision.section);
     }
-    hideCopy("listening");
+    showHearing();
   };
 
-  const startCapture = () => {
+  const startCapture = (isReady) => {
     const source = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
+    const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.62;
     ui.wave.setAnalyser(analyser);
@@ -252,7 +290,7 @@ function bindVoice() {
     let lastLoudAt = 0;
     let speechStartedAt = 0;
     processor.onaudioprocess = (event) => {
-      if (!session || !socket || socket.readyState !== 1) return;
+      if (!isReady() || !socket || socket.readyState !== 1) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
       if (!pcm.length) return;
@@ -272,8 +310,8 @@ function bindVoice() {
       if (talking && now - lastLoudAt >= 800) {
         if (lastLoudAt - speechStartedAt >= 700) {
           socket.send(JSON.stringify({ type: "commit" }));
-        } else {
-          showHearing("");
+        } else if (ui.root.dataset.state === "listening") {
+          showHearing();
         }
         talking = false;
       }
@@ -285,107 +323,104 @@ function bindVoice() {
   };
 
   const startSession = async () => {
-    closing = false;
-    hideCopy("listening");
-    const micRequest = navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
-    const dropMic = () => {
-      micRequest.then((media) => media.getTracks().forEach((track) => track.stop())).catch(() => {});
-    };
-    let boxUp = false;
-    try {
-      const health = await fetch(`${VOICE_BOX_URL}/health`, { cache: "no-store" });
-      boxUp = health.ok;
-    } catch {
-      boxUp = false;
-    }
-    if (!boxUp) {
-      dropMic();
-      endSession(COPY.deaf);
-      return;
-    }
-    try {
-      stream = await micRequest;
-    } catch {
-      endSession(COPY.blocked);
-      return;
-    }
-    stream.getAudioTracks().forEach((track) => {
-      track.addEventListener("ended", () => {
-        if (session) endSession(COPY.deaf);
-      });
-    });
-    try {
-      socket = new WebSocket(VOICE_BOX_WS);
-    } catch {
-      endSession(COPY.deaf);
-      return;
-    }
-    socket.addEventListener("message", (event) => {
-      let payload = null;
-      try {
-        payload = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-      if (payload.type === "ready") {
-        showHearing("");
-        return;
-      }
-      if (payload.type === "speech_started") {
-        showHearing("");
-        return;
-      }
-      if (payload.type === "delta") {
-        showHearing(payload.text || "");
-        return;
-      }
-      if (payload.type === "final") {
-        hideCopy("thinking");
-        return;
-      }
-      if (payload.type === "noop") {
-        showHearing("");
-        return;
-      }
-      if (payload.type === "decision") {
-        applyDecision(payload);
-        return;
-      }
-      if (payload.type === "error") {
-        setCopy(COPY.deaf, "", "deaf");
-      }
-    });
-    socket.addEventListener("close", () => {
-      if (session && !closing) endSession(COPY.deaf);
-    });
-    socket.addEventListener("error", () => {
-      if (session && !closing) endSession(COPY.deaf);
-    });
-    await new Promise((resolve, reject) => {
-      const onOpen = () => {
-        socket.removeEventListener("error", onErr);
-        resolve();
-      };
-      const onErr = () => reject(new Error("ws"));
-      socket.addEventListener("open", onOpen, { once: true });
-      socket.addEventListener("error", onErr, { once: true });
-    }).catch(() => {
-      endSession(COPY.deaf);
-    });
-    if (!socket || socket.readyState !== 1) return;
-    audioContext = new AudioContext();
-    if (audioContext.state === "suspended") await audioContext.resume();
-    startCapture();
+    if (session) return;
     session = true;
-    setPressed(true);
-    showHearing("");
+    const attempt = ++generation;
+    const isCurrent = () => session && generation === attempt;
+    setCopy(COPY.connecting, "", "connecting");
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!navigator.mediaDevices?.getUserMedia || !Audio) {
+      endSession("blocked", COPY.unsupported);
+      return;
+    }
+    try {
+      const micRequest = navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      }).then((media) => {
+        if (!isCurrent()) {
+          media.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = media;
+        stream.getAudioTracks().forEach((track) => {
+          track.addEventListener("ended", () => {
+            if (isCurrent()) endSession("deaf");
+          });
+        });
+      }).catch(() => {
+        if (isCurrent()) endSession("blocked");
+      });
+      const healthRequest = fetch(`${VOICE_BOX_URL}/health`, { cache: "no-store" })
+        .then((health) => {
+          if (!health.ok && isCurrent()) endSession("deaf");
+        }).catch(() => {
+          if (isCurrent()) endSession("deaf");
+        });
+      await Promise.all([micRequest, healthRequest]);
+      if (!isCurrent()) return;
+
+      const ws = new WebSocket(VOICE_BOX_WS);
+      socket = ws;
+      let backendReady = false;
+      let captureReady = false;
+      const isReady = () => isCurrent() && backendReady && captureReady;
+      const listenWhenReady = () => {
+        if (isReady()) showHearing();
+      };
+      const fail = () => {
+        if (isCurrent()) endSession("deaf");
+      };
+      ws.addEventListener("message", (event) => {
+        if (!isCurrent()) return;
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (!payload || typeof payload !== "object") return;
+        if (payload.type === "error") {
+          fail();
+          return;
+        }
+        if (payload.type === "ready") {
+          backendReady = true;
+          listenWhenReady();
+          return;
+        }
+        if (!isReady()) return;
+        if (payload.type === "speech_started" || payload.type === "noop") showHearing();
+        else if (payload.type === "delta") showHearing(typeof payload.text === "string" ? payload.text : "");
+        else if (payload.type === "final") setCopy(COPY.thinking, "", "thinking");
+        else if (payload.type === "decision") applyDecision(payload);
+      });
+      ws.addEventListener("close", fail);
+      ws.addEventListener("error", fail);
+      ws.addEventListener("open", async () => {
+        if (!isCurrent()) return;
+        try {
+          const context = new Audio();
+          audioContext = context;
+          if (context.state === "suspended") await context.resume();
+          if (!isCurrent()) return;
+          startCapture(isReady);
+          captureReady = true;
+          listenWhenReady();
+        } catch {
+          fail();
+        }
+      }, { once: true });
+    } catch {
+      if (isCurrent()) endSession("deaf");
+    }
   };
 
   ui.button.addEventListener("click", () => {
-    if (session) endSession("");
+    if (session) endSession();
     else startSession();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && session) endSession();
   });
 }
 

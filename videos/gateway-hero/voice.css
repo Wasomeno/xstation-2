@@ -1,13 +1,13 @@
 #voice-surface {
   position: fixed;
   left: 50%;
-  bottom: clamp(1.4rem, 3.5vh, 2.4rem);
+  bottom: max(1rem, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: min(22rem, calc(100vw - 2rem));
+  width: min(24rem, calc(100vw - 2rem));
   font-family: var(--sans);
   color: var(--ink);
   pointer-events: none;
@@ -19,10 +19,9 @@
 
 .voice-copy {
   position: absolute;
-  left: 0;
-  right: 0;
+  width: 100%;
   bottom: 100%;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.25rem;
   text-align: center;
 }
 
@@ -32,16 +31,31 @@
 }
 
 .voice-status {
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  background: var(--page);
+  font-size: 0.8125rem;
+  line-height: 1.45;
   color: var(--slate);
 }
 
 .voice-transcript {
-  margin-top: 0.28rem;
-  font-size: 1.02rem;
-  line-height: 1.35;
+  margin-top: 0.375rem;
+  padding: 0.65rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--page);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  max-height: min(9rem, 24vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  user-select: text;
+  scrollbar-width: thin;
 }
 
 .voice-status:empty,
@@ -50,25 +64,90 @@
 }
 
 .voice-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
   pointer-events: auto;
-  width: 7.25rem;
-  height: 7.25rem;
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
   padding: 0;
   border: 0;
   background: transparent;
+  border-radius: 50%;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .voice-orb:focus-visible {
-  outline: 1px solid var(--signal);
-  outline-offset: 6px;
-  border-radius: 50%;
+  outline: 2px solid var(--deep-forest);
+  outline-offset: 0;
 }
 
 .voice-wave {
   display: block;
-  width: 7.25rem;
-  height: 7.25rem;
+  width: 88px;
+  height: 88px;
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.voice-orb:hover .voice-wave {
+  transform: scale(1.04);
+}
+
+.voice-orb:active .voice-wave {
+  transform: scale(0.96);
+}
+
+.voice-hint {
+  position: absolute;
+  bottom: calc(100% + 0.25rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  background: var(--page);
+  color: var(--slate);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+
+#voice-surface[data-state="idle"] .voice-orb:is(:hover, :focus-visible) .voice-hint {
+  opacity: 1;
+}
+
+.voice-stop,
+.voice-error {
+  position: absolute;
+  color: var(--paper);
+  pointer-events: none;
+}
+
+.voice-stop {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0;
+}
+
+#voice-surface:is([data-state="connecting"], [data-state="listening"], [data-state="thinking"]) .voice-orb:is(:hover, :focus-visible) .voice-stop {
+  opacity: 1;
+}
+
+.voice-error {
+  display: none;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+#voice-surface:is([data-state="deaf"], [data-state="blocked"]) .voice-error {
+  display: block;
 }
 
 .is-voice-shown {
@@ -77,12 +156,17 @@
 
 @media (max-width: 767px) {
   #voice-surface {
-    bottom: 1.1rem;
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-wave,
+  .voice-hint {
+    transition: none;
   }
 
-  .voice-orb,
-  .voice-wave {
-    width: 6.4rem;
-    height: 6.4rem;
+  .voice-orb:is(:hover, :active) .voice-wave {
+    transform: none;
   }
 }
