@@ -163,7 +163,13 @@ async def command(request: Request, audio: UploadFile = File(...)):
         try:
             tmp.write(body)
             tmp.close()
-            transcript = await asyncio.to_thread(transcribe_path, tmp.name)
+            try:
+                transcript = await asyncio.to_thread(transcribe_path, tmp.name)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"whisper-failed:{type(exc).__name__}",
+                ) from exc
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
@@ -175,7 +181,12 @@ async def command(request: Request, audio: UploadFile = File(...)):
                 "transcript": "",
             }
 
-        decision = await interpret(transcript)
+        try:
+            decision = await interpret(transcript)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"interpret-failed:{type(exc).__name__}") from exc
         decision["transcript"] = transcript
         return decision
 
