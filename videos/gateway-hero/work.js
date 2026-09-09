@@ -149,32 +149,66 @@ function smooth() {
     smoothWheel: true,
   });
 
+  let ticker = null;
+  let rafId = 0;
   if (gsap && ScrollTrigger) {
     lenis.on("scroll", ScrollTrigger.update);
-    gsap.ticker.add(function (time) {
-      lenis.raf(time * 1000);
-    });
+    ticker = (time) => lenis.raf(time * 1000);
+    gsap.ticker.add(ticker);
     gsap.ticker.lagSmoothing(0);
   } else {
-    function raf(time) {
+    const raf = (time) => {
       lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
+    };
+    rafId = requestAnimationFrame(raf);
   }
 
+  const anchorBindings = [];
   document.querySelectorAll('a[href^="#"]').forEach((a) => {
-    a.addEventListener("click", (e) => {
+    const onClick = (e) => {
       const href = a.getAttribute("href");
       if (!href || href === "#") return;
       const el = document.querySelector(href);
       if (!el) return;
       e.preventDefault();
       lenis.scrollTo(el, { offset: -8, duration: 2.4 });
-    });
+    };
+    a.addEventListener("click", onClick);
+    anchorBindings.push([a, onClick]);
   });
 
+  lenis.__xstationDestroy = () => {
+    if (ticker) gsap.ticker.remove(ticker);
+    if (rafId) cancelAnimationFrame(rafId);
+    anchorBindings.forEach(([anchor, handler]) => anchor.removeEventListener("click", handler));
+    lenis.destroy?.();
+  };
+
   return lenis;
+}
+
+let smoothInstance = null;
+let smoothStarted = false;
+let cleanupSmoothStart = () => {};
+
+function startSmooth() {
+  if (smoothStarted) return smoothInstance;
+  smoothStarted = true;
+  smoothInstance = smooth();
+  return smoothInstance;
+}
+
+function bindSmoothStart() {
+  if (reduce || shot || typeof window.Lenis !== "function") return () => {};
+  if (!document.getElementById("welcome-bumper")) {
+    startSmooth();
+    return () => {};
+  }
+
+  const onFinished = () => startSmooth();
+  window.addEventListener("xstation:welcome-finished", onFinished, { once: true });
+  return () => window.removeEventListener("xstation:welcome-finished", onFinished);
 }
 
 
@@ -735,8 +769,8 @@ if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
 if (gsap && !isShot) {
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
   let cleanupHeroEntry = () => {};
+  cleanupSmoothStart = bindSmoothStart();
   const ctx = gsap.context(() => {
-    smooth();
     cleanupHeroEntry = bindHeroEntry();
     const orbitTl = startOrbitAutoplay();
     bindSpatialFold(orbitTl);
@@ -750,15 +784,46 @@ if (gsap && !isShot) {
     window.addEventListener("load", () => ScrollTrigger.refresh());
   }
   window.addEventListener("pagehide", () => {
+    cleanupSmoothStart();
+    smoothInstance?.__xstationDestroy?.();
     cleanupHeroEntry();
     ctx.revert();
   }, { once: true });
 } else if (!isShot) {
-  smooth();
+  startSmooth();
 }
 
-if (!isShot) {
+if (isShot) {
+  field.setRenderActive(true);
+  prepareOrbitHero(true);
+} else {
   const welcomeActive = Boolean(document.getElementById("welcome-bumper"));
   prepareOrbitHero(!welcomeActive);
-  window.dispatchEvent(new CustomEvent("xstation:orbit-ready"));
+  const dispatchOrbitReady = (result = null) => {
+    field.setRenderActive(!welcomeActive);
+    window.dispatchEvent(new CustomEvent("xstation:orbit-ready", {
+      detail: result,
+    }));
+  };
+  const prepareReady = field.ready || Promise.resolve();
+  let readinessTimer = 0;
+  const deadline = new Promise((resolve) => {
+    readinessTimer = window.setTimeout(() => resolve({
+      status: "degraded",
+      reason: "orbit-preparation-timeout",
+    }), 15000);
+  });
+  Promise.race([prepareReady, deadline]).then((result) => {
+    window.clearTimeout(readinessTimer);
+    dispatchOrbitReady(result);
+  }, (error) => {
+    window.clearTimeout(readinessTimer);
+    dispatchOrbitReady({ status: "degraded", reason: "orbit-preparation-error", error });
+  });
+}
+
+if (document.getElementById("welcome-bumper")) {
+  window.addEventListener("xstation:welcome-exit-start", () => {
+    field.setRenderActive(true);
+  }, { once: true });
 }

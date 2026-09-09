@@ -90,29 +90,52 @@
 
   document.documentElement.classList.add("is-welcoming");
   window.__xstationWelcomeActive = true;
+  window.__xstationWelcomeEntryComplete = false;
 
   const titleWords = bumper.querySelectorAll(".welcome-word");
   gsap.set(titleWords, {
     yPercent: reduce ? 0 : 115,
   });
   renderField();
+  if (!reduce) gsap.ticker.add(renderField);
 
   const flight = reduce ? null : gsap.to(state, {
     t: "+=1",
     duration: 8,
     repeat: -1,
     ease: "none",
-    onUpdate: renderField,
+    paused: true,
   });
 
   let orbitReady = false;
   let finished = false;
   let holdingForOrbit = false;
+  let entryComplete = false;
+  let timelineStarted = false;
+  let startupTimer = 0;
+
+  function signalEntryComplete() {
+    if (entryComplete) return;
+    entryComplete = true;
+    window.__xstationWelcomeEntryComplete = true;
+    window.dispatchEvent(new CustomEvent("xstation:welcome-entry-complete"));
+  }
+
+  function startTimeline() {
+    if (timelineStarted || finished) return;
+    timelineStarted = true;
+    requestAnimationFrame(() => {
+      flight?.play(0);
+      timeline.play(0);
+    });
+  }
 
   function finish() {
     if (finished) return;
     finished = true;
+    window.clearTimeout(startupTimer);
     flight?.kill();
+    if (!reduce) gsap.ticker.remove(renderField);
     window.__xstationWelcomeActive = false;
     document.documentElement.classList.remove("is-welcoming");
     bumper.remove();
@@ -134,6 +157,11 @@
 
   function releaseToOrbit() {
     orbitReady = true;
+    window.clearTimeout(startupTimer);
+    if (!timelineStarted) {
+      startTimeline();
+      return;
+    }
     if (holdingForOrbit) timeline.play();
   }
 
@@ -144,21 +172,26 @@
     if (timeline.timeScale() < 2.8) timeline.timeScale(2.8);
   }
 
-  const timeline = gsap.timeline({ onComplete: finish });
+  const timeline = gsap.timeline({ paused: true, onComplete: finish });
   if (reduce) {
     timeline
       .to({}, { duration: 0.9 })
+      .call(signalEntryComplete)
       .addPause("ready", waitForOrbit)
+      .call(
+        () => window.dispatchEvent(new CustomEvent("xstation:welcome-exit-start")),
+        [],
+        "ready+=0.001",
+      )
       .to(bumper, { autoAlpha: 0, duration: 0.6, ease: "power2.inOut" });
   } else {
     timeline
-      .to(state, { fieldAlpha: 1, duration: 0.46, ease: "power2.out", onUpdate: renderField }, 0)
+      .to(state, { fieldAlpha: 1, duration: 0.46, ease: "power2.out" }, 0)
       .to(introSlabs, {
         intro: 1,
         duration: 1.05,
         stagger: 0.025,
         ease: "expo.out",
-        onUpdate: renderField,
       }, 0.04)
       .to(titleWords, {
         yPercent: 0,
@@ -169,8 +202,14 @@
         },
         ease: "power4.out",
       }, 0.46)
+      .call(signalEntryComplete)
       .to({}, { duration: 1.4 })
       .addPause("ready", waitForOrbit)
+      .call(
+        () => window.dispatchEvent(new CustomEvent("xstation:welcome-exit-start")),
+        [],
+        "ready+=0.001",
+      )
       .to(titleWords, {
         yPercent: 115,
         duration: 1,
@@ -181,7 +220,7 @@
         ease: "power4.in",
       })
       .to(flight, { timeScale: 3.4, duration: 0.5, ease: "power2.in" }, "<")
-      .to(state, { exit: 1, duration: 1.25, ease: "power3.in", onUpdate: renderField }, "<")
+      .to(state, { exit: 1, duration: 1.25, ease: "power3.in" }, "<")
       .to(".welcome-atmosphere", { autoAlpha: 0, duration: 0.85, ease: "power2.in" }, "<+=0.24")
       .to(bumper, { autoAlpha: 0, duration: 0.7, ease: "power2.inOut" }, "<+=0.38");
   }
@@ -191,4 +230,7 @@
   window.addEventListener("wheel", accelerate, { passive: false });
   window.addEventListener("touchstart", accelerate, { passive: false });
   window.addEventListener("keydown", accelerate, { passive: false });
+
+  startupTimer = window.setTimeout(releaseToOrbit, 15000);
+  startTimeline();
 })();

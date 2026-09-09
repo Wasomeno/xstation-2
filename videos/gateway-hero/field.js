@@ -16,6 +16,12 @@ function createGLTFLoader() {
 }
 
 const NS = "http://www.w3.org/2000/svg";
+const PREPARED_ENVIRONMENT_URL = new URL(
+  "assets/environment/room-pmrem-r181.bin.gz",
+  import.meta.url,
+);
+const PREPARED_ENVIRONMENT_WIDTH = 768;
+const PREPARED_ENVIRONMENT_HEIGHT = 1024;
 
 const SLAB_DURATION = 8;
 const DOCK_DURATION = 36;
@@ -161,12 +167,8 @@ function poseAt(theta, radius) {
   };
 }
 
-function createOrbView(host, gsap) {
+function createSharedOrbitRenderer() {
   const canvas = document.createElement("canvas");
-  canvas.className = "dock-orbs";
-  canvas.setAttribute("aria-hidden", "true");
-  host.appendChild(canvas);
-
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
@@ -174,26 +176,133 @@ function createOrbView(host, gsap) {
     premultipliedAlpha: false,
     powerPreference: "high-performance",
   });
-  if (!renderer.getContext()) {
-    canvas.remove();
-    return null;
-  }
+  if (!renderer.getContext()) return null;
+
+  // Shader sources are fixed and covered by the warmup checks below. Avoid
+  // synchronous driver log queries on first use; they force Chrome to wait for
+  // GPU compilation and were the last large entry-time main-thread stalls.
+  renderer.debug.checkShaderErrors = false;
+
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, CATEGORY_MODEL_PIXEL_RATIO);
+  const renderSize = Math.round(CATEGORY_MODEL_RENDER_SIZE * pixelRatio);
+  renderer.setPixelRatio(1);
+  renderer.setSize(renderSize, renderSize, false);
   renderer.setClearColor(0x000000, 0);
   renderer.setClearAlpha(0);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  let disposed = false;
+  let environment = null;
+  let compileQueue = Promise.resolve();
+
+  async function loadPreparedEnvironment() {
+    const response = await fetch(PREPARED_ENVIRONMENT_URL);
+    if (!response.ok) throw new Error(`Could not load orbit environment (${response.status})`);
+    const stream = typeof DecompressionStream === "function"
+      ? response.body.pipeThrough(new DecompressionStream("gzip"))
+      : null;
+    if (!stream) throw new Error("Gzip decompression is unavailable");
+    const buffer = await new Response(stream).arrayBuffer();
+    const expectedBytes = PREPARED_ENVIRONMENT_WIDTH * PREPARED_ENVIRONMENT_HEIGHT * 4 * 2;
+    if (buffer.byteLength !== expectedBytes) {
+      throw new Error(`Orbit environment has ${buffer.byteLength} bytes; expected ${expectedBytes}`);
+    }
+    const texture = new THREE.DataTexture(
+      new Uint16Array(buffer),
+      PREPARED_ENVIRONMENT_WIDTH,
+      PREPARED_ENVIRONMENT_HEIGHT,
+      THREE.RGBAFormat,
+      THREE.HalfFloatType,
+    );
+    texture.mapping = THREE.CubeUVReflectionMapping;
+    texture.colorSpace = THREE.LinearSRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function generateEnvironmentFallback() {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environmentScene = new RoomEnvironment();
+    const texture = pmrem.fromScene(environmentScene, 0.04).texture;
+    environmentScene.dispose();
+    pmrem.dispose();
+    return texture;
+  }
+
+  const ready = loadPreparedEnvironment()
+    .catch((error) => {
+      console.warn("Could not load the prepared orbit environment; generating it at runtime", error);
+      return generateEnvironmentFallback();
+    })
+    .then((texture) => {
+      if (disposed) {
+        texture.dispose();
+        return null;
+      }
+      environment = texture;
+      return texture;
+    });
+
+  function prepareOutput(output, size) {
+    if (output.width !== size) output.width = size;
+    if (output.height !== size) output.height = size;
+    return output.getContext("2d", { alpha: true, desynchronized: true });
+  }
+
+  function render(scene, camera, output) {
+    if (disposed || !output) return;
+    const outputSize = Math.max(output.width, output.height, 1);
+    const context = prepareOutput(output, outputSize);
+    if (!context) return;
+    renderer.clear(true, true, true);
+    renderer.render(scene, camera);
+    context.clearRect(0, 0, output.width, output.height);
+    context.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, output.width, output.height);
+  }
+
+  function compile(scene, camera) {
+    const task = compileQueue.then(async () => {
+      if (disposed || typeof renderer.compileAsync !== "function") return;
+      const texture = await ready;
+      if (texture) scene.environment = texture;
+      await renderer.compileAsync(scene, camera);
+    });
+    compileQueue = task.catch(() => {});
+    return task;
+  }
+
+  return {
+    ready,
+    pixelRatio,
+    render,
+    compile,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      environment?.dispose();
+      renderer.dispose();
+    },
+  };
+}
+
+function createOrbView(host, gsap, sharedRenderer) {
+  if (!sharedRenderer) return null;
+  const canvas = document.createElement("canvas");
+  canvas.className = "dock-orbs";
+  canvas.setAttribute("aria-hidden", "true");
+  host.appendChild(canvas);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
   camera.position.set(1.35, 1.05, 4.2);
   camera.lookAt(0, 0, 0);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envScene = new RoomEnvironment();
-  const envMap = pmrem.fromScene(envScene, 0.04).texture;
-  scene.environment = envMap;
-  envScene.dispose();
 
   scene.add(new THREE.HemisphereLight(0x90b0a0, 0x002010, 0.85));
   const key = new THREE.DirectionalLight(0xe8f3ea, 1.35);
@@ -217,14 +326,18 @@ function createOrbView(host, gsap) {
   scene.add(orb);
 
   let lastPx = 0;
+  let renderActive = true;
+  let lastLayout = null;
 
   return {
     layout(t, inner, gain, compact, pose) {
+      lastLayout = { t, inner, gain, compact, pose };
       const px = Math.round(Math.max(150, Math.min(inner * 2.08, compact ? 210 : 300)));
       if (px !== lastPx) {
         lastPx = px;
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-        renderer.setSize(px, px, false);
+        const outputSize = Math.round(px * Math.min(window.devicePixelRatio || 1, 2));
+        canvas.width = outputSize;
+        canvas.height = outputSize;
         canvas.style.width = px + "px";
         canvas.style.height = px + "px";
         camera.aspect = 1;
@@ -248,15 +361,48 @@ function createOrbView(host, gsap) {
         force3D: true,
       });
 
-      if (gain > 0.02) renderer.render(scene, camera);
+      if (renderActive && gain > 0.02) sharedRenderer.render(scene, camera, canvas);
     },
     canvas,
+    setRenderActive(next) {
+      const active = Boolean(next);
+      if (active === renderActive) return;
+      renderActive = active;
+      if (renderActive && lastLayout) {
+        this.layout(
+          lastLayout.t,
+          lastLayout.inner,
+          lastLayout.gain,
+          lastLayout.compact,
+          lastLayout.pose,
+        );
+      }
+    },
+    async warm() {
+      try {
+        await sharedRenderer.compile(scene, camera);
+      } catch (error) {
+        console.debug("Could not asynchronously compile the orbit orb shader", error);
+      }
+      if (!lastLayout) return;
+      const originalLayout = lastLayout;
+      const wasActive = renderActive;
+      renderActive = true;
+      this.layout(
+        originalLayout.t,
+        originalLayout.inner,
+        Math.max(originalLayout.gain, 0.03),
+        originalLayout.compact,
+        originalLayout.pose,
+      );
+      lastLayout = originalLayout;
+      if (originalLayout.gain <= 0.02) gsap.set(canvas, { autoAlpha: originalLayout.gain });
+      renderActive = wasActive;
+    },
     dispose() {
-      renderer.dispose();
       geo.dispose();
       mat.dispose();
-      envMap.dispose();
-      pmrem.dispose();
+      canvas.remove();
     },
   };
 }
@@ -805,7 +951,7 @@ const CATEGORY_MODEL_SOURCES = {
   },
   marketing: {
     type: "gltf",
-    url: new URL("assets/models/marketing/14811211.glb", import.meta.url).href,
+    url: new URL("assets/models/marketing/14811211-draco.glb", import.meta.url).href,
     // Hold a gentle three-quarter view so the horn, barrel, rear cap, and
     // handle all stay legible when the focused orbit model enlarges.
     rotation: [-0.1, Math.PI / 2 + 0.08, -0.04],
@@ -834,6 +980,7 @@ const CATEGORY_MODEL_SOURCES = {
 };
 
 const categoryModelPromises = new Map();
+let modelParseQueue = Promise.resolve();
 // Keep geometry inside the WebGL frustum. CSS enlarges the complete transparent
 // canvas for the remaining focus scale so wide models do not clip at its edges.
 const CATEGORY_MODEL_FOCUS_SCALE = 1;
@@ -845,11 +992,186 @@ const CATEGORY_MODEL_PIXEL_RATIO = 2.5;
 // still transition to their own active green palettes below.
 const MODEL_IDLE_SWATCHES = [0xf1f2ef, 0xd4d7d3, 0xa7ada8, 0x6f7772];
 const MODEL_ACTIVE_SWATCHES = [0xc8d8c8, 0x90b0a0, 0x1c855c, 0x084828];
+const GEOMETRY_PREP_TOLERANCE = 1e-4;
+const GEOMETRY_WORKER_URL = new URL("./orbit-geometry-worker.js", import.meta.url);
+const GEOMETRY_ARRAY_TYPES = {
+  Float32Array,
+  Float64Array,
+  Int8Array,
+  Int16Array,
+  Int32Array,
+  Uint8Array,
+  Uint8ClampedArray,
+  Uint16Array,
+  Uint32Array,
+};
+let geometryWorker = null;
+let geometryWorkerTaskId = 0;
+const geometryWorkerTasks = new Map();
 
-function loadFbx(url) {
-  return new Promise((resolve, reject) => {
-    new FBXLoader().load(url, resolve, undefined, reject);
+function getGeometryWorker() {
+  if (geometryWorker) return geometryWorker;
+  if (typeof Worker !== "function") return null;
+
+  try {
+    geometryWorker = new Worker(GEOMETRY_WORKER_URL, { type: "module" });
+    geometryWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "boot-error") {
+        const error = new Error(event.data.error || "Orbit geometry worker failed to initialize");
+        geometryWorkerTasks.forEach((task) => task.reject(error));
+        geometryWorkerTasks.clear();
+        geometryWorker?.terminate();
+        geometryWorker = null;
+        return;
+      }
+      const { id, geometry, error } = event.data;
+      const task = geometryWorkerTasks.get(id);
+      if (!task) return;
+      geometryWorkerTasks.delete(id);
+      if (error) task.reject(new Error(error));
+      else task.resolve(geometry);
+    });
+    geometryWorker.addEventListener("error", (event) => {
+      const error = event.error || new Error(event.message || "Orbit geometry worker failed");
+      geometryWorkerTasks.forEach((task) => task.reject(error));
+      geometryWorkerTasks.clear();
+      geometryWorker?.terminate();
+      geometryWorker = null;
+    });
+  } catch (error) {
+    geometryWorker = null;
+    return null;
+  }
+  return geometryWorker;
+}
+
+function serializeGeometryForWorker(geometry) {
+  const transferables = [];
+
+  function serializeAttribute(attribute) {
+    if (!attribute || attribute.isInterleavedBufferAttribute) {
+      throw new Error("Interleaved geometry attributes are not supported by the orbit worker");
+    }
+    const array = attribute.array;
+    const buffer = array.buffer.slice(array.byteOffset, array.byteOffset + array.byteLength);
+    transferables.push(buffer);
+    return {
+      buffer,
+      arrayType: array.constructor.name,
+      itemSize: attribute.itemSize,
+      normalized: attribute.normalized,
+    };
+  }
+
+  const attributes = Object.fromEntries(
+    Object.entries(geometry.attributes).map(([name, attribute]) => [name, serializeAttribute(attribute)]),
+  );
+  const morphAttributes = Object.fromEntries(
+    Object.entries(geometry.morphAttributes).map(([name, list]) => [
+      name,
+      list.map(serializeAttribute),
+    ]),
+  );
+  const index = geometry.getIndex();
+
+  return {
+    payload: {
+      attributes,
+      morphAttributes,
+      morphTargetsRelative: geometry.morphTargetsRelative,
+      index: index ? serializeAttribute(index) : null,
+      groups: geometry.groups.map((group) => ({ ...group })),
+      drawRange: { ...geometry.drawRange },
+    },
+    transferables,
+  };
+}
+
+function geometryFromWorkerPayload(payload) {
+  const geometry = new THREE.BufferGeometry();
+
+  function attributeFromPayload(attribute) {
+    const ArrayType = GEOMETRY_ARRAY_TYPES[attribute.arrayType];
+    if (!ArrayType) throw new Error(`Unsupported prepared geometry type: ${attribute.arrayType}`);
+    return new THREE.BufferAttribute(
+      new ArrayType(attribute.buffer),
+      attribute.itemSize,
+      attribute.normalized,
+    );
+  }
+
+  Object.entries(payload.attributes).forEach(([name, attribute]) => {
+    geometry.setAttribute(name, attributeFromPayload(attribute));
   });
+  if (payload.index) geometry.setIndex(attributeFromPayload(payload.index));
+  payload.groups.forEach((group) => geometry.addGroup(group.start, group.count, group.materialIndex));
+  geometry.setDrawRange(payload.drawRange.start, payload.drawRange.count);
+  Object.entries(payload.morphAttributes).forEach(([name, list]) => {
+    geometry.morphAttributes[name] = list.map(attributeFromPayload);
+  });
+  geometry.morphTargetsRelative = Boolean(payload.morphTargetsRelative);
+  return geometry;
+}
+
+function prepareGeometryInWorker(geometry) {
+  const worker = getGeometryWorker();
+  if (!worker) return Promise.resolve(null);
+
+  let serialized;
+  try {
+    serialized = serializeGeometryForWorker(geometry);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+
+  const id = ++geometryWorkerTaskId;
+  return new Promise((resolve, reject) => {
+    geometryWorkerTasks.set(id, {
+      resolve: (payload) => resolve(geometryFromWorkerPayload(payload)),
+      reject,
+    });
+    try {
+      worker.postMessage({
+        id,
+        geometry: serialized.payload,
+        tolerance: GEOMETRY_PREP_TOLERANCE,
+      }, serialized.transferables);
+    } catch (error) {
+      geometryWorkerTasks.delete(id);
+      reject(error);
+    }
+  });
+}
+
+function enqueueModelParse(task) {
+  const run = modelParseQueue.then(() => new Promise((resolve, reject) => {
+    const schedule = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 0);
+    schedule(() => {
+      Promise.resolve()
+        .then(task)
+        .then(resolve, reject);
+    });
+  }));
+  modelParseQueue = run.catch(() => {});
+  return run;
+}
+
+async function fetchModelBuffer(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not load orbit model (${response.status}): ${url}`);
+  return response.arrayBuffer();
+}
+
+function parseGltfBuffer(buffer, url) {
+  return new Promise((resolve, reject) => {
+    createGLTFLoader().parse(buffer, new URL(".", url).href, resolve, reject);
+  });
+}
+
+function parseFbxBuffer(buffer, url) {
+  return new FBXLoader().parse(buffer, new URL(".", url).href);
 }
 
 function loadCategoryModelSource(key) {
@@ -859,16 +1181,22 @@ function loadCategoryModelSource(key) {
 
   if (source.type === "fbx") {
     promise = Promise.all([
-      loadFbx(source.url),
-      source.animationUrl ? loadFbx(source.animationUrl) : Promise.resolve(null),
-    ]).then(([model, animation]) => ({
-      scene: model,
-      animations: animation?.animations?.length ? animation.animations : model.animations || [],
+      fetchModelBuffer(source.url),
+      source.animationUrl ? fetchModelBuffer(source.animationUrl) : Promise.resolve(null),
+    ]).then(([modelBuffer, animationBuffer]) => enqueueModelParse(() => {
+      const model = parseFbxBuffer(modelBuffer, source.url);
+      const animation = animationBuffer
+        ? parseFbxBuffer(animationBuffer, source.animationUrl)
+        : null;
+      return {
+        scene: model,
+        animations: animation?.animations?.length ? animation.animations : model.animations || [],
+      };
     }));
   } else {
-    promise = new Promise((resolve, reject) => {
-      createGLTFLoader().load(source.url, resolve, undefined, reject);
-    }).then((gltf) => ({ scene: gltf.scene, animations: gltf.animations || [] }));
+    promise = fetchModelBuffer(source.url)
+      .then((buffer) => enqueueModelParse(() => parseGltfBuffer(buffer, source.url)))
+      .then((gltf) => ({ scene: gltf.scene, animations: gltf.animations || [] }));
   }
 
   categoryModelPromises.set(key, promise);
@@ -894,23 +1222,43 @@ function prepareOrbitModelGeometry(mesh) {
 
   // Imported assets often keep duplicated vertices across otherwise smooth
   // faces. Weld those copies before rebuilding normals for continuous shading.
-  const smoothedGeometry = mergeVertices(geometry.clone(), 1e-4);
+  const smoothedGeometry = mergeVertices(geometry.clone(), GEOMETRY_PREP_TOLERANCE);
   smoothedGeometry.computeVertexNormals();
   smoothedGeometry.attributes.normal.needsUpdate = true;
   mesh.geometry = smoothedGeometry;
 }
 
-function applyOrbitModelMaterials(
+async function prepareOrbitModelGeometryAsync(mesh) {
+  const geometry = mesh.geometry;
+  if (!geometry?.attributes?.position) return;
+
+  try {
+    const prepared = await prepareGeometryInWorker(geometry);
+    if (prepared) {
+      prepared.attributes.normal.needsUpdate = true;
+      mesh.geometry = prepared;
+      return;
+    }
+  } catch (error) {
+    // Keep the original synchronous path as a compatibility fallback for
+    // browsers that cannot construct a module worker or for unusual geometry.
+    console.warn("Orbit geometry worker unavailable; using the main-thread preparation path", error);
+  }
+  prepareOrbitModelGeometry(mesh);
+}
+
+async function applyOrbitModelMaterials(
   object,
   offset = 0,
   activeMaterialColors = null,
 ) {
   const materialMap = new Map();
   const materials = [];
+  const geometryTasks = [];
 
   object.traverse((child) => {
     if (!child.isMesh) return;
-    prepareOrbitModelGeometry(child);
+    geometryTasks.push(prepareOrbitModelGeometryAsync(child));
     child.castShadow = true;
     child.receiveShadow = false;
 
@@ -977,17 +1325,17 @@ function applyOrbitModelMaterials(
     child.material = Array.isArray(child.material) ? greenMaterials : greenMaterials[0];
   });
 
+  await Promise.all(geometryTasks);
+
   return materials;
 }
 
-function buildCategoryModel(source, config) {
+async function buildCategoryModel(source, config) {
   const materials = [];
 
   if (!config.ensemble) {
     const model = cloneSkeleton(source.scene);
-    materials.push(
-      ...applyOrbitModelMaterials(model, 0, config.activeMaterialColors),
-    );
+    materials.push(...await applyOrbitModelMaterials(model, 0, config.activeMaterialColors));
     fitModel(model, config.targetSize || 1.75);
     const orientedModel = new THREE.Group();
     orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
@@ -996,17 +1344,16 @@ function buildCategoryModel(source, config) {
   }
 
   const ensemble = new THREE.Group();
-  [-0.82, 0, 0.82].forEach((x, index) => {
+  for (const [index, x] of [-0.82, 0, 0.82].entries()) {
     const character = cloneSkeleton(source.scene);
-    materials.push(...applyOrbitModelMaterials(character));
+    materials.push(...await applyOrbitModelMaterials(character));
     fitModel(character, 1.72);
     character.position.x = x;
     character.position.y = index === 1 ? 0.08 : -0.08;
     character.rotation.y = index === 1 ? 0 : index === 0 ? 0.22 : -0.22;
     character.scale.multiplyScalar(index === 1 ? 1 : 0.88);
     ensemble.add(character);
-
-  });
+  }
   fitModel(ensemble, 1.75);
   const orientedModel = new THREE.Group();
   orientedModel.rotation.set(...(config.rotation || [0, 0, 0]));
@@ -1014,7 +1361,8 @@ function buildCategoryModel(source, config) {
   return { model: orientedModel, materials };
 }
 
-function createCategoryModelView(host, reduce, modelKey) {
+function createCategoryModelView(host, reduce, modelKey, initiallyActive = true, sharedRenderer) {
+  if (!sharedRenderer) return null;
   const config = CATEGORY_MODEL_SOURCES[modelKey];
   const canvas = document.createElement("canvas");
   canvas.className = "orbit-conversation-canvas orbit-category-model-canvas";
@@ -1022,35 +1370,16 @@ function createCategoryModelView(host, reduce, modelKey) {
   host.classList.add("is-conversation", "is-category-model", "is-model-loading");
   host.appendChild(canvas);
 
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    alpha: true,
-    antialias: true,
-    premultipliedAlpha: false,
-    powerPreference: "high-performance",
-  });
-  if (!renderer.getContext()) {
+  const outputSize = Math.round(CATEGORY_MODEL_RENDER_SIZE * sharedRenderer.pixelRatio);
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  if (!canvas.getContext("2d", { alpha: true, desynchronized: true })) {
     canvas.remove();
     host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
     return null;
   }
 
-  renderer.setClearColor(0x000000, 0);
-  renderer.setClearAlpha(0);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, CATEGORY_MODEL_PIXEL_RATIO));
-  renderer.setSize(CATEGORY_MODEL_RENDER_SIZE, CATEGORY_MODEL_RENDER_SIZE, false);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
-
   const scene = new THREE.Scene();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const environmentScene = new RoomEnvironment();
-  const environment = pmrem.fromScene(environmentScene, 0.04).texture;
-  scene.environment = environment;
-  environmentScene.dispose();
   const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 30);
   camera.position.set(0, 0.08, 6.2);
   camera.lookAt(0, 0, 0);
@@ -1110,6 +1439,21 @@ function createCategoryModelView(host, reduce, modelKey) {
   let tilt = focused ? -0.025 : 0;
   let transition = null;
   let previousFrameTime = window.performance.now() * 0.001;
+  let renderActive = Boolean(initiallyActive);
+  let warmInProgress = false;
+  let renderRequestedDuringWarm = false;
+  let readyResolve;
+  const ready = new Promise((resolve) => {
+    readyResolve = resolve;
+  });
+
+  function scheduleRender() {
+    if (reduce || !renderActive || frame) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      render();
+    });
+  }
 
   function startTransition(kind) {
     if (reduce) {
@@ -1141,8 +1485,9 @@ function createCategoryModelView(host, reduce, modelKey) {
     };
   }
 
-  function render() {
+  function render(forceDraw = false) {
     if (disposed) return;
+    if (!model) return;
     const now = window.performance.now() * 0.001;
     const delta = Math.min(Math.max(now - previousFrameTime, 0), 0.05);
     previousFrameTime = now;
@@ -1198,32 +1543,71 @@ function createCategoryModelView(host, reduce, modelKey) {
       );
     });
 
-    renderer.render(scene, camera);
-    if (!reduce) frame = window.requestAnimationFrame(render);
+    if (renderActive || forceDraw) sharedRenderer.render(scene, camera, canvas);
+    scheduleRender();
+  }
+
+  async function warm() {
+    if (!model || disposed) return;
+    warmInProgress = true;
+    renderRequestedDuringWarm = false;
+    try {
+      await sharedRenderer.compile(scene, camera);
+    } catch (error) {
+      // The explicit warm draw below remains the compatibility path when
+      // parallel shader compilation is unavailable or rejected.
+      console.debug(`Could not asynchronously compile ${modelKey} orbit shaders`, error);
+    }
+    const wasActive = renderActive;
+    if (!wasActive) renderActive = true;
+    render(true);
+    warmInProgress = false;
+    if (!wasActive && !renderRequestedDuringWarm && renderActive) {
+      renderActive = false;
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    }
   }
 
   loadCategoryModelSource(modelKey)
-    .then((source) => {
-      if (disposed) return;
-      const built = buildCategoryModel(source, config);
+    .then(async (source) => {
+      if (disposed) {
+        readyResolve({ status: "error", key: modelKey, reason: "disposed-before-load" });
+        return;
+      }
+      const built = await buildCategoryModel(source, config);
+      if (disposed) {
+        built.model?.traverse((child) => {
+          if (child.isMesh) child.geometry?.dispose();
+        });
+        built.materials?.forEach((material) => material.dispose());
+        readyResolve({ status: "error", key: modelKey, reason: "disposed-during-build" });
+        return;
+      }
       model = built.model;
       materials = built.materials;
       stage.add(model);
       host.classList.remove("is-model-loading");
       host.classList.add("is-model-ready");
       if (focused) startTransition("focus");
-      if (reduce) render();
+      await warm();
+      readyResolve({ status: "ready", key: modelKey });
     })
     .catch((error) => {
       console.warn(`Could not load ${modelKey} orbit model`, error);
       host.classList.remove("is-conversation", "is-category-model", "is-model-loading");
       host.classList.add("is-model-error");
       canvas.remove();
+      readyResolve({ status: "error", key: modelKey, error });
     });
 
-  render();
+  if (renderActive && reduce) render();
 
   return {
+    ready,
+    canvas,
     setHovered(next) {
       hovered = Boolean(next);
       if (reduce) render();
@@ -1235,18 +1619,29 @@ function createCategoryModelView(host, reduce, modelKey) {
       if (model && focused !== wasFocused) startTransition(focused ? "focus" : "exit");
       if (reduce) render();
     },
+    setRenderActive(next) {
+      const active = Boolean(next);
+      if (warmInProgress) renderRequestedDuringWarm = true;
+      if (active === renderActive) return;
+      renderActive = active;
+      if (renderActive) {
+        previousFrameTime = window.performance.now() * 0.001;
+        render();
+      } else if (frame) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    },
     dispose() {
       disposed = true;
       if (frame) window.cancelAnimationFrame(frame);
+      frame = 0;
       model?.traverse((child) => {
         if (child.isMesh) child.geometry?.dispose();
       });
       materials.forEach((material) => material.dispose());
       shadowGeometry.dispose();
       shadowMaterial.dispose();
-      environment.dispose();
-      pmrem.dispose();
-      renderer.dispose();
       canvas.remove();
     },
   };
@@ -1256,6 +1651,8 @@ function noopController() {
   return {
     items: [],
     mode: "idle",
+    ready: Promise.resolve({ status: "degraded", results: [], failures: [] }),
+    setRenderActive() {},
     startIdle() {},
     playEnter() {},
     playWelcome() {},
@@ -1270,8 +1667,138 @@ function noopController() {
   };
 }
 
+let deferredViewQueue = Promise.resolve();
+
+function enqueueViewCreation(task) {
+  const run = deferredViewQueue.then(() => new Promise((resolve) => {
+    const schedule = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 0);
+    schedule(() => {
+      try {
+        task();
+      } finally {
+        resolve();
+      }
+    });
+  }));
+  deferredViewQueue = run.catch(() => {});
+  return run;
+}
+
+function createCategoryModelViewSlot(host, reduce, modelKey, initiallyActive, sharedRenderer) {
+  let view = null;
+  let disposed = false;
+  let hovered = false;
+  let focused = host.classList.contains("is-focus");
+  let renderActive = Boolean(initiallyActive);
+  let readyResolve;
+  const ready = new Promise((resolve) => {
+    readyResolve = resolve;
+  });
+
+  enqueueViewCreation(() => {
+    if (disposed) {
+      readyResolve({ status: "error", key: modelKey, reason: "disposed-before-create" });
+      return;
+    }
+    try {
+      view = createCategoryModelView(host, reduce, modelKey, renderActive, sharedRenderer);
+      if (!view) {
+        readyResolve({ status: "error", key: modelKey, reason: "renderer-unavailable" });
+        return;
+      }
+      view.setHovered(hovered);
+      view.setFocused(focused);
+      view.setRenderActive(renderActive);
+      view.ready.then(readyResolve, (error) => {
+        readyResolve({ status: "error", key: modelKey, error });
+      });
+    } catch (error) {
+      readyResolve({ status: "error", key: modelKey, error });
+    }
+  });
+
+  return {
+    ready,
+    get canvas() {
+      return view?.canvas || null;
+    },
+    setHovered(next) {
+      hovered = Boolean(next);
+      view?.setHovered(hovered);
+    },
+    setFocused(next) {
+      focused = Boolean(next);
+      view?.setFocused(focused);
+    },
+    setRenderActive(next) {
+      renderActive = Boolean(next);
+      view?.setRenderActive(renderActive);
+    },
+    dispose() {
+      disposed = true;
+      view?.dispose();
+    },
+  };
+}
+
+function createOrbViewSlot(root, gsap, initiallyActive, sharedRenderer) {
+  let view = null;
+  let disposed = false;
+  let renderActive = Boolean(initiallyActive);
+  let lastLayout = null;
+  let readyResolve;
+  const ready = new Promise((resolve) => {
+    readyResolve = resolve;
+  });
+
+  enqueueViewCreation(() => {
+    if (disposed) {
+      readyResolve({ status: "error", reason: "disposed-before-create" });
+      return;
+    }
+    try {
+      view = createOrbView(root, gsap, sharedRenderer);
+      if (!view) {
+        readyResolve({ status: "error", reason: "renderer-unavailable" });
+        return;
+      }
+      view.setRenderActive(renderActive);
+      if (lastLayout) view.layout(...lastLayout);
+      Promise.resolve(view.warm?.()).then(
+        () => readyResolve({ status: "ready" }),
+        (error) => readyResolve({ status: "error", error }),
+      );
+    } catch (error) {
+      readyResolve({ status: "error", error });
+    }
+  });
+
+  return {
+    ready,
+    get canvas() {
+      return view?.canvas || null;
+    },
+    layout(...args) {
+      lastLayout = args;
+      view?.layout(...args);
+    },
+    setRenderActive(next) {
+      renderActive = Boolean(next);
+      view?.setRenderActive(renderActive);
+    },
+    dispose() {
+      disposed = true;
+      view?.dispose();
+    },
+  };
+}
+
 export function createField({ root, gsap, reduce }) {
   if (!root || !gsap) return noopController();
+
+  const sharedRenderer = createSharedOrbitRenderer();
 
   let m = metrics();
   let mode = "idle";
@@ -1392,13 +1919,18 @@ svg.append(spokeGroup, ringCore, ringMid, ringOuter, alignLine);
     return { el, spec, spoke: spokes[index], x: 0, y: 0 };
   });
 
+  const initialRenderActive = reduce
+    || !document.getElementById("welcome-bumper")
+    || new URLSearchParams(window.location.search).has("shot");
   const conversationViews = nodes.map((node) => {
-    try {
-      node.el.setAttribute("aria-label", node.spec.label);
-      return createCategoryModelView(node.el, reduce, node.spec.model);
-    } catch (err) {
-      return null;
-    }
+    node.el.setAttribute("aria-label", node.spec.label);
+    return createCategoryModelViewSlot(
+      node.el,
+      reduce,
+      node.spec.model,
+      initialRenderActive,
+      sharedRenderer,
+    );
   });
 
   let hover = null;
@@ -1418,11 +1950,23 @@ svg.append(spokeGroup, ringCore, ringMid, ringOuter, alignLine);
   let orbView = null;
   if (!reduce) {
     try {
-      orbView = createOrbView(root, gsap);
+      orbView = createOrbViewSlot(root, gsap, initialRenderActive, sharedRenderer);
     } catch (err) {
       orbView = null;
     }
   }
+  const fieldReady = Promise.all([
+    ...conversationViews.map((view, index) => view?.ready || Promise.resolve({
+      status: "error",
+      key: STATION_NODES[index].model,
+      error: new Error("Orbit model view could not be created"),
+    })),
+    ...(orbView?.ready ? [orbView.ready] : []),
+  ]).then((results) => ({
+    status: results.every((result) => result.status === "ready") ? "ready" : "degraded",
+    results,
+    failures: results.filter((result) => result.status !== "ready"),
+  }));
 
   const focusMotion = {
     dockX: 0,
@@ -2203,6 +2747,12 @@ function ringRadius(name) {
   const controller = {
     items: slabs,
     mode,
+    ready: fieldReady,
+    setRenderActive(next) {
+      conversationViews.forEach((view) => view?.setRenderActive?.(next));
+      orbView?.setRenderActive?.(next);
+      if (next) tickIdle();
+    },
     startIdle() {
       if (mode === "whisper" || mode === "paused") return;
       if (idleTl) {
@@ -2254,6 +2804,7 @@ function ringRadius(name) {
     categoryAssetScaleTweens.forEach((tween) => tween?.kill());
     if (orbView) orbView.dispose();
       conversationViews.forEach((view) => view?.dispose());
+      sharedRenderer?.dispose();
       slabs.forEach((it) => {
         it.el.style.willChange = "auto";
       });
