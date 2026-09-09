@@ -5,7 +5,19 @@ const SILENCE_MS = 800;
 const MIN_SPEECH_MS = 400;
 const MAX_COMMAND_MS = 15000;
 const DISCLOSURE =
-  "Mic audio is transcribed on XTATION's machine. Transcripts go to DeepSeek. Nothing is stored.";
+  "Suara dari mikrofon ditranskripsi di mesin XTATION. Teksnya dikirim ke DeepSeek. Tidak disimpan.";
+
+const COPY = {
+  listen: "Mendengarkan",
+  think: "Sebentar…",
+  busy: "Sedang sibuk",
+  deaf: "Tidak bisa mendengar",
+  blocked: "Mikrofon diblokir",
+  fallback: "Produk, atau hubungi kami?",
+  cantShow: "Tidak bisa menampilkan bagian itu",
+  start: "Mulai mendengarkan",
+  stop: "Berhenti mendengarkan",
+};
 
 const SECTION_LABELS = {
   hero: "Hero",
@@ -50,7 +62,7 @@ function createSurface() {
   root.id = "voice-surface";
   root.hidden = true;
   root.innerHTML = `
-    <button class="voice-mic" type="button" aria-pressed="false" aria-label="Start listening">
+    <button class="voice-mic" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
       <svg class="voice-mic-mark" viewBox="0 0 24 24" aria-hidden="true">
         <rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"></rect>
         <path d="M7 11a5 5 0 0 0 10 0" fill="none" stroke="currentColor" stroke-width="2"></path>
@@ -96,7 +108,7 @@ function bindVoice() {
 
   const setPressed = (on) => {
     ui.button.setAttribute("aria-pressed", on ? "true" : "false");
-    ui.button.setAttribute("aria-label", on ? "Stop listening" : "Start listening");
+    ui.button.setAttribute("aria-label", on ? COPY.stop : COPY.start);
   };
 
   const stopRecorder = () => {
@@ -134,25 +146,25 @@ function bindVoice() {
   const applyDecision = (decision) => {
     const transcript = decision?.transcript || "";
     if (decision?.action === "busy") {
-      setCopy("Busy", transcript);
+      setCopy(COPY.busy, transcript);
       return;
     }
     if (decision?.action === "show" && decision.section) {
       const shown = window.xstationShowSection?.(decision.section);
       const label = SECTION_LABELS[decision.section] || decision.section;
-      setCopy(shown ? label : "Can't show that section", transcript);
+      setCopy(shown ? label : COPY.cantShow, transcript);
       return;
     }
     if (decision?.action === "clarify") {
-      setCopy(decision.text || "A product, or contact?", transcript);
+      setCopy(decision.text || COPY.fallback, transcript);
       return;
     }
-    setCopy("A product, or contact?", transcript);
+    setCopy(COPY.fallback, transcript);
   };
 
   const sendClip = async (blob) => {
     thinking = true;
-    setCopy("Thinking…");
+    setCopy(COPY.think);
     const body = new FormData();
     body.append("audio", blob, `command.${blob.type.includes("mp4") ? "mp4" : "webm"}`);
     try {
@@ -167,7 +179,7 @@ function bindVoice() {
       if (!response.ok) throw new Error("box");
       applyDecision(await response.json());
     } catch {
-      setCopy("Can't hear");
+      setCopy(COPY.deaf);
     } finally {
       thinking = false;
     }
@@ -180,7 +192,7 @@ function bindVoice() {
     try {
       recorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
     } catch {
-      setCopy("Can't hear");
+      setCopy(COPY.deaf);
       return;
     }
     recording = true;
@@ -234,18 +246,18 @@ function bindVoice() {
     }
     if (!boxUp) {
       dropMic();
-      endSession("Can't hear");
+      endSession(COPY.deaf);
       return;
     }
     try {
       stream = await micRequest;
     } catch {
-      endSession("Microphone is blocked");
+      endSession(COPY.blocked);
       return;
     }
     stream.getAudioTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (session) endSession("Can't hear");
+        if (session) endSession(COPY.deaf);
       });
     });
     audioContext = new AudioContext();
@@ -256,7 +268,7 @@ function bindVoice() {
     if (audioContext.state === "suspended") await audioContext.resume();
     session = true;
     setPressed(true);
-    setCopy("Listening");
+    setCopy(COPY.listen);
     monitorId = window.setInterval(monitor, 80);
   };
 

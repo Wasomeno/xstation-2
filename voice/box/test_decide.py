@@ -58,6 +58,11 @@ class DecideTests(unittest.TestCase):
     def test_empty_payload_clarifies(self):
         result = decide(None)
         self.assertEqual(result["action"], "clarify")
+        self.assertIn("Produk", result["text"])
+
+    def test_default_clarify_is_indonesian(self):
+        result = decide({"action": "clarify", "hypotheses": ["HireAssess", "Arkiv"]})
+        self.assertEqual(result["text"], "HireAssess, atau Arkiv?")
 
     def test_decide_from_model_text_round_trip(self):
         result = decide_from_model_text('{"action":"show","section":"bikin konten"}')

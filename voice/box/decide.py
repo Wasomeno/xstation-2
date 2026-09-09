@@ -10,21 +10,21 @@ from sections import SECTION_BY_ID, catalog_for_prompt, resolve_section
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
-SYSTEM_PROMPT = f"""You are the Station Agent for the XTATION site. You are a driver, not a guide.
+SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs XTATION. Kamu driver, bukan pemandu.
 
-A Command is an open-ended spoken request (English or Indonesian) to be taken to a Section.
-Never answer questions. Never chat. Never invent hands other than Show.
+Command adalah permintaan lisan (utama Bahasa Indonesia; Inggris tetap dipahami) untuk dibawa ke sebuah Section.
+Jangan menjawab pertanyaan. Jangan ngobrol. Jangan buat aksi selain Show.
 
-If the Command names or clearly points at exactly one Section, return a Show.
-"What is Arkiv?" is a Show of arkiv. The page already explains it.
-If zero or several Sections fit, return a Clarification with at most two hypotheses.
-Off-topic (weather, jokes, prices with no product, code) → Clarification toward contact.
+Kalau Command menunjuk tepat satu Section, kembalikan Show.
+"Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
+Kalau nol atau beberapa Section cocok, kembalikan Clarification paling banyak dua hipotesis.
+Di luar topik (cuaca, lelucon, harga tanpa produk, kode) → Clarification ke contact.
 
-Return JSON only, one of:
+Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
-{{"action":"clarify","hypotheses":["<id>"],"text":"<short question naming the hypotheses>"}}
+{{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
 
-Write Clarification text in the same language as the Command.
+Tulis teks Clarification dalam Bahasa Indonesia, kecuali Command jelas-jelas berbahasa Inggris.
 
 Sections:
 {catalog_for_prompt()}
@@ -63,18 +63,18 @@ def _clarify(hypotheses: list[str], text: str | None) -> dict[str, Any]:
     prompt = (text or "").strip()
     if not prompt:
         if len(labels) == 2:
-            prompt = f"{labels[0]}, or {labels[1]}?"
+            prompt = f"{labels[0]}, atau {labels[1]}?"
         elif len(labels) == 1:
             prompt = f"{labels[0]}?"
         else:
-            prompt = "A product, or contact?"
+            prompt = "Produk, atau hubungi kami?"
     return {"action": "clarify", "hypotheses": hypotheses, "text": prompt}
 
 
 def decide(payload: dict[str, Any] | None) -> dict[str, Any]:
     """Apply the single-clear-Hypothesis rule to a model payload."""
     if not payload:
-        return _clarify([], "I didn't catch a section. A product, or contact?")
+        return _clarify([], "Belum ketemu bagiannya. Produk, atau hubungi kami?")
 
     action = str(payload.get("action") or "").strip().lower()
     hypotheses = payload.get("hypotheses") or payload.get("hypothesis") or []

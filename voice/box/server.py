@@ -177,7 +177,7 @@ async def command(request: Request, audio: UploadFile = File(...)):
             return {
                 "action": "clarify",
                 "hypotheses": [],
-                "text": "I didn't catch that. Try a product, or contact?",
+                "text": "Belum ketangkap. Coba sebut produk, atau hubungi kami?",
                 "transcript": "",
             }
 
