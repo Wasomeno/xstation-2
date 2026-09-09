@@ -129,11 +129,12 @@ test("energy smoothing attacks faster than release and is frame-rate independent
 test("all three variants preserve their visuals, react to audio, and respect reduced motion", () => {
   const render = (state, reduced = false, loud = false, variant = "2") => {
     let pixels, nextFrame, radius, squash;
-    const paths = [], fills = [], arcs = [];
+    const paths = [], fills = [], arcs = [], rectangles = [];
     const surface = { dataset: { state, variant } };
     const ctx = {
       save() {}, restore() {}, translate() {}, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
-      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; },
+      roundRect(x, y, width, height, corner) { radius = width / 2; rectangles.push({ width, height, corner }); },
+      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; rectangles.length = 0; },
       moveTo(...point) { paths.push(point); }, lineTo(...point) { paths.push(point); },
       closePath() {}, fill() { fills.push(this.fillStyle); },
       rotate(angle) { paths.push(["rotate", angle]); }, setTransform() {}, drawImage() {},
@@ -162,8 +163,10 @@ test("all three variants preserve their visuals, react to audio, and respect red
     for (let i = 1; i <= 30 && nextFrame; i++) nextFrame(1000 + i * 34);
     if (variant === "3") {
       if (state === "thinking") {
-        assert.equal(arcs.length, 1, "Processing keeps one continuous fluid silhouette");
-        assert.ok(squash >= 0.48 && squash < 0.55, "Processing is a wide, flattened shape");
+        assert.equal(arcs.length, 0, "Processing is not an ellipse");
+        assert.equal(rectangles.length, 1);
+        assert.ok(rectangles[0].width > rectangles[0].height * 1.8);
+        assert.equal(rectangles[0].corner, rectangles[0].height / 2, "Processing has fully rounded ends");
       } else assert.ok(paths.length > 0, "Variant 3 restores the earlier layered contours");
       assert.equal(fills.length, 3);
       assert.ok(fills.every((fill) => Object.values(colors).includes(fill)));
@@ -252,6 +255,76 @@ test("Escape stops capture and stale socket callbacks cannot revive a session", 
   assert.equal(h.ui.root.dataset.state, "connecting");
   assert.deepEqual(h.sections, []);
   h.click();
+});
+
+test("startup captures the first words before health and transcription are ready", async () => {
+  const h = browser();
+  h.click();
+  const { media } = microphone();
+  h.microphones[0].resolve(media);
+  await flush();
+  const context = h.contexts[0];
+  assert.ok(context?.processor, "Capture must start as soon as the microphone is available");
+  const input = new Float32Array([0, 0.5, -0.5]);
+  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => input } });
+  h.health[0].resolve({ ok: true });
+  await flush();
+  const socket = h.sockets[0];
+  socket.open();
+  await flush();
+  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => input } });
+  assert.equal(socket.messages.length, 0, "Wait for transcription readiness before sending");
+  socket.message({ type: "ready" });
+  assert.deepEqual(socket.messages, [
+    { type: "audio", pcm: "AAD/PwDA" }, { type: "audio", pcm: "AAD/PwDA" },
+  ]);
+  socket.message({ type: "ready" });
+  assert.equal(socket.messages.length, 2, "Startup audio is sent exactly once");
+  h.escape();
+});
+
+test("a command finished during startup is submitted once and processing stays protected", async () => {
+  const h = browser();
+  const { socket, context } = await h.connect();
+  const feed = (level, now) => {
+    h.sandbox.performance.now = () => now;
+    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
+  };
+  feed(0.1, 1000);
+  feed(0, 3000);
+  feed(0.1, 3100);
+  socket.message({ type: "ready" });
+  assert.deepEqual(socket.messages.map(message => message.type), ["audio", "audio", "commit"]);
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  feed(0.1, 3200);
+  socket.message({ type: "ready" });
+  assert.equal(socket.messages.length, 3);
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  socket.message({ type: "decision", action: "show", section: "codev" });
+  feed(0.1, 4000);
+  assert.equal(socket.messages.at(-1).type, "audio");
+  h.escape();
+});
+
+test("cancelled or stalled startup discards buffered audio and releases the microphone", async () => {
+  for (const stalled of [false, true]) {
+    const h = browser();
+    const first = await h.connect();
+    const feed = samples => first.context.processor.onaudioprocess({
+      inputBuffer: { getChannelData: () => samples },
+    });
+    feed(new Float32Array(4096).fill(0.1));
+    if (stalled) feed(new Float32Array(24000 * 31));
+    else h.escape();
+    assert.equal(first.track.stopped, true);
+    assert.equal(first.context.state, "closed");
+    first.socket.message({ type: "ready" });
+    assert.deepEqual(first.socket.messages.map(message => message.type), ["stop"]);
+    const next = await h.connect();
+    next.socket.message({ type: "ready" });
+    assert.deepEqual(next.socket.messages, [], "A new session cannot send old microphone audio");
+    h.escape();
+  }
 });
 
 test("backend errors tear down microphone, socket, and audio context", async () => {
@@ -496,6 +569,32 @@ test("a long foreground sentence and brief pauses are not cut by a fixed timeout
     assert.notEqual(pause.update(new Float32Array(4096).fill(level), now), "commit");
     pause.transcript(now);
   }
+});
+
+test("softer speech after a loud opening keeps streaming beyond twelve seconds", async () => {
+  const h = browser();
+  const { socket, context, track } = await h.connect();
+  socket.message({ type: "ready" });
+  const step = 4096 / context.sampleRate * 1000;
+  const feed = (level, elapsed) => {
+    h.sandbox.performance.now = () => 1000 + elapsed;
+    context.processor.onaudioprocess({
+      inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) },
+    });
+  };
+  let elapsed = 0;
+  for (; elapsed < 12000; elapsed += step) {
+    const level = elapsed < 1000 ? 0.18 : [0.018, 0.045, 0.025, 0.055][Math.floor(elapsed / step) % 4];
+    feed(level, elapsed);
+    assert.equal(h.ui.root.dataset.state, "listening", `Speech cut off at ${elapsed}ms`);
+  }
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 0);
+  const speechEnd = elapsed;
+  for (; elapsed < speechEnd + 2200; elapsed += step) feed(0.008, elapsed);
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  assert.equal(track.stopped, false);
+  h.escape();
 });
 
 test("a breathing pause in background noise keeps the sentence open until speech resumes", () => {

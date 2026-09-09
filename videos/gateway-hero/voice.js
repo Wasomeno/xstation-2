@@ -84,7 +84,8 @@ function createPauseDetector() {
       const seconds = lastUpdate ? Math.min((now - lastUpdate) / 1000, 0.25) : 1 / 60;
       lastUpdate = now;
       peak = Math.max(rms, peak * Math.exp(-seconds / 2));
-      const threshold = Math.max(0.012, noise * 2.5, peak * 0.35);
+      // Require a stronger onset, then tolerate softer syllables in the same sentence.
+      const threshold = Math.max(0.012, noise * (heardVoice ? 1.5 : 2.5), peak * 0.35);
       if (rms < threshold) {
         // Learn the quieter room level even while a command is active.
         noise += (rms - noise) * (1 - Math.exp(-seconds / 0.3));
@@ -162,10 +163,10 @@ function createWaveform(canvas) {
     ctx.clearRect(0, 0, size, size);
     ctx.save();
     ctx.translate(size / 2, size / 2);
-    ctx.scale(1, visualSquash);
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.roundRect(-radius, -radius * visualSquash, radius * 2, radius * visualSquash * 2, radius * visualSquash);
     ctx.clip();
+    ctx.scale(1, visualSquash);
     ctx.fillStyle = failed ? palette[0] : palette[1];
     ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
     // Three flat overlapping contours.
@@ -340,7 +341,7 @@ function bindVoice() {
     } else showNoAction();
   };
 
-  const startCapture = (isReady, onPause) => {
+  const startCapture = (isCurrent, isReady, onPause) => {
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
@@ -350,23 +351,45 @@ function bindVoice() {
     const mute = audioContext.createGain();
     mute.gain.value = 0;
     const pause = createPauseDetector();
+    const pending = [];
+    let bufferedSamples = 0;
+    let pendingCommit = false;
+    const send = (message) => {
+      const data = JSON.stringify(message);
+      if (isReady()) socket.send(data);
+      else pending.push(data);
+    };
     processor.onaudioprocess = (event) => {
-      if (!isReady() || ui.root.dataset.state !== "listening" || !socket || socket.readyState !== 1) return;
+      if (!isCurrent() || pendingCommit || !["connecting", "listening"].includes(ui.root.dataset.state)) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
       if (!pcm.length) return;
-      socket.send(JSON.stringify({ type: "audio", pcm: floatToPcm16Base64(pcm) }));
+      if (!isReady()) {
+        bufferedSamples += pcm.length;
+        // A stalled connection must fail instead of retaining unlimited microphone audio.
+        if (bufferedSamples > TARGET_RATE * 30) { endSession("deaf"); return; }
+      }
+      send({ type: "audio", pcm: floatToPcm16Base64(pcm) });
       const action = pause.update(input, performance.now());
       if (action === "commit") {
-        socket.send(JSON.stringify({ type: "commit" }));
-        onPause();
+        send({ type: "commit" });
+        if (isReady()) onPause();
+        else pendingCommit = true;
       }
     };
     source.connect(analyser);
     source.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
-    return pause;
+    return {
+      ...pause,
+      flush() {
+        for (const data of pending) socket.send(data);
+        pending.length = 0;
+        bufferedSamples = 0;
+        if (pendingCommit) { pendingCommit = false; onPause(); }
+      },
+    };
   };
 
   const startSession = async () => {
@@ -380,7 +403,24 @@ function bindVoice() {
       endSession("blocked", COPY.unsupported);
       return;
     }
+    let backendReady = false;
+    let captureReady = false;
+    let currentItem = null;
+    let submittedItem = null;
+    const ignoredItems = new Set();
+    let pause = null;
+    const isReady = () => isCurrent() && backendReady && captureReady && socket?.readyState === 1;
+    const listenWhenReady = () => {
+      if (isReady()) { showHearing(); pause.flush(); }
+    };
+    const fail = () => {
+      if (isCurrent()) endSession("deaf");
+    };
     try {
+      // Resume during the click gesture, while permission and networking proceed.
+      const context = new Audio();
+      audioContext = context;
+      const contextReady = (context.state === "suspended" ? context.resume() : Promise.resolve()).catch(fail);
       const micRequest = navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false },
       }).then((media) => {
@@ -397,6 +437,15 @@ function bindVoice() {
       }).catch(() => {
         if (isCurrent()) endSession("blocked");
       });
+      Promise.all([micRequest, contextReady]).then(() => {
+        if (!isCurrent()) return;
+        pause = startCapture(isCurrent, isReady, () => {
+          submittedItem = currentItem;
+          setCopy(COPY.thinking, "", "thinking");
+        });
+        captureReady = true;
+        listenWhenReady();
+      }).catch(fail);
       const healthRequest = fetch(`${VOICE_BOX_URL}/health`, { cache: "no-store" })
         .then((health) => {
           if (!health.ok && isCurrent()) endSession("deaf");
@@ -408,24 +457,11 @@ function bindVoice() {
 
       const ws = new WebSocket(VOICE_BOX_WS);
       socket = ws;
-      let backendReady = false;
-      let captureReady = false;
-      let currentItem = null;
-      let submittedItem = null;
-      const ignoredItems = new Set();
-      let pause = null;
       const finishTurn = () => {
         pause?.reset();
         if (currentItem) ignoredItems.add(currentItem);
         currentItem = null;
         submittedItem = null;
-      };
-      const isReady = () => isCurrent() && backendReady && captureReady;
-      const listenWhenReady = () => {
-        if (isReady()) showHearing();
-      };
-      const fail = () => {
-        if (isCurrent()) endSession("deaf");
       };
       ws.addEventListener("message", (event) => {
         if (!isCurrent()) return;
@@ -447,6 +483,7 @@ function bindVoice() {
           return;
         }
         if (payload.type === "ready") {
+          if (backendReady) return;
           backendReady = true;
           listenWhenReady();
           return;
@@ -489,23 +526,6 @@ function bindVoice() {
       });
       ws.addEventListener("close", fail);
       ws.addEventListener("error", fail);
-      ws.addEventListener("open", async () => {
-        if (!isCurrent()) return;
-        try {
-          const context = new Audio();
-          audioContext = context;
-          if (context.state === "suspended") await context.resume();
-          if (!isCurrent()) return;
-          pause = startCapture(isReady, () => {
-            submittedItem = currentItem;
-            setCopy(COPY.thinking, "", "thinking");
-          });
-          captureReady = true;
-          listenWhenReady();
-        } catch {
-          fail();
-        }
-      }, { once: true });
     } catch {
       if (isCurrent()) endSession("deaf");
     }
