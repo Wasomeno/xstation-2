@@ -4,11 +4,7 @@ from __future__ import annotations
 
 ID_FAMILY = frozenset({"id", "ms"})
 
-ID_PROMPT = (
-    "Perintah dalam bahasa Indonesia untuk situs XTATION. "
-    "Produk: BikinKonten, Lubna, HireAssess, Arkiv, CoDev, CoFrame, CoFinance, CRM AI Agent. "
-    "Tunjukkan produk atau hubungi kami."
-)
+ID_PROMPT = "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
 
 HOTWORDS = "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance"
 
@@ -47,11 +43,33 @@ def normalize_lang(detected: str | None) -> str:
     return _LANG_NAMES.get(raw, raw)
 
 
+def is_unusable_transcript(text: str | None) -> bool:
+    """Silence and prompt-echo must not become a Command."""
+    blob = " ".join((text or "").lower().split())
+    if len(blob) < 3:
+        return True
+    prompt = " ".join(ID_PROMPT.lower().split())
+    if blob == prompt or (len(blob) > 12 and blob in prompt):
+        return True
+    echoes = (
+        "perintah dalam bahasa indonesia",
+        "thank you for watching",
+        "thanks for watching",
+        "terima kasih sudah menonton",
+        "subtitle",
+    )
+    return blob in echoes or any(blob == echo or blob.startswith(echo + " ") for echo in echoes)
+
+
 def parse_openai_transcription(payload: dict) -> dict:
     text = (payload.get("text") or "").strip()
     code = normalize_lang(payload.get("language"))
     foreign = is_foreign_language(code, 0.99 if code else 0.0)
-    return {"transcript": "" if foreign else text, "foreign": foreign, "detected": code or "id"}
+    if foreign:
+        return {"transcript": "", "foreign": True, "detected": code or "id", "silence": False}
+    if is_unusable_transcript(text):
+        return {"transcript": "", "foreign": False, "detected": code or "id", "silence": True}
+    return {"transcript": text, "foreign": False, "detected": code or "id", "silence": False}
 
 
 def resolve_asr_language(detected: str | None, probability: float | None) -> str:

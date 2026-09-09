@@ -1,6 +1,11 @@
 import unittest
 
-from whisper_lang import is_foreign_language, parse_openai_transcription, resolve_asr_language
+from whisper_lang import (
+    is_foreign_language,
+    is_unusable_transcript,
+    parse_openai_transcription,
+    resolve_asr_language,
+)
 
 
 class ResolveAsrLanguageTests(unittest.TestCase):
@@ -48,3 +53,16 @@ class OpenAITranscriptionTests(unittest.TestCase):
         result = parse_openai_transcription({"text": "Tunjukkan Arkiv"})
         self.assertFalse(result["foreign"])
         self.assertEqual(result["transcript"], "Tunjukkan Arkiv")
+
+    def test_prompt_echo_is_silence(self):
+        result = parse_openai_transcription({
+            "text": "XTATION BikinKonten Lubna HireAssess Arkiv CoDev CoFrame CoFinance",
+            "language": "indonesian",
+        })
+        self.assertTrue(result["silence"])
+        self.assertEqual(result["transcript"], "")
+
+    def test_real_product_command_is_kept(self):
+        self.assertFalse(is_unusable_transcript("Tunjukkan HireAssess"))
+        self.assertFalse(is_unusable_transcript("lihat produk"))
+        self.assertFalse(is_unusable_transcript("Arkiv"))

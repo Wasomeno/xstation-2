@@ -36,7 +36,7 @@ from fastapi.responses import JSONResponse
 import httpx
 import uvicorn
 
-from decide import SYSTEM_PROMPT, UNCLEAR_ASK, decide_from_model_text
+from decide import SYSTEM_PROMPT, decide_from_model_text
 from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
 
 ALLOWED_ORIGINS = (
@@ -216,14 +216,12 @@ async def command(request: Request, audio: UploadFile = File(...)):
                 "transcript": asr.get("transcript") or "",
             }
 
+        if asr.get("silence"):
+            return {"action": "noop", "hypotheses": [], "text": "", "transcript": ""}
+
         transcript = (asr.get("transcript") or "").strip()
         if not transcript:
-            return {
-                "action": "clarify",
-                "hypotheses": [],
-                "text": UNCLEAR_ASK,
-                "transcript": "",
-            }
+            return {"action": "noop", "hypotheses": [], "text": "", "transcript": ""}
 
         try:
             decision = await interpret(transcript)

@@ -1,8 +1,8 @@
 import { VOICE_BOX_URL } from "./voice-config.js";
 
-const SPEECH_RMS = 0.018;
+const SPEECH_RMS = 0.03;
 const SILENCE_MS = 800;
-const MIN_SPEECH_MS = 400;
+const MIN_SPEECH_MS = 700;
 const MAX_COMMAND_MS = 15000;
 const DISCLOSURE =
   "Suara dari mikrofon ditranskripsi di mesin XTATION. Teksnya dikirim ke DeepSeek. Tidak disimpan.";
@@ -145,6 +145,10 @@ function bindVoice() {
 
   const applyDecision = (decision) => {
     const transcript = decision?.transcript || "";
+    if (decision?.action === "noop") {
+      setCopy(COPY.listen);
+      return;
+    }
     if (decision?.action === "busy") {
       setCopy(COPY.busy, transcript);
       return;
@@ -203,12 +207,13 @@ function bindVoice() {
       if (event.data?.size) chunks.push(event.data);
     });
     recorder.addEventListener("stop", () => {
-      const spoken = performance.now() - speechStartedAt;
+      const voiced = lastLoudAt - speechStartedAt;
       const blob = new Blob(chunks, { type: typeUsed });
       chunks = [];
       recording = false;
       recorder = null;
-      if (session && blob.size > 0 && spoken >= MIN_SPEECH_MS) sendClip(blob);
+      if (session && blob.size > 0 && voiced >= MIN_SPEECH_MS) sendClip(blob);
+      else if (session) setCopy(COPY.listen);
     });
     recorder.start();
   };
