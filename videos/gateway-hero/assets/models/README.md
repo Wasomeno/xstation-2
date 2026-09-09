@@ -1,6 +1,6 @@
 # Orbit model credits
 
-The orbit models are locally hosted and recolored at runtime with XTATION's green palette.
+The orbit models are locally hosted and recolored at runtime with NADI's green palette.
 
 - Customer Engagement: `handshake/icon.fbx` from 3dicons by Vijay Verma, CC0. Source: https://3dicons.co/
 - Prototyping: `retro-computer/icon.fbx` from 3dicons by Vijay Verma, CC0. Source: https://3dicons.co/

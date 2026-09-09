@@ -177,8 +177,8 @@ body {
     backdrop-filter: blur(14px) saturate(125%);
   }
 
-  #brand em {
-    font-size: 1rem;
+  #brand .brand-logo {
+    width: 5.75rem;
   }
 
   #site-links {

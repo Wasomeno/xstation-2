@@ -235,7 +235,7 @@ html.lenis body {
   grid-template-columns: 1fr 1fr;
   min-height: 80dvh;
   gap: 0;
-  padding: 0;
+  padding: 0 var(--pad);
   background: #ffffff;
 }
 
@@ -535,6 +535,12 @@ html.lenis body {
   filter: grayscale(1) contrast(0.9);
 }
 
+.client-list [data-client="bina"] img {
+  width: min(100%, 7rem);
+  height: auto;
+  aspect-ratio: 112 / 35;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .client-list img {
     opacity: 0.68;
@@ -660,9 +666,12 @@ html.lenis body {
 
 .site-footer-brand {
   justify-self: start;
-  font-size: 18px;
-  font-weight: 400;
-  letter-spacing: 0.04em;
+}
+
+.site-footer-brand img {
+  display: block;
+  width: 6.75rem;
+  height: auto;
 }
 
 .site-footer-meta {
@@ -854,7 +863,7 @@ html.lenis body {
 
 }
 
-/* Project detail treatment: keep the reference hierarchy inside XTATION's light green theme. */
+/* Project detail treatment: keep the reference hierarchy inside NADI's light green theme. */
 .space,
 .space.is-flip {
   align-items: stretch;

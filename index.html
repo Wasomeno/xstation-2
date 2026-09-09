@@ -185,7 +185,7 @@
 
       #brand {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         gap: 10px;
         color: inherit;
       }
@@ -193,23 +193,13 @@
       #brand .brand-mask {
         display: block;
         overflow: hidden;
-        margin: -0.2em -0.45em;
-        border-radius: 2px;
+        margin: 0;
       }
 
-      #brand em {
+      #brand .brand-logo {
         display: block;
-        font-family: var(--sans);
-        font-style: normal;
-        font-weight: 400;
-        font-size: 18px;
-        letter-spacing: 0.04em;
-        text-transform: none;
-        padding: 0.2em 0.45em;
-        margin: 0;
-        background: transparent;
-        box-shadow: none;
-        border-radius: 2px;
+        width: clamp(5.75rem, 7vw, 6.75rem);
+        height: auto;
       }
 
       #hero-copy {
@@ -490,7 +480,7 @@
     </div>
     <header id="site-nav">
       <a id="brand" href="#main-content" aria-label="NADI home">
-        <span class="brand-mask"><em>NADI</em></span>
+        <span class="brand-mask"><img class="brand-logo" src="videos/gateway-hero/media/brand/nadi-wordmark.svg" alt="NADI" /></span>
       </a>
       <nav id="site-links" aria-label="Primary navigation">
         <a href="#work">Products</a>
@@ -728,7 +718,7 @@
       </section>
 
       <footer class="site-footer" aria-label="Site footer">
-        <a class="site-footer-brand" href="#main-content">NADI</a>
+        <a class="site-footer-brand" href="#main-content" aria-label="NADI home"><img src="videos/gateway-hero/media/brand/nadi-wordmark.svg" alt="NADI" /></a>
         <nav class="site-footer-links" aria-label="Footer navigation">
           <a href="#work">Products</a>
           <a href="#contact">Contact</a>
