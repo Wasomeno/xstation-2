@@ -1,33 +1,12 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js";
 
 const TARGET_RATE = 24000;
-const DISCLOSURE =
-  "Suara dari mikrofon ditranskripsi di mesin XTATION. Teksnya dikirim ke DeepSeek. Tidak disimpan.";
 
 const COPY = {
-  listen: "Mendengarkan",
-  think: "Sebentar…",
-  busy: "Sedang sibuk",
   deaf: "Tidak bisa mendengar",
   blocked: "Mikrofon diblokir",
-  cantShow: "Tidak bisa menampilkan bagian itu",
   start: "Mulai mendengarkan",
   stop: "Berhenti mendengarkan",
-};
-
-const SECTION_LABELS = {
-  hero: "Hero",
-  work: "Products",
-  bikinkonten: "BikinKonten",
-  lubna: "Lubna",
-  "crm-ai-agent": "CRM AI Agent",
-  hireassess: "HireAssess",
-  arkiv: "Arkiv",
-  codev: "CoDev",
-  coframe: "CoFrame",
-  cofinance: "CoFinance",
-  clients: "Clients",
-  contact: "Contact",
 };
 
 function afterWelcome(fn) {
@@ -154,8 +133,8 @@ function createSurface() {
   root.hidden = true;
   root.dataset.state = "idle";
   root.innerHTML = `
-    <div class="voice-copy">
-      <p class="voice-status" aria-live="polite"></p>
+    <div class="voice-copy" aria-live="polite">
+      <p class="voice-status"></p>
       <p class="voice-transcript"></p>
     </div>
     <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
@@ -193,6 +172,14 @@ function bindVoice() {
     ui.status.textContent = status || "";
     ui.transcript.textContent = transcript || "";
     if (state) setState(state);
+  };
+
+  const showHearing = (transcript = "") => {
+    setCopy("", transcript, transcript ? "speaking" : "listening");
+  };
+
+  const hideCopy = (state) => {
+    setCopy("", "", state);
   };
 
   const setPressed = (on) => {
@@ -246,26 +233,10 @@ function bindVoice() {
   };
 
   const applyDecision = (decision) => {
-    const transcript = decision?.transcript || "";
-    if (decision?.action === "noop") {
-      setCopy(COPY.listen, "", "listening");
-      return;
-    }
-    if (decision?.action === "busy") {
-      setCopy(COPY.busy, transcript, "thinking");
-      return;
-    }
     if (decision?.action === "show" && decision.section) {
-      const shown = window.xstationShowSection?.(decision.section);
-      const label = SECTION_LABELS[decision.section] || decision.section;
-      setCopy(shown ? label : COPY.cantShow, transcript, shown ? "shown" : "clarify");
-      return;
+      window.xstationShowSection?.(decision.section);
     }
-    if (decision?.action === "clarify" && decision.text) {
-      setCopy(decision.text, transcript, "clarify");
-      return;
-    }
-    setCopy(COPY.listen, transcript, "listening");
+    hideCopy("listening");
   };
 
   const startCapture = () => {
@@ -302,7 +273,7 @@ function bindVoice() {
         if (lastLoudAt - speechStartedAt >= 700) {
           socket.send(JSON.stringify({ type: "commit" }));
         } else {
-          setCopy(COPY.listen, "", "listening");
+          showHearing("");
         }
         talking = false;
       }
@@ -315,7 +286,7 @@ function bindVoice() {
 
   const startSession = async () => {
     closing = false;
-    setCopy(DISCLOSURE, "", "listening");
+    hideCopy("listening");
     const micRequest = navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
@@ -359,23 +330,23 @@ function bindVoice() {
         return;
       }
       if (payload.type === "ready") {
-        setCopy(COPY.listen, "", "listening");
+        showHearing("");
         return;
       }
       if (payload.type === "speech_started") {
-        setCopy(COPY.listen, "", "listening");
+        showHearing("");
         return;
       }
       if (payload.type === "delta") {
-        setCopy(COPY.listen, payload.text || "", payload.text ? "speaking" : "listening");
+        showHearing(payload.text || "");
         return;
       }
       if (payload.type === "final") {
-        setCopy(COPY.think, payload.transcript || "", "thinking");
+        hideCopy("thinking");
         return;
       }
       if (payload.type === "noop") {
-        setCopy(COPY.listen, "", "listening");
+        showHearing("");
         return;
       }
       if (payload.type === "decision") {
@@ -409,7 +380,7 @@ function bindVoice() {
     startCapture();
     session = true;
     setPressed(true);
-    setCopy(COPY.listen, "", "listening");
+    showHearing("");
   };
 
   ui.button.addEventListener("click", () => {

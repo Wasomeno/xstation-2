@@ -18,9 +18,12 @@
 }
 
 .voice-copy {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 0.45rem;
   text-align: center;
-  margin-bottom: 0.55rem;
-  min-height: 2.3rem;
 }
 
 .voice-status,
