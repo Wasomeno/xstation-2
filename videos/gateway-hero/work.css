@@ -295,23 +295,6 @@ html.lenis body {
   display: block;
 }
 
-.space-stage::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--deep-forest) 72%, transparent) 100%);
-  pointer-events: none;
-}
-
-.space.is-app .space-stage::after {
-  display: block;
-  background: radial-gradient(
-    ellipse 78% 62% at 50% 48%,
-    transparent 52%,
-    color-mix(in srgb, var(--deep-forest) 38%, transparent) 100%
-  );
-}
-
 .space-panel,
 .stage-card {
   background: none;
@@ -534,10 +517,11 @@ html.lenis body {
 .client-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(8rem, 10rem));
   gap: clamp(1.25rem, 2.5vw, 2.5rem);
   align-items: center;
   align-content: center;
+  justify-content: start;
 }
 
 .client-list li {
@@ -555,15 +539,6 @@ html.lenis body {
   object-fit: contain;
   object-position: center;
   filter: grayscale(1) contrast(0.9);
-}
-
-.client-list li[data-client="pama"] img,
-.client-list li[data-client="resona"] img {
-  height: 2.9rem;
-}
-
-.client-list li[data-client="pupuk"] img {
-  height: 2.6rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -871,15 +846,6 @@ html.lenis body {
     height: 2.2rem;
   }
 
-  .client-list li[data-client="pama"] img,
-  .client-list li[data-client="resona"] img {
-    height: 2.7rem;
-  }
-
-  .client-list li[data-client="pupuk"] img {
-    height: 2.4rem;
-  }
-
   .inquiry {
     min-height: 0;
     padding-top: 2.2rem;
@@ -1037,14 +1003,6 @@ html.lenis body {
 .space.is-app,
 .stage.is-app {
   background: var(--dark-surface);
-}
-
-.space-stage::after {
-  background: linear-gradient(180deg, transparent 42%, color-mix(in srgb, var(--dark-surface-strong) 72%, transparent) 100%);
-}
-
-.space.is-app .space-stage::after {
-  background: radial-gradient(ellipse 78% 62% at 50% 48%, transparent 52%, color-mix(in srgb, var(--dark-surface-strong) 38%, transparent) 100%);
 }
 
 .stage::after {
