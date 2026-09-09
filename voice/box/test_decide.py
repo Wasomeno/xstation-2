@@ -34,11 +34,48 @@ class DecideTests(unittest.TestCase):
         self.assertEqual(result["action"], "clarify")
         self.assertEqual(result["hypotheses"], [])
 
-    def test_single_hypothesis_is_a_show(self):
+    def test_single_hypothesis_keeps_model_uncertainty(self):
         self.assertEqual(
             decide({"action": "clarify", "hypotheses": ["HireAssess"], "text": "HireAssess?"}),
-            {"action": "show", "section": "hireassess"},
+            {"action": "clarify", "hypotheses": ["hireassess"], "text": "HireAssess?"},
         )
+
+    def test_only_explicit_show_can_navigate(self):
+        for payload in (
+            {"section": "arkiv"},
+            {"action": "answer", "section": "arkiv"},
+            {"action": "noop", "section": "arkiv", "hypotheses": ["arkiv"]},
+            {"action": "show", "hypotheses": ["arkiv"]},
+        ):
+            with self.subTest(payload=payload):
+                self.assertNotEqual(decide(payload, "apa itu Arkiv?")["action"], "show")
+
+    def test_hero_is_never_a_default_destination(self):
+        for transcript in (None, "halo", "mulai", "lanjut", "apa itu Arkiv?", "superhero"):
+            with self.subTest(transcript=transcript):
+                self.assertNotEqual(decide({"action": "show", "section": "root"}, transcript)["action"], "show")
+
+    def test_explicit_request_can_return_to_hero(self):
+        for transcript in ("kembali ke beranda", "ke halaman awal", "balik ke atas", "go to the top", "home"):
+            with self.subTest(transcript=transcript):
+                self.assertEqual(decide({"action": "show", "section": "hero"}, transcript), {"action": "show", "section": "hero"})
+
+    def test_negated_hero_request_does_not_navigate(self):
+        for transcript in ("jangan ke hero", "jangan kembali ke beranda", "don't go home"):
+            with self.subTest(transcript=transcript):
+                self.assertNotEqual(decide({"action": "show", "section": "hero"}, transcript)["action"], "show")
+
+    def test_contact_aliases_match_whole_words(self):
+        for transcript in ("notebook", "demografi", "stalking"):
+            with self.subTest(transcript=transcript):
+                self.assertNotEqual(decide({"action": "show", "section": "contact"}, transcript)["action"], "show")
+
+    def test_noop_remains_a_noop(self):
+        self.assertEqual(decide({"action": "noop"}, "terima kasih"), {"action": "noop"})
+
+    def test_conflicting_show_destinations_do_not_navigate(self):
+        result = decide({"action": "show", "section": "arkiv", "hypotheses": ["arkiv", "hireassess"]})
+        self.assertEqual(result["action"], "clarify")
 
     def test_two_hypotheses_clarify(self):
         result = decide({

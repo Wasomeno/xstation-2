@@ -13,16 +13,16 @@ class Section:
 
 
 SECTIONS: tuple[Section, ...] = (
-    Section("hero", "Hero", ("home", "top", "start", "beginning", "gateway", "root")),
-    Section("work", "Products", ("products", "explore", "catalog", "index", "what you can do")),
-    Section("bikinkonten", "BikinKonten", ("bikin konten", "content", "marketing", "social")),
-    Section("lubna", "Lubna", ("brand", "social content")),
-    Section("crm-ai-agent", "CRM AI Agent", ("crm", "whatsapp", "customer agent", "ai agent")),
-    Section("hireassess", "HireAssess", ("hire assess", "hiring", "talent", "assessment", "hr", "rekrut")),
-    Section("arkiv", "Arkiv", ("archive", "document", "documents", "files", "dokumen")),
-    Section("codev", "CoDev", ("code", "developer", "engineering")),
-    Section("coframe", "CoFrame", ("prototype", "prototyping", "wireframe")),
-    Section("cofinance", "CoFinance", ("finance", "cashflow", "invoice", "keuangan")),
+    Section("hero", "Hero", ("home", "top", "start", "beginning", "gateway", "root", "beranda", "halaman awal")),
+    Section("work", "Products", ("products", "explore", "catalog", "index", "what you can do", "produk", "daftar produk")),
+    Section("bikinkonten", "BikinKonten", ("bikin konten", "content", "marketing", "social", "workspace konten gambar dan video")),
+    Section("lubna", "Lubna", ("brand", "social content", "asisten pemasaran lewat chat", "brief sampai publikasi konten")),
+    Section("crm-ai-agent", "CRM AI Agent", ("crm", "whatsapp", "customer agent", "ai agent", "layanan pelanggan", "customer service")),
+    Section("hireassess", "HireAssess", ("hire assess", "hiring", "talent", "assessment", "hr", "rekrut", "rekrutmen", "penilaian kandidat")),
+    Section("arkiv", "Arkiv", ("archive", "document", "documents", "files", "dokumen", "arsip", "manajemen dokumen")),
+    Section("codev", "CoDev", ("code", "developer", "engineering", "coding", "pengembangan software")),
+    Section("coframe", "CoFrame", ("prototype", "prototyping", "wireframe", "prototipe")),
+    Section("cofinance", "CoFinance", ("finance", "cashflow", "invoice", "keuangan", "arus kas")),
     Section("clients", "Clients", ("trusted by", "logos", "customers", "klien")),
     Section("contact", "Contact", ("demo", "book", "talk", "qr", "email", "hubungi", "kontak")),
 )

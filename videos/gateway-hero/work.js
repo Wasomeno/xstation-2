@@ -222,9 +222,10 @@ function showSection(id) {
   if (!el) return false;
   const duration = reduce ? 0.05 : 1.15;
   if (smoothInstance) {
-    smoothInstance.scrollTo(el, { offset: -8, duration });
+    const offset = (el.getBoundingClientRect().height - window.innerHeight) / 2;
+    smoothInstance.scrollTo(el, { offset, duration });
   } else {
-    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
   }
   document.querySelectorAll(".is-voice-shown").forEach((node) => node.classList.remove("is-voice-shown"));
   el.classList.add("is-voice-shown");

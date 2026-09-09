@@ -31,14 +31,13 @@
 }
 
 .voice-status {
-  display: inline-block;
-  max-width: 100%;
-  padding: 0.4rem 0.75rem;
-  border-radius: 12px;
-  background: var(--page);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--slate);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .voice-transcript {
@@ -100,35 +99,10 @@
   transform: scale(0.96);
 }
 
-.voice-hint {
-  position: absolute;
-  bottom: calc(100% + 0.25rem);
-  left: 50%;
-  transform: translateX(-50%);
-  width: max-content;
-  padding: 0.4rem 0.75rem;
-  border-radius: 12px;
-  background: var(--page);
-  color: var(--slate);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 150ms ease-out;
-}
-
-#voice-surface[data-state="idle"] .voice-orb:is(:hover, :focus-visible) .voice-hint {
-  opacity: 1;
-}
-
-.voice-stop,
-.voice-error {
+.voice-stop {
   position: absolute;
   color: var(--paper);
   pointer-events: none;
-}
-
-.voice-stop {
   width: 10px;
   height: 10px;
   border-radius: 2px;
@@ -138,16 +112,6 @@
 
 #voice-surface:is([data-state="connecting"], [data-state="listening"], [data-state="thinking"]) .voice-orb:is(:hover, :focus-visible) .voice-stop {
   opacity: 1;
-}
-
-.voice-error {
-  display: none;
-  font-size: 1.25rem;
-  font-weight: 700;
-}
-
-#voice-surface:is([data-state="deaf"], [data-state="blocked"]) .voice-error {
-  display: block;
 }
 
 .is-voice-shown {
@@ -161,8 +125,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .voice-wave,
-  .voice-hint {
+  .voice-wave {
     transition: none;
   }
 

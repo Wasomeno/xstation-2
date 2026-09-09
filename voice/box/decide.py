@@ -1,4 +1,4 @@
-"""Turn a model payload into a Show or a Clarification."""
+"""Validate voice navigation; uncertainty must leave the page in place."""
 
 from __future__ import annotations
 
@@ -14,17 +14,24 @@ UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
 
 SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs XTATION. Kamu driver, bukan pemandu.
 
-Command adalah permintaan lisan dalam Bahasa Indonesia untuk dibawa ke sebuah Section.
-Jangan menjawab pertanyaan. Jangan ngobrol. Jangan buat aksi selain Show.
+Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk dibawa ke sebuah Section.
+Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog.
 
 Kalau Command menunjuk tepat satu Section, kembalikan Show.
 "Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
-Kalau nol atau beberapa Section cocok, kembalikan Clarification paling banyak dua hipotesis.
-Di luar topik, bahasa asing, atau tidak jelas: Clarification yang menanyakan ulang. JANGAN Show. JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / demo / kontak / QR.
+Kalau tujuan belum pasti, kembalikan Clarification paling banyak dua hipotesis, meskipun hanya satu dugaan.
+Sapaan, ucapan terima kasih, suara tidak jelas, di luar topik, atau "lanjut/yang tadi" tanpa rujukan yang pasti: noop. Jangan menebak tujuan.
+Hero HANYA untuk permintaan eksplisit kembali ke beranda / halaman awal / paling atas. Hero bukan fallback untuk ucapan yang tidak dipahami atau kata "mulai".
+JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / demo / kontak / QR.
+Hormati penyangkalan: "jangan ke beranda" tidak boleh Show hero.
+"produk apa saja?" adalah Show work. "customer service WhatsApp" adalah Show crm-ai-agent.
+"kelola dokumen" adalah Show arkiv. "buat prototype" adalah Show coframe.
+Untuk konten sosial yang belum membedakan BikinKonten dan Lubna, Clarification; jangan pilih sembarang.
 
 Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
+{{"action":"noop"}}
 
 Tulis teks Clarification dalam Bahasa Indonesia.
 
@@ -81,22 +88,36 @@ def mentions_contact(transcript: str | None) -> bool:
         return True
     contact = SECTION_BY_ID["contact"]
     needles = (contact.id, contact.label.lower(), *contact.aliases)
-    return any(needle in blob for needle in needles)
+    return any(re.search(r"\b" + re.escape(needle) + r"\b", blob) for needle in needles)
 
 
-def _guard_contact(result: dict[str, Any], transcript: str | None) -> dict[str, Any]:
-    if result.get("action") == "show" and result.get("section") == "contact":
-        if not mentions_contact(transcript):
-            return _clarify([], UNCLEAR_ASK)
-    return result
+def mentions_home(transcript: str | None) -> bool:
+    blob = " ".join((transcript or "").lower().split())
+    if re.search(r"\b(?:jangan|bukan|tidak|don't|do not)\b", blob):
+        return False
+    return bool(re.search(
+        r"\b(?:hero|home|beranda|halaman (?:utama|awal|depan)|"
+        r"(?:ke|to(?: the)?) (?:paling )?(?:atas|awal|depan|top|start|beginning))\b",
+        blob,
+    ))
+
+
+def _show(section: str, transcript: str | None) -> dict[str, Any]:
+    if section == "contact" and not mentions_contact(transcript):
+        return _clarify([], UNCLEAR_ASK)
+    if section == "hero" and not mentions_home(transcript):
+        return _clarify([], UNCLEAR_ASK)
+    return {"action": "show", "section": section}
 
 
 def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dict[str, Any]:
-    """Apply the single-clear-Hypothesis rule to a model payload."""
-    if not payload:
+    """Only an explicit, valid Show is allowed to navigate."""
+    if not isinstance(payload, dict) or not payload:
         return _clarify([], UNCLEAR_ASK)
 
     action = str(payload.get("action") or "").strip().lower()
+    if action == "noop":
+        return {"action": "noop"}
     hypotheses = payload.get("hypotheses") or payload.get("hypothesis") or []
     if isinstance(hypotheses, str):
         hypotheses = [hypotheses]
@@ -108,21 +129,13 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
     text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
 
     if action == "show" or action == "scroll":
-        if section:
-            return _guard_contact({"action": "show", "section": section}, transcript)
-        if len(guessed) == 1:
-            return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
+        if section and (not guessed or guessed == [section]):
+            return _show(section, transcript)
         return _clarify(guessed, text if isinstance(text, str) else None)
 
     if action in {"clarify", "clarification", "ask"}:
-        if len(guessed) == 1:
-            return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
         return _clarify(guessed, text if isinstance(text, str) else None)
 
-    if section and not guessed:
-        return _guard_contact({"action": "show", "section": section}, transcript)
-    if len(guessed) == 1:
-        return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
     return _clarify(guessed, None)
 
 

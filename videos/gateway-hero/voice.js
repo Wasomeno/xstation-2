@@ -63,6 +63,49 @@ function smoothVoiceEnergy(current, target, seconds) {
   return current + (target - current) * (1 - Math.exp(-seconds / duration));
 }
 
+function createPauseDetector() {
+  let active = false;
+  let heardVoice = false;
+  let lastSpeech = 0;
+  let noise = 0.003;
+  let peak = 0;
+  let lastUpdate = 0;
+  return {
+    reset() { active = false; heardVoice = false; },
+    transcript(now) {
+      active = true;
+      // Quiet speech can start a turn, but trailing captions cannot prolong an audible one.
+      if (!heardVoice) lastSpeech = now;
+    },
+    update(input, now) {
+      let sum = 0;
+      for (const sample of input) sum += sample * sample;
+      const rms = Math.sqrt(sum / (input.length || 1));
+      const seconds = lastUpdate ? Math.min((now - lastUpdate) / 1000, 0.25) : 1 / 60;
+      lastUpdate = now;
+      peak = Math.max(rms, peak * Math.exp(-seconds / 2));
+      const threshold = Math.max(0.012, noise * 2.5, peak * 0.35);
+      if (rms < threshold) {
+        // Learn the quieter room level even while a command is active.
+        noise += (rms - noise) * (1 - Math.exp(-seconds / 0.3));
+      }
+      if (rms >= threshold) {
+        const started = !active;
+        active = true;
+        heardVoice = true;
+        lastSpeech = now;
+        return started ? "start" : null;
+      }
+      if (active && now - lastSpeech >= 1100) {
+        active = false;
+        heardVoice = false;
+        return "commit";
+      }
+      return null;
+    },
+  };
+}
+
 // Variant 3: the earlier flat, layered-circle animation.
 function createWaveform(canvas) {
   const variant = canvas.closest("#voice-surface")?.dataset.variant;
@@ -186,15 +229,13 @@ function createSurface() {
   const variant = new URLSearchParams(window.location.search).get("voice-variant");
   root.dataset.variant = ["1", "2"].includes(variant) ? variant : "3";
   root.innerHTML = `
-    <div class="voice-copy" aria-live="polite" aria-atomic="true">
-      <p class="voice-status"></p>
+    <div class="voice-copy">
+      <p class="voice-status" role="status" aria-live="polite"></p>
       <p class="voice-transcript"></p>
     </div>
     <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
       <canvas class="voice-wave" width="88" height="88" aria-hidden="true"></canvas>
-      <span class="voice-hint" aria-hidden="true">Mulai mendengarkan</span>
       <span class="voice-stop" aria-hidden="true"></span>
-      <span class="voice-error" aria-hidden="true">!</span>
     </button>
   `;
   document.body.append(root);
@@ -218,6 +259,7 @@ function bindVoice() {
   let socket = null;
   let audioContext = null;
   let processor = null;
+  let feedbackAnimation = null;
   const setCopy = (status, transcript = "", state = "idle") => {
     ui.status.textContent = status || "";
     ui.transcript.textContent = state === "listening" ? transcript : "";
@@ -231,6 +273,16 @@ function bindVoice() {
 
   const showHearing = (transcript = "") => {
     setCopy(COPY.listening, transcript, "listening");
+  };
+
+  const showNoAction = () => {
+    setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening");
+    feedbackAnimation?.cancel();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    feedbackAnimation = ui.button.animate(
+      [0, -5, 5, -3, 3, 0].map(x => ({ transform: `translateX(${x}px)` })),
+      { duration: 360, easing: "ease-in-out" },
+    );
   };
 
   const teardownAudio = () => {
@@ -264,6 +316,7 @@ function bindVoice() {
   };
 
   const endSession = (state = "idle", status = COPY[state]) => {
+    feedbackAnimation?.cancel();
     session = false;
     generation += 1;
     teardownAudio();
@@ -271,13 +324,17 @@ function bindVoice() {
   };
 
   const applyDecision = (decision) => {
+    let navigated = false;
     if (decision?.action === "show" && typeof decision.section === "string" && decision.section) {
-      window.xstationShowSection?.(decision.section);
+      navigated = window.xstationShowSection?.(decision.section) === true;
     }
-    showHearing();
+    if (navigated) {
+      feedbackAnimation?.cancel();
+      showHearing();
+    } else showNoAction();
   };
 
-  const startCapture = (isReady) => {
+  const startCapture = (isReady, onPause) => {
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
@@ -286,40 +343,24 @@ function bindVoice() {
     processor = audioContext.createScriptProcessor(4096, 1, 1);
     const mute = audioContext.createGain();
     mute.gain.value = 0;
-    let talking = false;
-    let lastLoudAt = 0;
-    let speechStartedAt = 0;
+    const pause = createPauseDetector();
     processor.onaudioprocess = (event) => {
       if (!isReady() || !socket || socket.readyState !== 1) return;
       const input = event.inputBuffer.getChannelData(0);
       const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
       if (!pcm.length) return;
       socket.send(JSON.stringify({ type: "audio", pcm: floatToPcm16Base64(pcm) }));
-      let sum = 0;
-      for (let i = 0; i < input.length; i += 1) sum += input[i] * input[i];
-      const rms = Math.sqrt(sum / input.length);
-      const now = performance.now();
-      if (rms >= 0.03) {
-        if (!talking) {
-          talking = true;
-          speechStartedAt = now;
-        }
-        lastLoudAt = now;
-        return;
-      }
-      if (talking && now - lastLoudAt >= 800) {
-        if (lastLoudAt - speechStartedAt >= 700) {
-          socket.send(JSON.stringify({ type: "commit" }));
-        } else if (ui.root.dataset.state === "listening") {
-          showHearing();
-        }
-        talking = false;
+      const action = pause.update(input, performance.now());
+      if (action === "commit") {
+        socket.send(JSON.stringify({ type: "commit" }));
+        onPause();
       }
     };
     source.connect(analyser);
     source.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
+    return pause;
   };
 
   const startSession = async () => {
@@ -335,7 +376,7 @@ function bindVoice() {
     }
     try {
       const micRequest = navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false },
       }).then((media) => {
         if (!isCurrent()) {
           media.getTracks().forEach((track) => track.stop());
@@ -363,6 +404,9 @@ function bindVoice() {
       socket = ws;
       let backendReady = false;
       let captureReady = false;
+      let currentItem = null;
+      let submittedItem = null;
+      let pause = null;
       const isReady = () => isCurrent() && backendReady && captureReady;
       const listenWhenReady = () => {
         if (isReady()) showHearing();
@@ -380,6 +424,12 @@ function bindVoice() {
         }
         if (!payload || typeof payload !== "object") return;
         if (payload.type === "error") {
+          if (payload.recoverable && isReady()) {
+            if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
+            pause?.reset();
+            showHearing();
+            return;
+          }
           fail();
           return;
         }
@@ -389,9 +439,31 @@ function bindVoice() {
           return;
         }
         if (!isReady()) return;
-        if (payload.type === "speech_started" || payload.type === "noop") showHearing();
-        else if (payload.type === "delta") showHearing(typeof payload.text === "string" ? payload.text : "");
-        else if (payload.type === "final") setCopy(COPY.thinking, "", "thinking");
+        // Only a new transcript turn supersedes a decision; microphone energy may be noise.
+        if (payload.type === "speech_started") {
+          feedbackAnimation?.cancel();
+          currentItem = payload.item_id || null;
+          submittedItem = null;
+          showHearing();
+          return;
+        }
+        if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
+        if (payload.item_id) currentItem = payload.item_id;
+        if (payload.type === "noop") {
+          pause?.reset();
+          if (ui.root.dataset.state === "thinking") showNoAction();
+          else showHearing();
+        }
+        else if (payload.type === "delta") {
+          if (submittedItem && payload.item_id === submittedItem) return;
+          const text = typeof payload.text === "string" ? payload.text : "";
+          if (text.trim()) pause?.transcript(performance.now());
+          showHearing(text);
+        }
+        else if (payload.type === "final" || payload.type === "speech_stopped") {
+          pause?.reset();
+          setCopy(COPY.thinking, "", "thinking");
+        }
         else if (payload.type === "decision") applyDecision(payload);
       });
       ws.addEventListener("close", fail);
@@ -403,7 +475,10 @@ function bindVoice() {
           audioContext = context;
           if (context.state === "suspended") await context.resume();
           if (!isCurrent()) return;
-          startCapture(isReady);
+          pause = startCapture(isReady, () => {
+            submittedItem = currentItem;
+            setCopy(COPY.thinking, "", "thinking");
+          });
           captureReady = true;
           listenWhenReady();
         } catch {

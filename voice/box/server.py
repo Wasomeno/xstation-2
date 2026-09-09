@@ -41,7 +41,8 @@ import uvicorn
 import websockets
 
 from decide import SYSTEM_PROMPT, decide_from_model_text
-from whisper_lang import FOREIGN_ASK, ID_PROMPT, is_unusable_transcript, parse_openai_transcription
+from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
+from streaming import relay_transcripts
 
 ALLOWED_ORIGINS = (
     "http://127.0.0.1:4174",
@@ -76,13 +77,14 @@ SESSION_UPDATE = {
                         "XTATION",
                         "BikinKonten",
                         "Lubna",
+                        "CRM AI Agent",
                         "HireAssess",
                         "Arkiv",
                         "CoDev",
                         "CoFrame",
                         "CoFinance",
                     ],
-                    "languages": ["id"],
+                    "languages": ["id", "en"],
                     "delay": "low",
                 },
                 "turn_detection": None,
@@ -296,7 +298,7 @@ async def stream(websocket: WebSocket):
         ) as openai_ws:
             await openai_ws.send(json.dumps(SESSION_UPDATE))
             while True:
-                boot = json.loads(await openai_ws.recv())
+                boot = json.loads(await asyncio.wait_for(openai_ws.recv(), timeout=10))
                 if boot.get("type") == "session.updated":
                     break
                 if boot.get("type") == "error":
@@ -333,44 +335,26 @@ async def stream(websocket: WebSocket):
                     except Exception:
                         pass
 
-            async def from_openai() -> None:
-                partial = ""
-                async for raw in openai_ws:
-                    event = json.loads(raw)
-                    kind = event.get("type")
-                    if kind == "conversation.item.input_audio_transcription.delta":
-                        partial += event.get("delta") or ""
-                        await websocket.send_json({"type": "delta", "text": partial})
-                    elif kind == "conversation.item.input_audio_transcription.completed":
-                        transcript = (event.get("transcript") or partial or "").strip()
-                        partial = ""
-                        if is_unusable_transcript(transcript):
-                            await websocket.send_json({"type": "noop"})
-                            continue
-                        await websocket.send_json({"type": "final", "transcript": transcript})
-                        try:
-                            decision = await interpret(transcript)
-                        except Exception:
-                            await websocket.send_json({"type": "error", "message": "interpret"})
-                            continue
-                        decision["transcript"] = transcript
-                        await websocket.send_json({"type": "decision", **decision})
-                    elif kind == "input_audio_buffer.speech_started":
-                        partial = ""
-                        await websocket.send_json({"type": "speech_started"})
-                    elif kind == "error":
-                        detail = event.get("error") or {}
-                        await websocket.send_json(
-                            {"type": "error", "message": detail.get("message") or "openai"}
-                        )
+            tasks = [
+                asyncio.create_task(from_client()),
+                asyncio.create_task(relay_transcripts(openai_ws, websocket, interpret)),
+            ]
+            try:
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    task.result()
+            finally:
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
 
-            await asyncio.gather(from_client(), from_openai())
     except Exception:
         log.exception("realtime stream failed")
         try:
             await websocket.send_json({"type": "error", "message": "stream"})
         except Exception:
             pass
+    finally:
         try:
             await websocket.close()
         except Exception:
