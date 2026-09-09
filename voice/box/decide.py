@@ -10,21 +10,23 @@ from sections import SECTION_BY_ID, catalog_for_prompt, resolve_section
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
+UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
+
 SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs XTATION. Kamu driver, bukan pemandu.
 
-Command adalah permintaan lisan (utama Bahasa Indonesia; Inggris tetap dipahami) untuk dibawa ke sebuah Section.
+Command adalah permintaan lisan dalam Bahasa Indonesia untuk dibawa ke sebuah Section.
 Jangan menjawab pertanyaan. Jangan ngobrol. Jangan buat aksi selain Show.
 
 Kalau Command menunjuk tepat satu Section, kembalikan Show.
 "Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
 Kalau nol atau beberapa Section cocok, kembalikan Clarification paling banyak dua hipotesis.
-Di luar topik (cuaca, lelucon, harga tanpa produk, kode) → Clarification ke contact.
+Di luar topik, bahasa asing, atau tidak jelas: Clarification yang menanyakan ulang. JANGAN Show. JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / demo / kontak / QR.
 
 Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
 
-Tulis teks Clarification dalam Bahasa Indonesia, kecuali Command jelas-jelas berbahasa Inggris.
+Tulis teks Clarification dalam Bahasa Indonesia.
 
 Sections:
 {catalog_for_prompt()}
@@ -67,14 +69,32 @@ def _clarify(hypotheses: list[str], text: str | None) -> dict[str, Any]:
         elif len(labels) == 1:
             prompt = f"{labels[0]}?"
         else:
-            prompt = "Produk, atau hubungi kami?"
+            prompt = UNCLEAR_ASK
     return {"action": "clarify", "hypotheses": hypotheses, "text": prompt}
 
 
-def decide(payload: dict[str, Any] | None) -> dict[str, Any]:
+def mentions_contact(transcript: str | None) -> bool:
+    blob = " ".join((transcript or "").lower().split())
+    if not blob:
+        return False
+    if resolve_section(blob) == "contact":
+        return True
+    contact = SECTION_BY_ID["contact"]
+    needles = (contact.id, contact.label.lower(), *contact.aliases)
+    return any(needle in blob for needle in needles)
+
+
+def _guard_contact(result: dict[str, Any], transcript: str | None) -> dict[str, Any]:
+    if result.get("action") == "show" and result.get("section") == "contact":
+        if not mentions_contact(transcript):
+            return _clarify([], UNCLEAR_ASK)
+    return result
+
+
+def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dict[str, Any]:
     """Apply the single-clear-Hypothesis rule to a model payload."""
     if not payload:
-        return _clarify([], "Belum ketemu bagiannya. Produk, atau hubungi kami?")
+        return _clarify([], UNCLEAR_ASK)
 
     action = str(payload.get("action") or "").strip().lower()
     hypotheses = payload.get("hypotheses") or payload.get("hypothesis") or []
@@ -89,22 +109,22 @@ def decide(payload: dict[str, Any] | None) -> dict[str, Any]:
 
     if action == "show" or action == "scroll":
         if section:
-            return {"action": "show", "section": section}
+            return _guard_contact({"action": "show", "section": section}, transcript)
         if len(guessed) == 1:
-            return {"action": "show", "section": guessed[0]}
+            return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
         return _clarify(guessed, text if isinstance(text, str) else None)
 
     if action in {"clarify", "clarification", "ask"}:
         if len(guessed) == 1:
-            return {"action": "show", "section": guessed[0]}
+            return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
         return _clarify(guessed, text if isinstance(text, str) else None)
 
     if section and not guessed:
-        return {"action": "show", "section": section}
+        return _guard_contact({"action": "show", "section": section}, transcript)
     if len(guessed) == 1:
-        return {"action": "show", "section": guessed[0]}
+        return _guard_contact({"action": "show", "section": guessed[0]}, transcript)
     return _clarify(guessed, None)
 
 
-def decide_from_model_text(text: str) -> dict[str, Any]:
-    return decide(parse_model_json(text))
+def decide_from_model_text(text: str, transcript: str | None = None) -> dict[str, Any]:
+    return decide(parse_model_json(text), transcript)

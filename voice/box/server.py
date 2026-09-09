@@ -36,8 +36,8 @@ from fastapi.responses import JSONResponse
 import httpx
 import uvicorn
 
-from decide import SYSTEM_PROMPT, decide_from_model_text
-from whisper_lang import HOTWORDS, ID_PROMPT, resolve_asr_language
+from decide import SYSTEM_PROMPT, UNCLEAR_ASK, decide_from_model_text
+from whisper_lang import FOREIGN_ASK, HOTWORDS, ID_PROMPT, is_foreign_language, resolve_asr_language
 
 ALLOWED_ORIGINS = (
     "http://127.0.0.1:4174",
@@ -93,15 +93,17 @@ def _whisper_model():
     return _whisper
 
 
-def transcribe_path(path: str) -> str:
+def transcribe_path(path: str) -> dict:
     from faster_whisper.audio import decode_audio
 
     model = _whisper_model()
     audio = decode_audio(path, sampling_rate=16000)
     try:
-        detected, probability, _probs = model.detect_language(audio, vad_filter=True)
+        detected, probability, probs = model.detect_language(audio, vad_filter=True)
     except Exception:
-        detected, probability = "id", 1.0
+        detected, probability, probs = "id", 1.0, [("id", 1.0)]
+    if is_foreign_language(detected, probability, probs):
+        return {"transcript": "", "foreign": True, "detected": detected}
     language = resolve_asr_language(detected, probability)
     segments, _info = model.transcribe(
         audio,
@@ -114,7 +116,8 @@ def transcribe_path(path: str) -> str:
         hotwords=HOTWORDS,
         multilingual=False,
     )
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    text = " ".join(segment.text.strip() for segment in segments).strip()
+    return {"transcript": text, "foreign": False, "detected": detected}
 
 
 async def interpret(transcript: str) -> dict:
@@ -145,7 +148,7 @@ async def interpret(transcript: str) -> dict:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise HTTPException(status_code=502, detail="deepseek-shape") from exc
-    return decide_from_model_text(content or "")
+    return decide_from_model_text(content or "", transcript)
 
 
 @app.get("/health")
@@ -179,7 +182,7 @@ async def command(request: Request, audio: UploadFile = File(...)):
             tmp.write(body)
             tmp.close()
             try:
-                transcript = await asyncio.to_thread(transcribe_path, tmp.name)
+                asr = await asyncio.to_thread(transcribe_path, tmp.name)
             except Exception as exc:
                 raise HTTPException(
                     status_code=502,
@@ -188,11 +191,20 @@ async def command(request: Request, audio: UploadFile = File(...)):
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
+        if asr.get("foreign"):
+            return {
+                "action": "clarify",
+                "hypotheses": [],
+                "text": FOREIGN_ASK,
+                "transcript": asr.get("transcript") or "",
+            }
+
+        transcript = (asr.get("transcript") or "").strip()
         if not transcript:
             return {
                 "action": "clarify",
                 "hypotheses": [],
-                "text": "Belum ketangkap. Coba sebut produk, atau hubungi kami?",
+                "text": UNCLEAR_ASK,
                 "transcript": "",
             }
 

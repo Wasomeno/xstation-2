@@ -37,11 +37,11 @@ Scrolling a Section into view along the site's existing smooth scroll, then a sh
 _Avoid_: jump, open, navigate, hash
 
 **Page Action**:
-A Show. Contact is a Section (the QR), not a form to fill. No other hands in this experience.
+A Show. Contact is a Section (the QR) only when the Visitor asked for it. Foreign-language clips do not Show. No other hands in this experience.
 _Avoid_: tool call, control, navigation, click, fill, mailto, answer
 
 **Clarification**:
-What the Station Agent asks when a Command has zero or several Hypotheses. It names the Hypotheses. No Page Action that turn. The Session stays open.
+What the Station Agent asks when a Command has zero or several Hypotheses, or when the clip is a foreign language. It names the Hypotheses or asks the Visitor to repeat in Bahasa Indonesia. No Page Action that turn. The Session stays open.
 _Avoid_: error, fallback, retry, sorry
 
 **Hypothesis**:

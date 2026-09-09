@@ -58,7 +58,16 @@ class DecideTests(unittest.TestCase):
     def test_empty_payload_clarifies(self):
         result = decide(None)
         self.assertEqual(result["action"], "clarify")
-        self.assertIn("Produk", result["text"])
+        self.assertIn("ulangi", result["text"])
+
+    def test_contact_show_without_asking_is_blocked(self):
+        result = decide({"action": "show", "section": "contact"}, transcript="tell me a joke")
+        self.assertEqual(result["action"], "clarify")
+        self.assertNotEqual(result.get("section"), "contact")
+
+    def test_contact_show_when_asked_is_allowed(self):
+        result = decide({"action": "show", "section": "contact"}, transcript="mau book demo")
+        self.assertEqual(result, {"action": "show", "section": "contact"})
 
     def test_default_clarify_is_indonesian(self):
         result = decide({"action": "clarify", "hypotheses": ["HireAssess", "Arkiv"]})
