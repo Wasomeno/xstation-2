@@ -537,8 +537,14 @@ html.lenis body {
 
 .client-list [data-client="bina"] img {
   width: min(100%, 7rem);
-  height: auto;
-  aspect-ratio: 112 / 35;
+  height: 2.35rem;
+  object-fit: contain;
+}
+
+.client-list [data-client="qasir"] img {
+  width: min(100%, 6.15rem);
+  height: 2.35rem;
+  object-fit: contain;
 }
 
 @media (hover: hover) and (pointer: fine) {
