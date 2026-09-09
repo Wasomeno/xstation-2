@@ -26,14 +26,25 @@
   const far = -1880;
   const near = 620;
   const travel = near - far;
-  const compact = window.innerWidth < 720;
-  const colPitch = compact ? 70 : 104;
-  const rowPitch = compact ? 128 : 186;
-  const gutter = compact ? 108 : 208;
-  const rail = compact ? 260 : 460;
-  const entryOffset = compact ? 64 : 96;
   const field = bumper.querySelector(".welcome-field");
   const state = { t: 0, fieldAlpha: 0, exit: 0 };
+
+  function getLayoutMetrics() {
+    const width = window.visualViewport?.width || window.innerWidth;
+    const height = window.visualViewport?.height || window.innerHeight;
+    const shortLandscape = height < 500 && width > height;
+    const compact = width < 768 || shortLandscape;
+    return {
+      compact,
+      colPitch: compact ? 70 : 104,
+      rowPitch: shortLandscape ? 94 : compact ? 128 : 186,
+      gutter: shortLandscape ? 90 : compact ? 108 : 208,
+      rail: compact ? 260 : 460,
+      entryOffset: compact ? 64 : 96,
+    };
+  }
+
+  let layoutMetrics = getLayoutMetrics();
 
   function alphaAt(progress, peak) {
     if (progress < 0.12) return (progress / 0.12) * peak;
@@ -45,23 +56,40 @@
     const slab = document.createElement("div");
     const color = palette[index % palette.length];
     const width = Math.abs(col) === 1 ? 22 : Math.abs(col) === 2 ? 18 : 14;
-    const x = col * colPitch + Math.sign(col) * gutter;
-    const y = row * rowPitch;
     slab.className = `welcome-slab${color === "ivory" ? "" : ` is-${color}`}`;
-    slab.style.setProperty("--slab-w", `${compact ? width * 0.82 : width}px`);
-    slab.style.setProperty("--slab-h", `${Math.round(width * (compact ? 3.65 : 4.08))}px`);
     field?.appendChild(slab);
     return {
       element: slab,
       phase: ((col + 4) * 0.09 + (row + 2) * 0.13 + index * 0.019) % 1,
-      x,
-      y,
-      entryY: y + entryOffset,
-      railX: Math.sign(col) * rail,
+      col,
+      row,
+      width,
+      x: 0,
+      y: 0,
+      entryY: 0,
+      railX: 0,
       peak: color === "gold" || color === "peri" ? 0.78 : 0.52,
       intro: 0,
     };
   });
+
+  function updateSlabLayout() {
+    layoutMetrics = getLayoutMetrics();
+    slabs.forEach((slab) => {
+      const renderedWidth = layoutMetrics.compact ? slab.width * 0.82 : slab.width;
+      slab.x = slab.col * layoutMetrics.colPitch + Math.sign(slab.col) * layoutMetrics.gutter;
+      slab.y = slab.row * layoutMetrics.rowPitch;
+      slab.entryY = slab.y + layoutMetrics.entryOffset;
+      slab.railX = Math.sign(slab.col) * layoutMetrics.rail;
+      slab.element.style.setProperty("--slab-w", `${renderedWidth}px`);
+      slab.element.style.setProperty(
+        "--slab-h",
+        `${Math.round(slab.width * (layoutMetrics.compact ? 3.65 : 4.08))}px`,
+      );
+    });
+  }
+
+  updateSlabLayout();
 
   const introSlabs = [...slabs].sort((a, b) =>
     b.y - a.y
@@ -145,6 +173,8 @@
     window.removeEventListener("wheel", accelerate);
     window.removeEventListener("touchstart", accelerate);
     window.removeEventListener("keydown", accelerate);
+    window.removeEventListener("resize", handleViewportResize);
+    window.visualViewport?.removeEventListener("resize", handleViewportResize);
   }
 
   function waitForOrbit() {
@@ -170,6 +200,11 @@
       event.preventDefault();
     }
     if (timeline.timeScale() < 2.8) timeline.timeScale(2.8);
+  }
+
+  function handleViewportResize() {
+    updateSlabLayout();
+    renderField();
   }
 
   const timeline = gsap.timeline({ paused: true, onComplete: finish });
@@ -230,6 +265,8 @@
   window.addEventListener("wheel", accelerate, { passive: false });
   window.addEventListener("touchstart", accelerate, { passive: false });
   window.addEventListener("keydown", accelerate, { passive: false });
+  window.addEventListener("resize", handleViewportResize);
+  window.visualViewport?.addEventListener("resize", handleViewportResize);
 
   startupTimer = window.setTimeout(releaseToOrbit, 15000);
   startTimeline();

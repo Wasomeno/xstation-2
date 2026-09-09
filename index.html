@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>XTATION - Your Gateway To Intelligent Products</title>
+    <meta
+      name="description"
+      content="Explore XTATION's practical AI products for content, customer engagement, hiring, documents, development, prototyping, and finance."
+    />
     <script>
       if ("scrollRestoration" in window.history) {
         window.history.scrollRestoration = "manual";
@@ -39,17 +43,25 @@
       :root {
         --deep-forest: #083B28;
         --signal: #1C855C;
- --sage: #90B0A0;
- --mist: #C8D8C8;
- --page: #F7F8F5;
+        --sage: #90B0A0;
+        --mist: #C8D8C8;
+        --page: #F7F8F5;
         --ink: #122225;
         --paper: #F7F8F5;
         --slate: #3C4C49;
         --muted: #3C4C49;
         --surface: color-mix(in srgb, var(--mist) 28%, #F7F8F5);
- --line: color-mix(in srgb, var(--ink) 16%, transparent);
+        --line: color-mix(in srgb, var(--ink) 16%, transparent);
         --sans: "Geist", "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
         --section-join: 22vh;
+        --content-max: 90rem;
+        --reading-max: 42rem;
+        --page-gutter: clamp(1rem, 3.5vw, 4rem);
+        --section-space: clamp(4.5rem, 9vw, 9rem);
+        --section-space-compact: clamp(3rem, 7vw, 5rem);
+        --nav-height: clamp(4rem, 6vw, 4.75rem);
+        --radius-control: 0.25rem;
+        --radius-panel: clamp(0.75rem, 1vw, 1rem);
       }
 
       * {
@@ -60,6 +72,7 @@
 
       html {
         color-scheme: light;
+        scroll-padding-top: calc(var(--nav-height) + 1rem);
       }
 
       html,
@@ -82,6 +95,29 @@
       a {
         color: inherit;
         text-decoration: none;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .skip-link {
+        position: fixed;
+        inset-block-start: max(0.75rem, env(safe-area-inset-top));
+        inset-inline-start: 1rem;
+        z-index: 100;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-control);
+        background: var(--deep-forest);
+        color: var(--paper);
+        font-size: 0.95rem;
+        transform: translateY(calc(-100% - 2rem));
+        transition: transform 0.2s ease;
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
       }
 
       #pin-slot {
@@ -304,6 +340,56 @@
         color: var(--ink);
         pointer-events: auto;
         background: transparent;
+        border-bottom: 1px solid transparent;
+        transition:
+          min-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+          background-color 0.35s ease,
+          border-color 0.35s ease;
+      }
+
+      #site-nav.is-scrolled {
+        min-height: 3.75rem;
+        padding-block:
+          max(0.75rem, env(safe-area-inset-top))
+          0.75rem;
+        border-bottom-color: var(--line);
+        background: color-mix(in srgb, var(--page) 92%, transparent);
+        -webkit-backdrop-filter: blur(14px) saturate(125%);
+        backdrop-filter: blur(14px) saturate(125%);
+      }
+
+      #site-links {
+        display: flex;
+        align-items: center;
+        gap: clamp(0.75rem, 2.2vw, 1.75rem);
+        letter-spacing: 0.08em;
+      }
+
+      #site-links a {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
+
+      #site-links a::after {
+        content: "";
+        position: absolute;
+        inset-inline: 0;
+        inset-block-end: 0.4rem;
+        height: 1px;
+        background: currentColor;
+        transform: scaleX(0);
+        transform-origin: right;
+        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      #site-links a:hover::after,
+      #site-links a:focus-visible::after,
+      #site-links a[aria-current="location"]::after {
+        transform: scaleX(1);
+        transform-origin: left;
       }
 
       #brand {
@@ -538,7 +624,7 @@
         min-height: 0;
       }
 
-      #hero-copy h2 {
+      #hero-copy h1 {
         margin: 0;
         font-family: var(--sans);
         font-weight: 500;
@@ -693,30 +779,6 @@
           max-width: min(18ch, 92vw);
           font-size: clamp(2.55rem, 11.1vw, 3.225rem);
         }
-
-        #hero-copy {
-          width: 100%;
-          align-items: flex-start;
-          padding: 16svh 20px 0;
-        }
-
-        #hero-copy h2 {
-          max-width: 14ch;
-          font-size: clamp(2.2rem, 8.6vw, 3.5rem);
-        }
-
-        #hero-copy .doctrine-block {
-          max-width: 22rem;
-        }
-
-        #hero-copy h2 {
-          font-size: 2.15rem;
-        }
-
-        #hero-copy p {
-          max-width: 36ch;
-          font-size: 1.2rem;
-        }
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -746,7 +808,7 @@
         max-width: 42rem;
       }
 
-      #hero-copy h2 {
+      #hero-copy h1 {
         max-width: 11.5ch;
         font-size: clamp(3rem, 4.85vw, 5.25rem);
         line-height: 1.02;
@@ -790,7 +852,7 @@
           min-height: 0;
         }
 
-        #hero-copy h2 {
+        #hero-copy h1 {
           max-width: 12ch;
           font-size: clamp(2.25rem, 10vw, 3.15rem);
           line-height: 1.02;
@@ -865,16 +927,48 @@
     </style>
     <link rel="stylesheet" href="videos/gateway-hero/field.css" />
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
+    <noscript>
+      <style>
+        #welcome-bumper,
+        #field-stage {
+          display: none;
+        }
+
+        #site-nav,
+        #hero-copy,
+        .js-enter,
+        .js-enter-child {
+          opacity: 1 !important;
+          visibility: visible !important;
+          transform: none !important;
+          filter: none !important;
+        }
+
+        #pin-slot {
+          height: auto;
+        }
+
+        #root {
+          min-height: 100dvh;
+        }
+
+        #work-root {
+          margin-top: 0;
+        }
+      </style>
+    </noscript>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <div id="welcome-bumper" aria-hidden="true">
       <div class="welcome-backdrop"></div>
       <div class="welcome-atmosphere"></div>
       <div class="welcome-field"></div>
       <div class="welcome-title-layer">
-        <h1 class="welcome-title" aria-label="Your Gateway To Intelligent Products">
+        <p class="welcome-title">
           <span class="welcome-title-line" aria-hidden="true">
             <span class="welcome-word-mask"><span class="welcome-word">Your</span></span>
             <span class="welcome-word-mask"><span class="welcome-word">Gateway</span></span>
@@ -884,27 +978,32 @@
             <span class="welcome-word-mask"><span class="welcome-word">Intelligent</span></span>
             <span class="welcome-word-mask"><span class="welcome-word">Products</span></span>
           </span>
-        </h1>
+        </p>
       </div>
     </div>
     <div id="field-stage">
       <div id="field"></div>
     </div>
     <header id="site-nav">
-      <a id="brand" href="#root">
+      <a id="brand" href="#main-content" aria-label="XTATION home">
         <span class="brand-mask"><em>XTATION</em></span>
       </a>
+      <nav id="site-links" aria-label="Primary navigation">
+        <a href="#work">Products</a>
+        <a href="#contact">Contact</a>
+      </nav>
     </header>
-    <div id="pin-slot">
+    <main id="main-content">
+      <div id="pin-slot">
       <div id="root">
-        <section id="hero">
+        <section id="hero" aria-labelledby="doctrine-title">
           <div id="hero-copy">
             <div class="doctrine-block">
-              <div class="doctrine-copy-stage">
-                <h2 id="doctrine-title">
+              <div class="doctrine-copy-stage" id="doctrine-copy-stage">
+                <h1 id="doctrine-title">
                   <span class="hero-title-line"><span>Your Gateway to</span></span>
                   <span class="hero-title-line"><span>Intelligent Products</span></span>
-                </h2>
+                </h1>
                 <p id="doctrine-lead">
                   Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
                 </p>
@@ -917,9 +1016,9 @@
           </div>
         </section>
       </div>
-    </div>
+      </div>
 
-    <div id="work-root" class="work-pad">
+      <div id="work-root" class="work-pad">
       <section class="chapter" id="work" aria-labelledby="index-title">
         <h2 class="index-mark" id="index-title"><span class="index-line"><span>Explore What We Can Do</span></span><span class="index-line"><span>for <strong class="index-emphasis">Your Business</strong></span></span></h2>
       </section>
@@ -1060,21 +1159,27 @@
             <span class="inquiry-title-line"><span>Intelligent Solution</span></span>
             <span class="inquiry-title-line"><span>for Your Business</span></span>
           </h2>
-          <p class="inquiry-support">Scan the QR code on the side if you want to connect with us.</p>
+          <p class="inquiry-support">Scan the code to connect, or tap it to email us.</p>
+          <a class="inquiry-email" href="mailto:hello@xstation?subject=XTATION%20brief">hello@xstation</a>
         </div>
         <figure class="inquiry-code">
-          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Scan to connect with XTATION">
+          <a class="inquiry-qr" href="mailto:hello@xstation?subject=XTATION%20brief" aria-label="Email XTATION">
             <img class="inquiry-qr-image" src="videos/gateway-hero/media/mail.svg" alt="" width="490" height="490" decoding="async" />
           </a>
         </figure>
       </section>
 
       <footer class="site-footer" aria-label="Site footer">
-        <a class="site-footer-brand" href="#root">XTATION</a>
-        <p class="site-footer-meta">&copy; 2026 XTATION</p>
+        <a class="site-footer-brand" href="#main-content">XTATION</a>
+        <nav class="site-footer-links" aria-label="Footer navigation">
+          <a href="#work">Products</a>
+          <a href="#contact">Contact</a>
+        </nav>
+        <p class="site-footer-meta">&copy; <span id="current-year">2026</span> XTATION</p>
       </footer>
 
-    </div>
+      </div>
+    </main>
 
     <script src="videos/gateway-hero/welcome.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
