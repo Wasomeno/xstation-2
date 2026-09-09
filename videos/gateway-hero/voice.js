@@ -1,4 +1,4 @@
-import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js";
+import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
 import createFlatWaveform from "./voice-variant-1.js";
 import createSmoothWaveform from "./voice-variant-2.js";
 

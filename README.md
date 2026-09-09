@@ -33,6 +33,25 @@ Point the live site at a tunneled box with `?box=https://your-tunnel`.
 
 ## Deploy on one domain
 
+### Dokploy (Docker Compose)
+
+Create a **Docker Compose** deployment using this repository's `main` branch and `compose.yaml`. This starts both the static frontend (`web`) and Python backend (`voice`), with `/voice/` proxied internally. A static-only Dokploy application does not run the backend or install the proxy snippet.
+
+Set these variables in Dokploy's Environment tab:
+
+```dotenv
+OPENAI_API_KEY=your-openai-key
+DEEPSEEK_API_KEY=your-deepseek-key
+DEEPSEEK_MODEL=deepseek-v4-flash
+VOICE_BOX_ALLOWED_ORIGINS=https://nadi.dotploy.my.id
+```
+
+In Domains, route `nadi.dotploy.my.id` to service **web**, container port **80**, path `/`, with HTTPS enabled. Replace the old application's domain mapping so only this deployment owns the hostname. Do not add a public domain or host port for `voice`. See [Dokploy's Compose domain setup](https://docs.dokploy.com/docs/core/docker-compose/domains).
+
+Deploy, then check `https://nadi.dotploy.my.id/voice/health` returns JSON with `ok: true`. The frontend uses `wss://nadi.dotploy.my.id/voice/v1/stream`. Updated script URLs bypass the old four-hour cached voice configuration; HTML and JavaScript revalidate on subsequent deployments. If a custom Cloudflare rule overrides origin cache headers, purge the old HTML/JavaScript cache and honor the origin headers.
+
+### Existing Nginx server
+
 Production uses `/voice` on the frontend's origin automatically. Local preview on port 4174 still connects directly to port 4175; `?box=` remains an override.
 
 Run the Python voice backend as a persistent service on the same host as Nginx, with these environment variables (or `voice/box/.env`):

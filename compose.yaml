@@ -1,0 +1,25 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - voice
+    expose:
+      - "80"
+
+  voice:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.voice
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in Dokploy}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY in Dokploy}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-flash}
+      VOICE_BOX_HOST: 0.0.0.0
+      VOICE_BOX_PORT: "4175"
+      VOICE_BOX_ALLOWED_ORIGINS: ${VOICE_BOX_ALLOWED_ORIGINS:-https://nadi.dotploy.my.id}
+    expose:
+      - "4175"

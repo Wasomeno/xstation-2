@@ -14,6 +14,7 @@ const flush = () => new Promise(setImmediate);
 test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
   const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
   for (const [page, expected] of [
+    ["https://nadi.dotploy.my.id/", "https://nadi.dotploy.my.id/voice"],
     ["https://nadi.example/", "https://nadi.example/voice"],
     ["https://nadi.example/products/", "https://nadi.example/voice"],
     ["http://127.0.0.1:4174/", "http://127.0.0.1:4175"],

@@ -1,0 +1,8 @@
+FROM python:3.11-slim
+WORKDIR /app
+COPY voice/box/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY voice/box/*.py ./
+ENV VOICE_BOX_HOST=0.0.0.0
+EXPOSE 4175
+CMD ["python", "server.py"]
