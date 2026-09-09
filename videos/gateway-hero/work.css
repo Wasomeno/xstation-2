@@ -510,7 +510,6 @@ html.lenis body {
   min-height: 0;
   background: #ffffff;
   padding: clamp(3.5rem, 7vh, 4.75rem) var(--pad);
-  border-bottom: 1px solid var(--line);
 }
 
 .clients-inner {
@@ -1071,6 +1070,11 @@ html.lenis body {
   border-color: var(--button-hover);
 }
 
+.station-cta:hover::before,
+.station-cta:focus-visible::before {
+  background: var(--signal);
+}
+
 /* Project sections are intentionally neutral: no green or tinted section
    fills behind the product content. The media artwork remains unchanged. */
 #work-root,
@@ -1091,7 +1095,7 @@ html.lenis body {
 #work-root .space.is-app .space-stage {
   background-color: #ffffff !important;
 }
-/* Requested polish: a restrained green color cycle keeps the primary CTA alive. */
+
 @keyframes demo-button-green-shift {
   0%,
   100% {
