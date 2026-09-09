@@ -12,24 +12,24 @@ Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
 ## Voice (local box)
 
-The floating mic talks to an always-on box on this machine: local OpenAI Whisper, then DeepSeek `deepseek-chat`. GitHub Pages cannot run Whisper.
+The floating mic talks to an always-on box on this machine: OpenAI `gpt-4o-mini-transcribe`, then DeepSeek `deepseek-chat`. Keys stay on the box.
 
 ```bash
 cd voice/box
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # set DEEPSEEK_API_KEY
+cp .env.example .env   # set OPENAI_API_KEY and DEEPSEEK_API_KEY
 ```
 
-From the repo root (venv active, key in the environment or `voice/box/.env`):
+From the repo root (keys in `voice/box/.env`):
 
 ```bash
 npm start          # site on :4174
 npm run voice      # box on :4175
 ```
 
-First Whisper load downloads the `small` model. Point the live site at a tunneled box with `?box=https://your-tunnel`.
+Point the live site at a tunneled box with `?box=https://your-tunnel`.
 
 ## Live site
 

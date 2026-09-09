@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Always-on voice box: local Whisper, DeepSeek behind the box."""
+"""Always-on voice box: OpenAI transcription, DeepSeek behind the box."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ import httpx
 import uvicorn
 
 from decide import SYSTEM_PROMPT, UNCLEAR_ASK, decide_from_model_text
-from whisper_lang import FOREIGN_ASK, HOTWORDS, ID_PROMPT, is_foreign_language, resolve_asr_language
+from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
 
 ALLOWED_ORIGINS = (
     "http://127.0.0.1:4174",
@@ -48,7 +48,11 @@ RATE_WINDOW_S = 60
 RATE_MAX = 20
 DEEPSEEK_URL = os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+OPENAI_TRANSCRIBE_URL = os.environ.get(
+    "OPENAI_TRANSCRIBE_URL",
+    "https://api.openai.com/v1/audio/transcriptions",
+)
+OPENAI_TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
 HOST = os.environ.get("VOICE_BOX_HOST", "127.0.0.1")
 PORT = int(os.environ.get("VOICE_BOX_PORT", "4175"))
 
@@ -61,7 +65,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_whisper = None
 _busy = asyncio.Lock()
 _hits: dict[str, deque[float]] = defaultdict(deque)
 
@@ -84,40 +87,46 @@ def _rate_ok(ip: str) -> bool:
     return True
 
 
-def _whisper_model():
-    global _whisper
-    if _whisper is None:
-        from faster_whisper import WhisperModel
+async def transcribe_openai(path: str) -> dict:
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="openai-key-missing")
+    audio_bytes = Path(path).read_bytes()
+    filename = Path(path).name or "clip.webm"
 
-        _whisper = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
-    return _whisper
+    async def send(client: httpx.AsyncClient, data: dict) -> httpx.Response:
+        return await client.post(
+            OPENAI_TRANSCRIBE_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            data=data,
+            files={"file": (filename, audio_bytes, "application/octet-stream")},
+        )
 
-
-def transcribe_path(path: str) -> dict:
-    from faster_whisper.audio import decode_audio
-
-    model = _whisper_model()
-    audio = decode_audio(path, sampling_rate=16000)
-    try:
-        detected, probability, probs = model.detect_language(audio, vad_filter=True)
-    except Exception:
-        detected, probability, probs = "id", 1.0, [("id", 1.0)]
-    if is_foreign_language(detected, probability, probs):
-        return {"transcript": "", "foreign": True, "detected": detected}
-    language = resolve_asr_language(detected, probability)
-    segments, _info = model.transcribe(
-        audio,
-        language=language,
-        task="transcribe",
-        vad_filter=True,
-        without_timestamps=True,
-        condition_on_previous_text=False,
-        initial_prompt=ID_PROMPT if language == "id" else None,
-        hotwords=HOTWORDS,
-        multilingual=False,
-    )
-    text = " ".join(segment.text.strip() for segment in segments).strip()
-    return {"transcript": text, "foreign": False, "detected": detected}
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await send(
+            client,
+            {
+                "model": OPENAI_TRANSCRIBE_MODEL,
+                "response_format": "verbose_json",
+                "prompt": ID_PROMPT,
+            },
+        )
+        if response.status_code >= 400:
+            response = await send(
+                client,
+                {
+                    "model": OPENAI_TRANSCRIBE_MODEL,
+                    "response_format": "json",
+                    "language": "id",
+                    "prompt": ID_PROMPT,
+                },
+            )
+        if response.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"openai-transcribe:{response.status_code}")
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=502, detail="openai-transcribe-shape")
+        return parse_openai_transcription(payload)
 
 
 async def interpret(transcript: str) -> dict:
@@ -153,9 +162,15 @@ async def interpret(transcript: str) -> dict:
 
 @app.get("/health")
 def health():
-    has_key = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
-    payload = {"ok": has_key, "whisper": WHISPER_MODEL, "deepseek": has_key}
-    if not has_key:
+    has_deepseek = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
+    has_openai = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    payload = {
+        "ok": has_deepseek and has_openai,
+        "transcribe": OPENAI_TRANSCRIBE_MODEL,
+        "openai": has_openai,
+        "deepseek": has_deepseek,
+    }
+    if not payload["ok"]:
         return JSONResponse(payload, status_code=503)
     return payload
 
@@ -182,11 +197,13 @@ async def command(request: Request, audio: UploadFile = File(...)):
             tmp.write(body)
             tmp.close()
             try:
-                asr = await asyncio.to_thread(transcribe_path, tmp.name)
+                asr = await transcribe_openai(tmp.name)
+            except HTTPException:
+                raise
             except Exception as exc:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"whisper-failed:{type(exc).__name__}",
+                    detail=f"transcribe-failed:{type(exc).__name__}",
                 ) from exc
         finally:
             Path(tmp.name).unlink(missing_ok=True)

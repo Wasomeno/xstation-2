@@ -1,6 +1,6 @@
 import unittest
 
-from whisper_lang import is_foreign_language, resolve_asr_language
+from whisper_lang import is_foreign_language, parse_openai_transcription, resolve_asr_language
 
 
 class ResolveAsrLanguageTests(unittest.TestCase):
@@ -30,3 +30,21 @@ class ForeignLanguageTests(unittest.TestCase):
     def test_id_mass_keeps_clip_local(self):
         top = [("en", 0.8), ("id", 0.15), ("ms", 0.1)]
         self.assertFalse(is_foreign_language("en", 0.8, top))
+
+
+class OpenAITranscriptionTests(unittest.TestCase):
+    def test_indonesian_verbose(self):
+        result = parse_openai_transcription({"text": "Tunjukkan HireAssess.", "language": "indonesian"})
+        self.assertEqual(result["detected"], "id")
+        self.assertFalse(result["foreign"])
+        self.assertIn("HireAssess", result["transcript"])
+
+    def test_english_verbose_is_foreign(self):
+        result = parse_openai_transcription({"text": "go to contact", "language": "english"})
+        self.assertTrue(result["foreign"])
+        self.assertEqual(result["transcript"], "")
+
+    def test_missing_language_keeps_text(self):
+        result = parse_openai_transcription({"text": "Tunjukkan Arkiv"})
+        self.assertFalse(result["foreign"])
+        self.assertEqual(result["transcript"], "Tunjukkan Arkiv")
