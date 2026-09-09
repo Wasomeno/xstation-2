@@ -30,14 +30,18 @@ def _load_env() -> None:
 
 _load_env()
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+import json
+import logging
+
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 import uvicorn
+import websockets
 
 from decide import SYSTEM_PROMPT, decide_from_model_text
-from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
+from whisper_lang import FOREIGN_ASK, ID_PROMPT, is_unusable_transcript, parse_openai_transcription
 
 ALLOWED_ORIGINS = (
     "http://127.0.0.1:4174",
@@ -52,7 +56,40 @@ OPENAI_TRANSCRIBE_URL = os.environ.get(
     "OPENAI_TRANSCRIBE_URL",
     "https://api.openai.com/v1/audio/transcriptions",
 )
-OPENAI_TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
+OPENAI_TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL", "gpt-live-transcribe")
+OPENAI_REALTIME_URL = os.environ.get(
+    "OPENAI_REALTIME_URL",
+    "wss://api.openai.com/v1/realtime?intent=transcription",
+)
+log = logging.getLogger("voice.box")
+SESSION_UPDATE = {
+    "type": "session.update",
+    "session": {
+        "type": "transcription",
+        "audio": {
+            "input": {
+                "format": {"type": "audio/pcm", "rate": 24000},
+                "transcription": {
+                    "model": "gpt-live-transcribe",
+                    "prompt": "Pengunjung situs XTATION berbicara dalam Bahasa Indonesia.",
+                    "keywords": [
+                        "XTATION",
+                        "BikinKonten",
+                        "Lubna",
+                        "HireAssess",
+                        "Arkiv",
+                        "CoDev",
+                        "CoFrame",
+                        "CoFinance",
+                    ],
+                    "languages": ["id"],
+                    "delay": "low",
+                },
+                "turn_detection": None,
+            }
+        },
+    },
+}
 HOST = os.environ.get("VOICE_BOX_HOST", "127.0.0.1")
 PORT = int(os.environ.get("VOICE_BOX_PORT", "4175"))
 
@@ -231,6 +268,113 @@ async def command(request: Request, audio: UploadFile = File(...)):
             raise HTTPException(status_code=502, detail=f"interpret-failed:{type(exc).__name__}") from exc
         decision["transcript"] = transcript
         return decision
+
+
+def _origin_ok(origin: str) -> bool:
+    if not origin:
+        return True
+    return origin in ALLOWED_ORIGINS or origin.startswith("https://wasomeno.github.io")
+
+
+@app.websocket("/v1/stream")
+async def stream(websocket: WebSocket):
+    origin = websocket.headers.get("origin", "")
+    if not _origin_ok(origin):
+        await websocket.close(code=1008)
+        return
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        await websocket.close(code=1013)
+        return
+    await websocket.accept()
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        async with websockets.connect(
+            OPENAI_REALTIME_URL,
+            additional_headers=headers,
+            max_size=8 * 1024 * 1024,
+        ) as openai_ws:
+            await openai_ws.send(json.dumps(SESSION_UPDATE))
+            while True:
+                boot = json.loads(await openai_ws.recv())
+                if boot.get("type") == "session.updated":
+                    break
+                if boot.get("type") == "error":
+                    detail = boot.get("error") or {}
+                    await websocket.send_json(
+                        {"type": "error", "message": detail.get("message") or "openai"}
+                    )
+                    return
+            await websocket.send_json({"type": "ready"})
+
+            async def from_client() -> None:
+                try:
+                    while True:
+                        message = await websocket.receive_json()
+                        kind = message.get("type")
+                        if kind == "audio" and message.get("pcm"):
+                            await openai_ws.send(
+                                json.dumps(
+                                    {
+                                        "type": "input_audio_buffer.append",
+                                        "audio": message["pcm"],
+                                    }
+                                )
+                            )
+                        elif kind == "commit":
+                            await openai_ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                        elif kind == "stop":
+                            break
+                except WebSocketDisconnect:
+                    pass
+                finally:
+                    try:
+                        await openai_ws.close()
+                    except Exception:
+                        pass
+
+            async def from_openai() -> None:
+                partial = ""
+                async for raw in openai_ws:
+                    event = json.loads(raw)
+                    kind = event.get("type")
+                    if kind == "conversation.item.input_audio_transcription.delta":
+                        partial += event.get("delta") or ""
+                        await websocket.send_json({"type": "delta", "text": partial})
+                    elif kind == "conversation.item.input_audio_transcription.completed":
+                        transcript = (event.get("transcript") or partial or "").strip()
+                        partial = ""
+                        if is_unusable_transcript(transcript):
+                            await websocket.send_json({"type": "noop"})
+                            continue
+                        await websocket.send_json({"type": "final", "transcript": transcript})
+                        try:
+                            decision = await interpret(transcript)
+                        except Exception:
+                            await websocket.send_json({"type": "error", "message": "interpret"})
+                            continue
+                        decision["transcript"] = transcript
+                        await websocket.send_json({"type": "decision", **decision})
+                    elif kind == "input_audio_buffer.speech_started":
+                        partial = ""
+                        await websocket.send_json({"type": "speech_started"})
+                    elif kind == "error":
+                        detail = event.get("error") or {}
+                        await websocket.send_json(
+                            {"type": "error", "message": detail.get("message") or "openai"}
+                        )
+
+            await asyncio.gather(from_client(), from_openai())
+    except Exception:
+        log.exception("realtime stream failed")
+        try:
+            await websocket.send_json({"type": "error", "message": "stream"})
+        except Exception:
+            pass
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 def main():

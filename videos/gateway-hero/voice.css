@@ -77,6 +77,10 @@
   color: var(--ink);
 }
 
+.voice-transcript:empty {
+  display: none;
+}
+
 .is-voice-shown {
   box-shadow: inset 0 0 0 2px var(--signal);
 }

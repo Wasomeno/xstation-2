@@ -12,7 +12,7 @@ Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
 ## Voice (local box)
 
-The floating mic talks to an always-on box on this machine: OpenAI `gpt-4o-mini-transcribe`, then DeepSeek `deepseek-chat`. Keys stay on the box.
+The floating mic streams audio to an always-on box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-chat`. Keys stay on the box. Live transcript appears in the popover.
 
 ```bash
 cd voice/box

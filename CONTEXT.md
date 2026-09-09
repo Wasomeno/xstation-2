@@ -13,7 +13,7 @@ The period from when the visitor turns the floating mic on until they turn it of
 _Avoid_: conversation, call, recording
 
 **Command**:
-One open-ended spoken request inside a session. Bahasa Indonesia is primary; English is still understood. It is not a keyword or a section id. The transcript appears only after a Pause, as a whole sentence — not word-by-word while the visitor talks.
+One open-ended spoken request inside a session. Bahasa Indonesia is primary; English is still understood. It is not a keyword or a section id. Partial text can appear in the Voice Surface while the visitor talks; the Command is complete after a Pause.
 _Avoid_: utterance, prompt, query, message, partial
 
 **Pause**:

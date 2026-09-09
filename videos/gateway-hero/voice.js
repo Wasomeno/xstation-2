@@ -1,9 +1,6 @@
-import { VOICE_BOX_URL } from "./voice-config.js";
+import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js";
 
-const SPEECH_RMS = 0.03;
-const SILENCE_MS = 800;
-const MIN_SPEECH_MS = 700;
-const MAX_COMMAND_MS = 15000;
+const TARGET_RATE = 24000;
 const DISCLOSURE =
   "Suara dari mikrofon ditranskripsi di mesin XTATION. Teksnya dikirim ke DeepSeek. Tidak disimpan.";
 
@@ -13,7 +10,6 @@ const COPY = {
   busy: "Sedang sibuk",
   deaf: "Tidak bisa mendengar",
   blocked: "Mikrofon diblokir",
-  fallback: "Produk, atau hubungi kami?",
   cantShow: "Tidak bisa menampilkan bagian itu",
   start: "Mulai mendengarkan",
   stop: "Berhenti mendengarkan",
@@ -34,11 +30,6 @@ const SECTION_LABELS = {
   contact: "Contact",
 };
 
-const mimeType = () => {
-  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  return types.find((type) => window.MediaRecorder?.isTypeSupported(type)) || "";
-};
-
 function afterWelcome(fn) {
   if (!document.getElementById("welcome-bumper") || !window.__xstationWelcomeActive) {
     fn();
@@ -47,14 +38,27 @@ function afterWelcome(fn) {
   window.addEventListener("xstation:welcome-finished", fn, { once: true });
 }
 
-function rmsFrom(analyser, buffer) {
-  analyser.getByteTimeDomainData(buffer);
-  let sum = 0;
-  for (let i = 0; i < buffer.length; i += 1) {
-    const centered = (buffer[i] - 128) / 128;
-    sum += centered * centered;
+function downsample(input, inRate, outRate) {
+  if (inRate === outRate) return input;
+  const ratio = inRate / outRate;
+  const outLength = Math.floor(input.length / ratio);
+  const output = new Float32Array(outLength);
+  for (let i = 0; i < outLength; i += 1) {
+    output[i] = input[Math.floor(i * ratio)] || 0;
   }
-  return Math.sqrt(sum / buffer.length);
+  return output;
+}
+
+function floatToPcm16Base64(float32) {
+  const bytes = new Uint8Array(float32.length * 2);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < float32.length; i += 1) {
+    const sample = Math.max(-1, Math.min(1, float32[i]));
+    view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 function createSurface() {
@@ -89,20 +93,15 @@ function bindVoice() {
   ui.root.hidden = false;
 
   let session = false;
-  let thinking = false;
+  let closing = false;
   let stream = null;
-  let recorder = null;
+  let socket = null;
   let audioContext = null;
-  let analyser = null;
-  let monitorId = 0;
-  let speechStartedAt = 0;
-  let lastLoudAt = 0;
-  let recording = false;
-  let chunks = [];
+  let processor = null;
 
   const setCopy = (status, transcript = "") => {
-    ui.status.textContent = status;
-    ui.transcript.textContent = transcript;
+    ui.status.textContent = status || "";
+    ui.transcript.textContent = transcript || "";
     ui.panel.hidden = !status && !transcript;
   };
 
@@ -111,15 +110,16 @@ function bindVoice() {
     ui.button.setAttribute("aria-label", on ? COPY.stop : COPY.start);
   };
 
-  const stopRecorder = () => {
-    if (recorder && recorder.state !== "inactive") recorder.stop();
-  };
-
   const teardownAudio = () => {
-    window.clearInterval(monitorId);
-    monitorId = 0;
-    stopRecorder();
-    analyser = null;
+    if (processor) {
+      processor.onaudioprocess = null;
+      try {
+        processor.disconnect();
+      } catch {
+        /* already closed */
+      }
+      processor = null;
+    }
     if (audioContext) {
       audioContext.close().catch(() => {});
       audioContext = null;
@@ -128,11 +128,20 @@ function bindVoice() {
       stream.getTracks().forEach((track) => track.stop());
       stream = null;
     }
+    if (socket && socket.readyState === 1) {
+      try {
+        socket.send(JSON.stringify({ type: "stop" }));
+      } catch {
+        /* closing */
+      }
+    }
+    if (socket && socket.readyState < 2) socket.close();
+    socket = null;
   };
 
   const endSession = (status) => {
     session = false;
-    thinking = false;
+    closing = true;
     setPressed(false);
     teardownAudio();
     if (status) setCopy(status);
@@ -159,86 +168,59 @@ function bindVoice() {
       setCopy(shown ? label : COPY.cantShow, transcript);
       return;
     }
-    if (decision?.action === "clarify") {
-      setCopy(decision.text || COPY.fallback, transcript);
+    if (decision?.action === "clarify" && decision.text) {
+      setCopy(decision.text, transcript);
       return;
     }
-    setCopy(COPY.fallback, transcript);
+    setCopy(COPY.listen, transcript);
   };
 
-  const sendClip = async (blob) => {
-    thinking = true;
-    setCopy(COPY.think);
-    const body = new FormData();
-    body.append("audio", blob, `command.${blob.type.includes("mp4") ? "mp4" : "webm"}`);
-    try {
-      const response = await fetch(`${VOICE_BOX_URL}/v1/command`, {
-        method: "POST",
-        body,
-      });
-      if (response.status === 429) {
-        applyDecision({ action: "busy" });
+  const startCapture = () => {
+    const source = audioContext.createMediaStreamSource(stream);
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    const mute = audioContext.createGain();
+    mute.gain.value = 0;
+    let talking = false;
+    let lastLoudAt = 0;
+    let speechStartedAt = 0;
+    processor.onaudioprocess = (event) => {
+      if (!session || !socket || socket.readyState !== 1) return;
+      const input = event.inputBuffer.getChannelData(0);
+      const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
+      if (!pcm.length) return;
+      socket.send(JSON.stringify({ type: "audio", pcm: floatToPcm16Base64(pcm) }));
+      let sum = 0;
+      for (let i = 0; i < input.length; i += 1) sum += input[i] * input[i];
+      const rms = Math.sqrt(sum / input.length);
+      const now = performance.now();
+      if (rms >= 0.03) {
+        if (!talking) {
+          talking = true;
+          speechStartedAt = now;
+        }
+        lastLoudAt = now;
         return;
       }
-      if (!response.ok) throw new Error("box");
-      applyDecision(await response.json());
-    } catch {
-      setCopy(COPY.deaf);
-    } finally {
-      thinking = false;
-    }
-  };
-
-  const beginCommand = () => {
-    if (!session || thinking || recording || !stream) return;
-    chunks = [];
-    const type = mimeType();
-    try {
-      recorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
-    } catch {
-      setCopy(COPY.deaf);
-      return;
-    }
-    recording = true;
-    speechStartedAt = performance.now();
-    lastLoudAt = speechStartedAt;
-    const typeUsed = recorder.mimeType || type || "audio/webm";
-    recorder.addEventListener("dataavailable", (event) => {
-      if (event.data?.size) chunks.push(event.data);
-    });
-    recorder.addEventListener("stop", () => {
-      const voiced = lastLoudAt - speechStartedAt;
-      const blob = new Blob(chunks, { type: typeUsed });
-      chunks = [];
-      recording = false;
-      recorder = null;
-      if (session && blob.size > 0 && voiced >= MIN_SPEECH_MS) sendClip(blob);
-      else if (session) setCopy(COPY.listen);
-    });
-    recorder.start();
-  };
-
-  const maybeEndCommand = (now) => {
-    if (!recording) return;
-    if (now - lastLoudAt < SILENCE_MS && now - speechStartedAt < MAX_COMMAND_MS) return;
-    stopRecorder();
-  };
-
-  const monitor = () => {
-    if (!session || !analyser) return;
-    const buffer = new Uint8Array(analyser.fftSize);
-    const level = rmsFrom(analyser, buffer);
-    const now = performance.now();
-    if (level >= SPEECH_RMS) {
-      lastLoudAt = now;
-      if (!recording && !thinking) beginCommand();
-    }
-    maybeEndCommand(now);
+      if (talking && now - lastLoudAt >= 800) {
+        if (lastLoudAt - speechStartedAt >= 700) {
+          socket.send(JSON.stringify({ type: "commit" }));
+        } else {
+          setCopy(COPY.listen);
+        }
+        talking = false;
+      }
+    };
+    source.connect(processor);
+    processor.connect(mute);
+    mute.connect(audioContext.destination);
   };
 
   const startSession = async () => {
+    closing = false;
     setCopy(DISCLOSURE);
-    const micRequest = navigator.mediaDevices.getUserMedia({ audio: true });
+    const micRequest = navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
     const dropMic = () => {
       micRequest.then((media) => media.getTracks().forEach((track) => track.stop())).catch(() => {});
     };
@@ -265,16 +247,71 @@ function bindVoice() {
         if (session) endSession(COPY.deaf);
       });
     });
+    try {
+      socket = new WebSocket(VOICE_BOX_WS);
+    } catch {
+      endSession(COPY.deaf);
+      return;
+    }
+    socket.addEventListener("message", (event) => {
+      let payload = null;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (payload.type === "ready") {
+        setCopy(COPY.listen);
+        return;
+      }
+      if (payload.type === "speech_started") {
+        setCopy(COPY.listen, "");
+        return;
+      }
+      if (payload.type === "delta") {
+        setCopy(COPY.listen, payload.text || "");
+        return;
+      }
+      if (payload.type === "final") {
+        setCopy(COPY.think, payload.transcript || "");
+        return;
+      }
+      if (payload.type === "noop") {
+        setCopy(COPY.listen);
+        return;
+      }
+      if (payload.type === "decision") {
+        applyDecision(payload);
+        return;
+      }
+      if (payload.type === "error") {
+        setCopy(COPY.deaf);
+      }
+    });
+    socket.addEventListener("close", () => {
+      if (session && !closing) endSession(COPY.deaf);
+    });
+    socket.addEventListener("error", () => {
+      if (session && !closing) endSession(COPY.deaf);
+    });
+    await new Promise((resolve, reject) => {
+      const onOpen = () => {
+        socket.removeEventListener("error", onErr);
+        resolve();
+      };
+      const onErr = () => reject(new Error("ws"));
+      socket.addEventListener("open", onOpen, { once: true });
+      socket.addEventListener("error", onErr, { once: true });
+    }).catch(() => {
+      endSession(COPY.deaf);
+    });
+    if (!socket || socket.readyState !== 1) return;
     audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-    source.connect(analyser);
     if (audioContext.state === "suspended") await audioContext.resume();
+    startCapture();
     session = true;
     setPressed(true);
     setCopy(COPY.listen);
-    monitorId = window.setInterval(monitor, 80);
   };
 
   ui.button.addEventListener("click", () => {
