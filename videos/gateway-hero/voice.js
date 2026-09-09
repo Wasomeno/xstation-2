@@ -327,8 +327,6 @@ function bindVoice() {
     let navigated = false;
     if (decision?.action === "show" && typeof decision.section === "string" && decision.section) {
       navigated = window.xstationShowSection?.(decision.section) === true;
-    } else if (decision?.action === "activate" && typeof decision.target === "string") {
-      navigated = window.xstationActivateCTA?.(decision.target) === true;
     }
     if (navigated) {
       feedbackAnimation?.cancel();
@@ -497,7 +495,7 @@ function bindVoice() {
     else startSession();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && session && !document.querySelector("dialog[open]")) endSession();
+    if (event.key === "Escape" && session) endSession();
   });
 }
 

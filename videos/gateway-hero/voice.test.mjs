@@ -23,7 +23,7 @@ const microphone = () => {
 };
 
 function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
-  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], activations = [];
+  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [];
   const button = Object.assign(new EventTarget(), {
     attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -64,7 +64,6 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   const window = Object.assign(new EventTarget(), {
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
-    xstationActivateCTA(target) { activations.push(target); return target === "bikinkonten-demo"; },
     matchMedia: () => ({ matches: reducedMotion }),
   });
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
@@ -81,7 +80,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   });
   vm.runInContext(`${source}\ncreateSurface = () => ui; bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, activations, sandbox,
+    ui, microphones, health, sockets, contexts, sections, animations, sandbox,
     copy: vm.runInContext("COPY", sandbox),
     click: () => emit(button, "click"),
     escape: () => emit(document, "keydown", { key: "Escape" }),
@@ -542,20 +541,4 @@ test("voice navigation starts at the project list and centers individual content
       assert.equal(show('unknown'), false);
     }
   }
-});
-
-test("voice can activate the demo CTA and Escape leaves an open dialog's session running", async () => {
-  const h = browser();
-  const { socket, track } = await h.connect();
-  socket.message({ type: 'ready' });
-  socket.message({ type: 'decision', action: 'activate', target: 'bikinkonten-demo' });
-  assert.deepEqual(h.activations, ['bikinkonten-demo']);
-  assert.equal(h.animations.length, 0);
-  assert.equal(h.ui.root.dataset.state, 'listening');
-  h.sandbox.document.querySelector = () => ({ open: true });
-  h.escape();
-  assert.equal(track.stopped, false);
-  h.sandbox.document.querySelector = () => null;
-  h.escape();
-  assert.equal(track.stopped, true);
 });
