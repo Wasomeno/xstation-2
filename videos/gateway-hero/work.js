@@ -223,9 +223,46 @@ function bindHeroScroll() {
   if (!gsap || !ScrollTrigger) return;
 
   const heroCopy = document.getElementById("hero-copy");
+  const heroFrame = document.getElementById("root");
+  const fieldStage = document.getElementById("nadi-stage");
+  const frameTargets = [heroFrame, fieldStage].filter(Boolean);
   const chapters = [...document.querySelectorAll(".chapter-panel")];
   if (heroCopy) gsap.set(heroCopy, { autoAlpha: 1, y: 0 });
   if (chapters.length) gsap.set(chapters, { autoAlpha: 0, y: 0 });
+
+  if (!reduce && frameTargets.length) {
+    const depth = { progress: 0 };
+    const timeline = gsap.timeline({
+      defaults: { duration: 1, ease: "none" },
+      scrollTrigger: {
+        id: "nadi-hero-depth",
+        trigger: "#pin-slot",
+        start: "top top",
+        endTrigger: "#work",
+        end: "top 12%",
+        scrub: 0.8,
+        invalidateOnRefresh: true,
+      },
+      onUpdate: () => cluster.setProgress(depth.progress),
+    });
+
+    timeline
+      .to(depth, { progress: 1 }, 0)
+      .to(frameTargets, {
+        clipPath: () =>
+          `inset(0% 5% round ${window.innerWidth < 768 ? 16 : 30}px)`,
+      }, 0);
+
+    if (heroCopy) {
+      timeline.to(heroCopy, {
+        x: () => window.innerWidth * (window.innerWidth < 768 ? 0.025 : 0.0375),
+        y: () => -Math.min(window.innerHeight * 0.1, 96),
+        force3D: true,
+      }, 0);
+    }
+  } else {
+    cluster.setProgress(0);
+  }
 
   ScrollTrigger.create({
     id: "nadi-cluster-cover",
@@ -412,31 +449,57 @@ function bindInquiryEntry() {
 
 function bindEnter() {
   if (!gsap || !ScrollTrigger) return;
-  const blurOn = !reduce && !window.matchMedia("(max-width: 767px)").matches;
   if (reduce) {
-    gsap.set(".js-enter, .js-enter-child", { autoAlpha: 1, scale: 1, filter: "none" });
+    gsap.set(".js-enter, .js-enter-child, .space-stage", { autoAlpha: 1, x: 0, y: 0, scale: 1, filter: "none" });
     return;
   }
-  document.querySelectorAll(".js-enter").forEach((el) => {
-    const kids = el.querySelectorAll(".js-enter-child");
+
+  document.querySelectorAll("#work-root .space").forEach((section) => {
+    const panel = section.querySelector(".space-panel.js-enter");
+    const media = section.querySelector(".space-stage");
+    if (!panel) return;
+
+    const flip = section.classList.contains("is-flip");
+    const mediaFrom = flip ? 16 : -16;
+    const kids = [...panel.querySelectorAll(".js-enter-child")];
+    const stack = kids.filter((el) => !el.classList.contains("project-cta"));
+    const cta = kids.filter((el) => el.classList.contains("project-cta"));
+
+    // Panel itself: no scale, no blur — stay clear for the stack.
+    gsap.set(panel, { autoAlpha: 1, scale: 1, filter: "none" });
+
     const tl = gsap.timeline({
       scrollTrigger: {
-        trigger: el,
+        trigger: section,
         start: "top 78%",
         once: true,
       },
     });
-    tl.fromTo(
-      el,
-      { scale: 0.94, autoAlpha: 0, filter: blurOn ? "blur(8px)" : "none" },
-      { scale: 1, autoAlpha: 1, filter: "none", duration: 0.9, ease: "expo.out" }
-    );
-    if (kids.length) {
+
+    if (media) {
       tl.fromTo(
-        kids,
-        { autoAlpha: 0, y: 0, scale: 0.98 },
-        { autoAlpha: 1, scale: 1, duration: 0.55, ease: "power2.out", stagger: 0.07 },
-        0.12
+        media,
+        { autoAlpha: 0, x: mediaFrom },
+        { autoAlpha: 1, x: 0, duration: 0.7, ease: "power3.out" },
+        0
+      );
+    }
+
+    if (stack.length) {
+      tl.fromTo(
+        stack,
+        { autoAlpha: 0, y: 12 },
+        { autoAlpha: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.07 },
+        media ? 0.12 : 0
+      );
+    }
+
+    if (cta.length) {
+      tl.fromTo(
+        cta,
+        { autoAlpha: 0 },
+        { autoAlpha: 1, duration: 0.45, ease: "power3.out" },
+        ">"
       );
     }
   });
