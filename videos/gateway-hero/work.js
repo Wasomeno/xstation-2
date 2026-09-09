@@ -1,70 +1,15 @@
-import { createField, DOCK_READY, FOCUS_END, FOCUS_START } from "./field.js";
-
-const ORBIT_STORIES = [
-  {
-    title: "Marketing & Content",
-    lead: "BikinKonten and Lubna help teams plan, create, and publish on-brand social content with less manual work.",
-  },
-  {
-    title: "Prototyping",
-    lead: "CoFrame turns an idea into an interactive web prototype, so teams can see what they want to build before development starts.",
-  },
-  {
-    title: "AI Agents",
-    lead: "CRM AI Agent and CoDev handle repeatable questions and development tasks, giving teams more time for work that needs people.",
-  },
-  {
-    title: "Customer Engagement",
-    lead: "CRM AI Agent answers customer questions on WhatsApp using your business knowledge, helping every conversation start faster.",
-  },
-  {
-    title: "Document Management",
-    lead: "Arkiv keeps business files organized, easy to find, and under control as teams store, share, and review information together.",
-  },
-  {
-    title: "Talent Assessment",
-    lead: "HireAssess helps hiring teams understand a technical candidate’s real work and make hiring decisions with more confidence.",
-  },
-];
-
-const DEFAULT_ORBIT_STORY = {
-  title: "Your Gateway to Intelligent Products",
-  titleLines: ["Your Gateway to", "Intelligent Products"],
-  lead: "Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.",
-};
+import { createCluster } from "./cluster.js";
 
 const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const shot = new URLSearchParams(window.location.search).get("shot");
 const gsap = window.gsap;
 const ScrollTrigger = window.ScrollTrigger;
 const ENHANCED_MOTION_QUERY = "(min-width: 64rem) and (hover: hover) and (pointer: fine)";
-const enhancedMotionMedia = window.matchMedia(ENHANCED_MOTION_QUERY);
 const smoothScrollMedia = window.matchMedia("(min-width: 64rem)");
-const saveData = Boolean(navigator.connection?.saveData);
 
-const field = createField({
-  root: document.getElementById("field"),
-  gsap,
-  reduce,
+const cluster = createCluster({
+  canvas: document.getElementById("nadi-cluster"),
 });
-
-function prepareOrbitHero(showInterface = true) {
-  field.setMode("pass");
-  field.setProgress(DOCK_READY);
-  document.documentElement.classList.add("is-station");
-
-  if (!gsap) {
-    const nav = document.getElementById("site-nav");
-    const copy = document.getElementById("hero-copy");
-    if (nav) nav.style.opacity = showInterface ? "1" : "0";
-    if (copy) copy.style.opacity = showInterface ? "1" : "0";
-    return;
-  }
-  gsap.set("#site-nav, #hero-copy", {
-    autoAlpha: showInterface ? 1 : 0,
-    y: 0,
-  });
-}
 
 function bindHeroEntry() {
   if (!gsap) return () => {};
@@ -74,10 +19,7 @@ function bindHeroEntry() {
   const lead = document.getElementById("doctrine-lead");
   const actions = document.querySelectorAll(".station-actions .station-cta");
   const animatedElements = [brand, ...titleLines, lead, ...actions].filter(Boolean);
-  const orbitEntry = { progress: reduce ? 1 : 0 };
   let timeline = null;
-
-  field.setOrbitEntryProgress(orbitEntry.progress);
 
   if (!reduce) {
     gsap.set(brand, { autoAlpha: 0, y: -12 });
@@ -91,52 +33,33 @@ function bindHeroEntry() {
     gsap.set(actions, { autoAlpha: 0, y: 16, scale: 0.97 });
   }
 
-  function reveal() {
-    gsap.set("#site-nav, #hero-copy", { autoAlpha: 1, y: 0 });
+  gsap.set("#site-nav, #hero-copy", { autoAlpha: 1, y: 0 });
 
-    if (reduce) {
-      field.setOrbitEntryProgress(1);
-      gsap.set(animatedElements, { autoAlpha: 1, clearProps: "transform" });
-      return;
-    }
-
-    timeline = gsap.timeline({ defaults: { ease: "power3.out" } })
-      .to(orbitEntry, {
-        progress: 1,
-        duration: 1.18,
-        ease: "expo.out",
-        onUpdate: () => field.setOrbitEntryProgress(orbitEntry.progress),
-      }, 0)
-      .to(brand, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.12)
-      .to(titleLines, {
-        autoAlpha: 1,
-        yPercent: 0,
-        rotate: 0,
-        duration: 0.9,
-        stagger: 0.09,
-        ease: "expo.out",
-      }, 0.26)
-      .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.52)
-      .to(actions, {
-        autoAlpha: 1,
-        y: 0,
-        scale: 1,
-        duration: 0.62,
-        stagger: 0.07,
-      }, 0.68);
+  if (reduce) {
+    gsap.set(animatedElements, { autoAlpha: 1, clearProps: "transform" });
+    return () => {};
   }
 
-  const welcome = document.getElementById("welcome-bumper");
-  if (welcome) {
-    window.addEventListener("xstation:welcome-finished", reveal, { once: true });
-  } else {
-    reveal();
-  }
+  timeline = gsap.timeline({ defaults: { ease: "power3.out" } })
+    .to(brand, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.08)
+    .to(titleLines, {
+      autoAlpha: 1,
+      yPercent: 0,
+      rotate: 0,
+      duration: 0.9,
+      stagger: 0.09,
+      ease: "expo.out",
+    }, 0.18)
+    .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.42)
+    .to(actions, {
+      autoAlpha: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.62,
+      stagger: 0.07,
+    }, 0.56);
 
-  return () => {
-    window.removeEventListener("xstation:welcome-finished", reveal);
-    timeline?.kill();
-  };
+  return () => timeline?.kill();
 }
 
 function smooth() {
@@ -187,7 +110,7 @@ function smooth() {
     anchorBindings.push([a, onClick]);
   });
 
-  lenis.__xstationDestroy = () => {
+  lenis.__nadiDestroy = () => {
     if (ticker) gsap.ticker.remove(ticker);
     if (rafId) cancelAnimationFrame(rafId);
     anchorBindings.forEach(([anchor, handler]) => anchor.removeEventListener("click", handler));
@@ -199,7 +122,6 @@ function smooth() {
 
 let smoothInstance = null;
 let smoothStarted = false;
-let cleanupSmoothStart = () => {};
 
 function startSmooth() {
   if (smoothStarted) return smoothInstance;
@@ -210,371 +132,125 @@ function startSmooth() {
 }
 
 function stopSmooth() {
-  smoothInstance?.__xstationDestroy?.();
+  smoothInstance?.__nadiDestroy?.();
   smoothInstance = null;
   smoothStarted = false;
 }
 
 function bindSmoothStart() {
   if (reduce || shot || typeof window.Lenis !== "function") return () => {};
-  let welcomeFinished = !document.getElementById("welcome-bumper");
 
   const sync = () => {
-    if (!welcomeFinished) return;
     if (smoothScrollMedia.matches) startSmooth();
     else stopSmooth();
   };
 
-  const onFinished = () => {
-    welcomeFinished = true;
-    sync();
-  };
-
-  if (welcomeFinished) {
-    sync();
-  } else {
-    window.addEventListener("xstation:welcome-finished", onFinished, { once: true });
-  }
-
+  sync();
   smoothScrollMedia.addEventListener("change", sync);
   return () => {
-    window.removeEventListener("xstation:welcome-finished", onFinished);
     smoothScrollMedia.removeEventListener("change", sync);
     stopSmooth();
   };
 }
 
-
-let activeOrbit = -1;
-let orbitCopyTl = null;
-
-function applyOrbitCopy(story, title, lead) {
-  title.replaceChildren();
-  const lines = story.titleLines || [story.title];
-  lines.forEach((line) => {
-    const lineMask = document.createElement("span");
-    const lineText = document.createElement("span");
-    lineMask.className = "hero-title-line";
-    lineText.textContent = line;
-    lineMask.appendChild(lineText);
-    title.appendChild(lineMask);
-  });
-  lead.textContent = story.lead;
+function clamp01(v) {
+  return Math.min(1, Math.max(0, v));
 }
 
-function measureOrbitCopyHeight(stage, story) {
-  const measurement = stage.cloneNode(true);
-  const title = measurement.querySelector("#doctrine-title");
-  const lead = measurement.querySelector("#doctrine-lead");
-  if (!title || !lead || !stage.parentElement) return stage.getBoundingClientRect().height;
+function bindHeroScroll() {
+  if (!gsap || !ScrollTrigger) return;
 
-  measurement.style.position = "absolute";
-  measurement.style.visibility = "hidden";
-  measurement.style.pointerEvents = "none";
-  measurement.style.height = "auto";
-  measurement.style.width = `${stage.getBoundingClientRect().width}px`;
-  stage.parentElement.appendChild(measurement);
-  applyOrbitCopy(story, title, lead);
-  const height = measurement.getBoundingClientRect().height;
-  measurement.remove();
-  return height;
-}
+  const heroCopy = document.getElementById("hero-copy");
+  const chapters = [...document.querySelectorAll(".chapter-panel")];
+  if (!heroCopy || !chapters.length) return;
 
-function setOrbitCopy(index, immediate = false) {
-  if (index < -1 || index >= ORBIT_STORIES.length || index === activeOrbit) return;
+  gsap.set(chapters, { autoAlpha: 0, y: 28 });
 
-  activeOrbit = index;
-  const story = index === -1 ? DEFAULT_ORBIT_STORY : ORBIT_STORIES[index];
-  const title = document.getElementById("doctrine-title");
-  const lead = document.getElementById("doctrine-lead");
-  const stage = document.querySelector("#hero-copy .doctrine-copy-stage");
+  const state = {
+    rest: 1,
+    alphas: chapters.map(() => 0),
+  };
 
-  if (!title || !lead || !stage) return;
+  function applyCopy(progress) {
+    const rest = clamp01(1 - progress / 0.12);
+    if (Math.abs(rest - state.rest) > 0.001) {
+      state.rest = rest;
+      gsap.set(heroCopy, {
+        autoAlpha: rest,
+        y: (1 - rest) * -36,
+      });
+    }
 
-  const startHeight = stage.getBoundingClientRect().height;
-
-  if (orbitCopyTl) {
-    orbitCopyTl.kill();
-    orbitCopyTl = null;
+    const chapterT = clamp01((progress - 0.1) / 0.9);
+    chapters.forEach((panel, i) => {
+      const start = i / chapters.length;
+      const end = (i + 1) / chapters.length;
+      const center = (start + end) / 2;
+      let alpha = 0;
+      if (progress >= 0.1) {
+        if (reduce) {
+          alpha = i === Math.min(chapters.length - 1, Math.floor(chapterT * 0.999 * chapters.length)) ? 1 : 0;
+        } else if (chapterT <= start) {
+          alpha = 0;
+        } else if (chapterT >= end) {
+          alpha = chapterT < end + 0.08 ? clamp01(1 - (chapterT - end) / 0.08) : 0;
+        } else {
+          const enter = start + 0.08;
+          alpha = chapterT < enter ? clamp01((chapterT - start) / 0.08) : 1;
+        }
+      }
+      if (Math.abs(alpha - state.alphas[i]) < 0.002) return;
+      state.alphas[i] = alpha;
+      gsap.set(panel, {
+        autoAlpha: alpha,
+        y: (1 - alpha) * (chapterT >= center ? -24 : 24),
+      });
+    });
   }
 
-  if (immediate || !gsap) {
-    applyOrbitCopy(story, title, lead);
-    gsap?.set(stage, { clearProps: "height,overflow,willChange" });
+  ScrollTrigger.create({
+    id: "nadi-hero",
+    trigger: "#pin-slot",
+    start: "top top",
+    end: () => `+=${Math.round(window.innerHeight * 5)}`,
+    pin: true,
+    pinSpacing: true,
+    anticipatePin: 1,
+    scrub: 0.65,
+    invalidateOnRefresh: true,
+    onUpdate: (self) => {
+      cluster.setProgress(clamp01((self.progress - 0.1) / 0.9));
+      applyCopy(self.progress);
+    },
+  });
+
+  applyCopy(0);
+
+  ScrollTrigger.create({
+    id: "nadi-cluster-cover",
+    trigger: "#work",
+    start: "top 12%",
+    end: "max",
+    onEnter: () => cluster.setActive(false),
+    onLeaveBack: () => cluster.setActive(true),
+  });
+}
+
+function bindProductsTitle() {
+  if (!gsap || !ScrollTrigger) return;
+
+  const indexLines = document.querySelectorAll("#index-title .index-line > span");
+  if (!indexLines.length) return;
+
+  if (reduce) {
+    gsap.set(indexLines, { autoAlpha: 1, yPercent: 0 });
     return;
   }
-
-  gsap.set(stage, { height: startHeight, overflow: "clip", willChange: "height" });
-  gsap.set([title, lead], { clearProps: "transform,opacity,visibility" });
-  const targetHeight = measureOrbitCopyHeight(stage, story);
-
-  orbitCopyTl = gsap.timeline({
-    defaults: { overwrite: "auto" },
-    onComplete: () => {
-      gsap.set(stage, { clearProps: "height,overflow,willChange" });
-      orbitCopyTl = null;
-    },
-  })
-    .to([title, lead], {
-      autoAlpha: 0,
-      y: 8,
-      duration: 0.2,
-      ease: "power2.in",
-    })
-    .call(() => {
-      applyOrbitCopy(story, title, lead);
-      gsap.set([title, lead], { autoAlpha: 0, y: 18 });
-    })
-    .fromTo(
-      stage,
-      { height: startHeight },
-      {
-        height: targetHeight,
-        duration: 0.46,
-        ease: "power3.inOut",
-        immediateRender: false,
-      },
-    )
-    .to([title, lead], {
-      autoAlpha: 1,
-      y: 0,
-      duration: 0.36,
-      ease: "power3.out",
-      stagger: 0.035,
-    }, "<+=0.08");
-}
-
-function startOrbitAutoplay() {
-  if (reduce || shot || !gsap) return;
-
-  const initialHold = 3.2;
-  const stationHold = 3.2;
-  const resetHold = 1.8;
-  const lastStation = ORBIT_STORIES.length - 1;
-  const progressForStation = (index) => {
-    return FOCUS_START + ((FOCUS_END - FOCUS_START) * index) / lastStation;
-  };
-
-  const orbitTl = gsap.timeline({
-    paused: true,
-    repeat: -1,
-    repeatDelay: 0.4,
-  });
-
-  orbitTl.to({}, { duration: initialHold });
-
-  ORBIT_STORIES.forEach((_, index) => {
-    orbitTl
-      .call(() => {
-        field.setMode("pass");
-        field.recedeDock(0);
-        field.setProgress(progressForStation(index));
-        setOrbitCopy(index);
-      })
-      .to({}, { duration: stationHold });
-  });
-
-  orbitTl
-    .call(() => {
-      field.setProgress(DOCK_READY);
-      setOrbitCopy(-1);
-    })
-    .to({}, { duration: resetHold });
-
-  function playWhenWelcomeFinishes() {
-    orbitTl.play();
-  }
-
-  if (document.getElementById("welcome-bumper")) {
-    window.addEventListener("xstation:welcome-finished", playWhenWelcomeFinishes, { once: true });
-  } else {
-    playWhenWelcomeFinishes();
-  }
-
-  return orbitTl;
-}
-
-function bindOrbitInteraction(orbitTl) {
-  let resumeTimer = 0;
-  let engaged = false;
-  const lastStation = ORBIT_STORIES.length - 1;
-  const progressForStation = (index) =>
-    FOCUS_START + ((FOCUS_END - FOCUS_START) * index) / lastStation;
-
-  const clearResume = () => window.clearTimeout(resumeTimer);
-  const selectStation = (index) => {
-    if (index < 0 || index > lastStation) return;
-    clearResume();
-    orbitTl?.pause();
-    field.setMode("pass");
-    field.recedeDock(0);
-    field.setProgress(progressForStation(index));
-    setOrbitCopy(index, reduce);
-  };
-
-  const scheduleResume = () => {
-    clearResume();
-    if (!orbitTl || reduce || shot || document.hidden) return;
-    resumeTimer = window.setTimeout(() => {
-      if (engaged) return;
-      setOrbitCopy(-1);
-      field.setProgress(DOCK_READY);
-      orbitTl.restart();
-    }, 6000);
-  };
-
-  const onInteraction = (event) => {
-    const { state, index } = event.detail || {};
-    if (state === "engage" || state === "select") {
-      engaged = state === "engage";
-      selectStation(index);
-      if (state === "select") scheduleResume();
-      return;
-    }
-    if (state === "release") {
-      engaged = false;
-      scheduleResume();
-    }
-  };
-
-  const onVisibilityChange = () => {
-    clearResume();
-    if (document.hidden) {
-      orbitTl?.pause();
-    } else if (!engaged && orbitTl && !reduce && !shot) {
-      scheduleResume();
-    }
-  };
-
-  window.addEventListener("xstation:orbit-interaction", onInteraction);
-  document.addEventListener("visibilitychange", onVisibilityChange);
-
-  return () => {
-    clearResume();
-    window.removeEventListener("xstation:orbit-interaction", onInteraction);
-    document.removeEventListener("visibilitychange", onVisibilityChange);
-  };
-}
-
-function bindSpatialFold(orbitTl) {
-  if (reduce || shot || !gsap || !ScrollTrigger || !orbitTl) return;
-
-  const isCompact = () => window.matchMedia("(max-width: 767px)").matches;
-  const indexLines = document.querySelectorAll("#index-title .index-line > span");
-  const editorialBridge = document.querySelector(".editorial-bridge");
-  const editorialLines = document.querySelectorAll(".editorial-line > span");
-  const editorialSupport = document.querySelector(".editorial-support");
-  let folded = false;
-
-  function lockOrbit() {
-    if (folded) return;
-    folded = true;
-    orbitTl.pause();
-    field.setProgress(DOCK_READY);
-    setOrbitCopy(-1);
-    field.freezeOrbit();
-  }
-
-  function releaseOrbit() {
-    if (!folded) return;
-    folded = false;
-    field.unfreezeOrbit();
-    orbitTl.restart();
-  }
-
-  function hideOrbitCanvas() {
-    field.setPresentationVisible(false);
-  }
-
-  function showFrozenOrbitCanvas() {
-    field.setPresentationVisible(true);
-    lockOrbit();
-  }
-
-  gsap.timeline({
-    defaults: { ease: "none" },
-    scrollTrigger: {
-      id: "orbit-spatial-fold",
-      trigger: "#work",
-      start: "top 92%",
-      end: "top 18%",
-      scrub: 0.8,
-      invalidateOnRefresh: true,
-      onEnter: lockOrbit,
-      onLeave: hideOrbitCanvas,
-      onEnterBack: showFrozenOrbitCanvas,
-      onLeaveBack: releaseOrbit,
-    },
-  })
-    .to("#hero-copy", {
-      autoAlpha: 0,
-      y: -42,
-      scale: 0.98,
-      duration: 0.28,
-    }, 0)
-    .to(".dock-node-label", {
-      autoAlpha: 0,
-      duration: 0.2,
-    }, 0)
-    .to(".dock-node", {
-      scale: () => isCompact() ? 0.38 : 0.24,
-      duration: 0.48,
-      ease: "power2.inOut",
-    }, 0.12)
-    .to("#field", {
-      rotationX: () => isCompact() ? 52 : 68,
-      rotationZ: () => isCompact() ? -3 : -6,
-      scale: () => isCompact() ? 0.84 : 0.78,
-      y: () => isCompact() ? "18vh" : "28vh",
-      transformOrigin: "50% 72%",
-      force3D: true,
-      duration: 0.78,
-      ease: "power2.inOut",
-    }, 0.08)
-    .to(".dock-svg", {
-      "--fold-alpha": 0.62,
-      duration: 0.5,
-    }, 0.25);
 
   gsap.set(indexLines, {
     autoAlpha: 0,
     yPercent: 105,
   });
-
-  if (editorialBridge) {
-    gsap.set(editorialLines, {
-      autoAlpha: 0,
-      yPercent: 105,
-    });
-
-    gsap.set(editorialSupport, {
-      autoAlpha: 0,
-      y: 20,
-    });
-
-    ScrollTrigger.create({
-      id: "editorial-bridge-enter",
-      trigger: editorialBridge,
-      start: "top 76%",
-      once: true,
-      onEnter: () => {
-        gsap.timeline()
-          .to(editorialLines, {
-            autoAlpha: 1,
-            yPercent: 0,
-            duration: 0.78,
-            stagger: 0.1,
-            ease: "power3.out",
-          })
-          .to(editorialSupport, {
-            autoAlpha: 1,
-            y: 0,
-            duration: 0.58,
-            ease: "power2.out",
-          }, "-=0.34");
-      },
-    });
-  }
 
   ScrollTrigger.create({
     id: "products-title-enter",
@@ -735,17 +411,11 @@ function bindInquiryEntry() {
 
 function bindEnter() {
   if (!gsap || !ScrollTrigger) return;
-  const compact = window.matchMedia("(max-width: 63.999rem)").matches;
+  const blurOn = !reduce && !window.matchMedia("(max-width: 767px)").matches;
   if (reduce) {
-    gsap.set(".js-enter, .js-enter-child", {
-      autoAlpha: 1,
-      y: 0,
-      scale: 1,
-      filter: "none",
-    });
+    gsap.set(".js-enter, .js-enter-child", { autoAlpha: 1, scale: 1, filter: "none" });
     return;
   }
-
   document.querySelectorAll(".js-enter").forEach((el) => {
     const kids = el.querySelectorAll(".js-enter-child");
     const tl = gsap.timeline({
@@ -755,63 +425,25 @@ function bindEnter() {
         once: true,
       },
     });
-
-    if (!compact) {
-      tl.fromTo(
-        el,
-        { scale: 0.94, autoAlpha: 0, filter: "blur(8px)" },
-        { scale: 1, autoAlpha: 1, filter: "none", duration: 0.9, ease: "expo.out" }
-      );
-      if (kids.length) {
-        tl.fromTo(
-          kids,
-          { autoAlpha: 0, y: 0, scale: 0.98 },
-          { autoAlpha: 1, scale: 1, duration: 0.55, ease: "power2.out", stagger: 0.07 },
-          0.12
-        );
-      }
-      return;
-    }
-
-    if (kids.length) {
-      gsap.set(el, { autoAlpha: 1, scale: 1, filter: "none" });
-      tl.fromTo(
-        kids,
-        { autoAlpha: 0, y: compact ? 10 : 14 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          duration: compact ? 0.45 : 0.6,
-          ease: "power3.out",
-          stagger: compact ? 0.05 : 0.07,
-        }
-      );
-      return;
-    }
-
     tl.fromTo(
       el,
-      {
-        autoAlpha: 0,
-        y: compact ? 10 : 0,
-        scale: compact ? 1 : 0.96,
-        filter: "none",
-      },
-      {
-        autoAlpha: 1,
-        y: 0,
-        scale: 1,
-        filter: "none",
-        duration: compact ? 0.48 : 0.82,
-        ease: "expo.out",
-      }
+      { scale: 0.94, autoAlpha: 0, filter: blurOn ? "blur(8px)" : "none" },
+      { scale: 1, autoAlpha: 1, filter: "none", duration: 0.9, ease: "expo.out" }
     );
+    if (kids.length) {
+      tl.fromTo(
+        kids,
+        { autoAlpha: 0, y: 0, scale: 0.98 },
+        { autoAlpha: 1, scale: 1, duration: 0.55, ease: "power2.out", stagger: 0.07 },
+        0.12
+      );
+    }
   });
 }
 
 function bindParallax() {
   if (reduce || shot || !gsap || !ScrollTrigger) return;
-  if (!enhancedMotionMedia.matches) return;
+  if (window.matchMedia("(max-width: 767px)").matches) return;
 
   document.querySelectorAll(".stage-media img").forEach((media) => {
     const trigger = media.closest(".space, .stage");
@@ -841,7 +473,6 @@ function bindParallax() {
       }
     );
   });
-
 }
 
 function bindProjectVideoPlayback() {
@@ -865,7 +496,7 @@ function bindProjectVideoPlayback() {
 
   const releaseAll = () => videos.forEach(releaseVideo);
 
-  if (reduce || saveData) {
+  if (reduce) {
     releaseAll();
     return () => {};
   }
@@ -933,8 +564,6 @@ function bindProjectVideoPlayback() {
 
 function applyShot() {
   if (!shot) return false;
-  document.documentElement.classList.add("is-shot");
-  document.getElementById("welcome-bumper")?.remove();
   const pinSlot = document.getElementById("pin-slot");
   const workRoot = document.getElementById("work-root");
   if (pinSlot) pinSlot.style.display = "none";
@@ -957,7 +586,6 @@ if (!isShot) cleanupProjectVideos = bindProjectVideoPlayback();
 window.addEventListener("pagehide", () => {
   cleanupHeaderState();
   cleanupProjectVideos();
-  field.destroy();
 }, { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
@@ -965,14 +593,12 @@ if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
 if (gsap && !isShot) {
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
   let cleanupHeroEntry = () => {};
-  let cleanupOrbitInteraction = () => {};
   let responsiveMotion = null;
-  cleanupSmoothStart = bindSmoothStart();
+  const cleanupSmoothStart = bindSmoothStart();
   const ctx = gsap.context(() => {
     cleanupHeroEntry = bindHeroEntry();
-    const orbitTl = startOrbitAutoplay();
-    cleanupOrbitInteraction = bindOrbitInteraction(orbitTl);
-    bindSpatialFold(orbitTl);
+    bindHeroScroll();
+    bindProductsTitle();
     bindBrandVisibility();
     bindInquiryEntry();
     bindEnter();
@@ -986,45 +612,14 @@ if (gsap && !isShot) {
   window.addEventListener("pagehide", () => {
     cleanupSmoothStart();
     cleanupHeroEntry();
-    cleanupOrbitInteraction();
     responsiveMotion?.revert();
+    cluster.dispose();
     ctx.revert();
   }, { once: true });
 } else if (!isShot) {
-  startSmooth();
-}
-
-if (isShot) {
-  field.setRenderActive(true);
-  prepareOrbitHero(true);
-} else {
-  const welcomeActive = Boolean(document.getElementById("welcome-bumper"));
-  prepareOrbitHero(!welcomeActive);
-  const dispatchOrbitReady = (result = null) => {
-    field.setRenderActive(!welcomeActive);
-    window.dispatchEvent(new CustomEvent("xstation:orbit-ready", {
-      detail: result,
-    }));
-  };
-  const prepareReady = field.ready || Promise.resolve();
-  let readinessTimer = 0;
-  const deadline = new Promise((resolve) => {
-    readinessTimer = window.setTimeout(() => resolve({
-      status: "degraded",
-      reason: "orbit-preparation-timeout",
-    }), 4000);
-  });
-  Promise.race([prepareReady, deadline]).then((result) => {
-    window.clearTimeout(readinessTimer);
-    dispatchOrbitReady(result);
-  }, (error) => {
-    window.clearTimeout(readinessTimer);
-    dispatchOrbitReady({ status: "degraded", reason: "orbit-preparation-error", error });
-  });
-}
-
-if (document.getElementById("welcome-bumper")) {
-  window.addEventListener("xstation:welcome-exit-start", () => {
-    field.setRenderActive(true);
+  const cleanupSmoothStart = bindSmoothStart();
+  window.addEventListener("pagehide", () => {
+    cleanupSmoothStart();
+    cluster.dispose();
   }, { once: true });
 }
