@@ -199,19 +199,10 @@ body {
   #hero-copy .doctrine-block {
     width: min(100%, 26rem);
     max-width: none;
-    gap: clamp(0.8rem, 2.6dvh, 1.15rem);
   }
 
   #hero-copy h1 {
-    max-width: 12ch;
-    font-size: clamp(2.15rem, 10.8vw, 3.25rem);
-    line-height: 0.98;
-  }
-
-  #hero-copy p {
-    max-width: 33ch;
-    font-size: clamp(1rem, 4.2vw, 1.12rem);
-    line-height: 1.42;
+    max-width: none;
   }
 
   .station-actions {
@@ -369,18 +360,10 @@ html.is-shot .site-footer {
   #hero-copy .doctrine-block {
     width: min(55%, 27rem);
     max-width: none;
-    gap: 0.5rem;
   }
 
   #hero-copy h1 {
-    max-width: 12ch;
-    font-size: clamp(1.8rem, 5.2vw, 2.4rem);
-  }
-
-  #hero-copy p {
-    max-width: 42ch;
-    font-size: clamp(0.82rem, 1.8vw, 0.95rem);
-    line-height: 1.35;
+    max-width: none;
   }
 
   .station-actions {
@@ -417,12 +400,6 @@ html.is-shot .site-footer {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
-  }
-
-  #root,
-  #nadi-stage {
-    clip-path: inset(0 0 round 0) !important;
-    will-change: auto;
   }
 
   #hero-copy,

@@ -10,7 +10,7 @@ const smoothScrollMedia = window.matchMedia("(min-width: 64rem)");
 
 const cluster = createCluster({
   canvas: document.getElementById("nadi-cluster"),
-  active: !document.getElementById("welcome-bumper"),
+  active: true,
 });
 
 function bindHeroEntry() {
@@ -19,8 +19,9 @@ function bindHeroEntry() {
   const brand = document.getElementById("brand");
   const titleLines = document.querySelectorAll("#doctrine-title .hero-title-line > span");
   const lead = document.getElementById("doctrine-lead");
+  const scope = document.getElementById("hero-scope");
   const actions = document.querySelectorAll("#hero-copy .station-actions .station-cta");
-  const animatedElements = [brand, ...titleLines, lead, ...actions].filter(Boolean);
+  const animatedElements = [brand, ...titleLines, lead, scope, ...actions].filter(Boolean);
   let timeline = null;
 
   if (!reduce) {
@@ -32,6 +33,7 @@ function bindHeroEntry() {
       transformOrigin: "0% 100%",
     });
     gsap.set(lead, { autoAlpha: 0, y: 22 });
+    gsap.set(scope, { autoAlpha: 0, y: 14 });
     gsap.set(actions, { autoAlpha: 0, y: 16, scale: 0.97 });
   }
 
@@ -54,6 +56,7 @@ function bindHeroEntry() {
         ease: "expo.out",
       }, 0.18)
       .to(lead, { autoAlpha: 1, y: 0, duration: 0.7 }, 0.42)
+      .to(scope, { autoAlpha: 1, y: 0, duration: 0.62 }, 0.5)
       .to(actions, {
         autoAlpha: 1,
         y: 0,
@@ -63,15 +66,9 @@ function bindHeroEntry() {
       }, 0.56);
   }
 
-  const welcome = document.getElementById("welcome-bumper");
-  if (welcome) {
-    window.addEventListener("xstation:welcome-finished", reveal, { once: true });
-  } else {
-    reveal();
-  }
+  reveal();
 
   return () => {
-    window.removeEventListener("xstation:welcome-finished", reveal);
     timeline?.kill();
   };
 }
@@ -146,6 +143,7 @@ function startSmooth() {
 const VOICE_SECTIONS = new Set([
   "hero",
   "root",
+  "system",
   "work",
   "bikinkonten",
   "lubna",
@@ -191,29 +189,17 @@ function stopSmooth() {
 
 function bindSmoothStart() {
   if (shot || typeof window.Lenis !== "function") return () => {};
-  let welcomeFinished = !document.getElementById("welcome-bumper");
 
   const sync = () => {
-    if (!welcomeFinished) return;
     if (!reducedMotionMedia.matches && smoothScrollMedia.matches) startSmooth();
     else stopSmooth();
   };
 
-  const onFinished = () => {
-    welcomeFinished = true;
-    sync();
-  };
-
-  if (welcomeFinished) {
-    sync();
-  } else {
-    window.addEventListener("xstation:welcome-finished", onFinished, { once: true });
-  }
+  sync();
 
   smoothScrollMedia.addEventListener("change", sync);
   reducedMotionMedia.addEventListener("change", sync);
   return () => {
-    window.removeEventListener("xstation:welcome-finished", onFinished);
     smoothScrollMedia.removeEventListener("change", sync);
     reducedMotionMedia.removeEventListener("change", sync);
     stopSmooth();
@@ -224,35 +210,47 @@ function bindHeroScroll() {
   if (!gsap || !ScrollTrigger) return;
 
   const heroCopy = document.getElementById("hero-copy");
-  const heroFrame = document.getElementById("root");
-  const fieldStage = document.getElementById("nadi-stage");
-  const frameTargets = [heroFrame, fieldStage].filter(Boolean);
+  const brandLogo = document.querySelector("#site-nav .brand-logo");
   const chapters = [...document.querySelectorAll(".chapter-panel")];
   if (heroCopy) gsap.set(heroCopy, { autoAlpha: 1, y: 0 });
   if (chapters.length) gsap.set(chapters, { autoAlpha: 0, y: 0 });
 
-  if (!reduce && frameTargets.length) {
+  if (!reduce) {
     const depth = { progress: 0 };
+    const flash = { progress: 0 };
     const timeline = gsap.timeline({
       defaults: { duration: 1, ease: "none" },
       scrollTrigger: {
         id: "nadi-hero-depth",
         trigger: "#pin-slot",
         start: "top top",
-        endTrigger: "#work",
+        endTrigger: "#system",
         end: "top 12%",
         scrub: true,
         invalidateOnRefresh: true,
       },
-      onUpdate: () => cluster.setProgress(depth.progress),
+      onUpdate: () => {
+        cluster.setProgress(depth.progress);
+        cluster.setFlashProgress(flash.progress);
+        if (brandLogo) {
+          const bounds = brandLogo.getBoundingClientRect();
+          document.body.classList.toggle(
+            "glare-passed-brand",
+            cluster.isFlashCoveringPoint(
+              bounds.left + bounds.width / 2,
+              bounds.top + bounds.height / 2,
+            ),
+          );
+        }
+        if (heroCopy) {
+          gsap.set(heroCopy, { opacity: Math.max(0, 1 - flash.progress * 2.4) });
+        }
+      },
     });
 
     timeline
       .to(depth, { progress: 1 }, 0)
-      .to(frameTargets, {
-        clipPath: () =>
-          `inset(0% 5% round ${window.innerWidth < 768 ? 16 : 30}px)`,
-      }, 0);
+      .to(flash, { progress: 1, duration: 0.7 }, 0.3);
 
     if (heroCopy) {
       timeline.to(heroCopy, {
@@ -263,12 +261,14 @@ function bindHeroScroll() {
     }
   } else {
     cluster.setProgress(0);
+    cluster.setFlashProgress(0);
+    document.body.classList.remove("glare-passed-brand");
   }
 
   ScrollTrigger.create({
     id: "nadi-cluster-cover",
-    trigger: "#work",
-    start: "top 12%",
+    trigger: "#system",
+    start: "top top",
     end: "max",
     onEnter: () => cluster.setActive(false),
     onLeaveBack: () => cluster.setActive(true),
@@ -630,8 +630,10 @@ function bindProjectVideoPlayback() {
 function applyShot() {
   if (!shot) return false;
   const pinSlot = document.getElementById("pin-slot");
+  const system = document.getElementById("system");
   const workRoot = document.getElementById("work-root");
   if (pinSlot) pinSlot.style.display = "none";
+  if (system && shot !== "system") system.style.display = "none";
   if (workRoot) workRoot.style.marginTop = "0";
   const target = document.getElementById(shot);
   if (target) {
@@ -686,21 +688,5 @@ if (gsap && !isShot) {
   window.addEventListener("pagehide", () => {
     cleanupSmoothStart();
     cluster.dispose();
-  }, { once: true });
-}
-
-if (!isShot && document.getElementById("welcome-bumper")) {
-  const dispatchReady = () => {
-    window.dispatchEvent(new CustomEvent("xstation:orbit-ready"));
-  };
-  if (cluster.ready && typeof cluster.ready.then === "function") {
-    cluster.ready.then(dispatchReady, dispatchReady);
-  } else {
-    dispatchReady();
-  }
-  window.addEventListener("xstation:welcome-exit-start", () => {
-    cluster.resize();
-    cluster.setActive(true);
-    ScrollTrigger?.refresh();
   }, { once: true });
 }

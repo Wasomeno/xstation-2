@@ -14,14 +14,6 @@ const COPY = {
   stop: "Berhenti mendengarkan",
 };
 
-function afterWelcome(fn) {
-  if (!document.getElementById("welcome-bumper") || !window.__xstationWelcomeActive) {
-    fn();
-    return;
-  }
-  window.addEventListener("xstation:welcome-finished", fn, { once: true });
-}
-
 function downsample(input, inRate, outRate) {
   if (inRate === outRate) return input;
   const ratio = inRate / outRate;
@@ -634,4 +626,4 @@ function bindVoice() {
   });
 }
 
-afterWelcome(bindVoice);
+bindVoice();

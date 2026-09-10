@@ -3,6 +3,8 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   if (!host) {
     return {
       setProgress() {},
+      setFlashProgress() {},
+      isFlashCoveringPoint() { return false; },
       setActive() {},
       resize() {},
       dispose() {},
@@ -35,25 +37,32 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   });
   const LOOP = SEQ.reduce((a, s) => a + s.dur, 0);
 
-  // One emerald family, separated into structure, energy, and a hot mint core.
-  // The layered tones create a selective-bloom read without muddying the paper.
-  const G = [51, 98, 78];
-  const GLOW = [45, 177, 112];
-  const PULSE = [27, 190, 112];
-  const HOT = [112, 232, 164];
-  const PIN = [220, 255, 236];
-  const HEAD = [7, 104, 60];
-  const PAPER_GAIN = 1.5;
-  const FAR_ALPHA_MUL = 0.26;
-  const CORE_BLOOM = 0.48;
+  const G = [61, 139, 103];
+  const GLOW = [74, 224, 157];
+  const PULSE = [110, 240, 178];
+  const HOT = [155, 243, 203];
+  const PIN = [226, 255, 240];
+  const HEAD = [45, 177, 112];
+  const PAPER_GAIN = 1.35;
+  const FAR_ALPHA_MUL = 0.22;
+  const CORE_BLOOM = 0.58;
   const NAMES = [
     "Marketing & Content",
     "Customer Engagement",
-    "Document Management",
-    "Talent Assessment",
-    "Prototyping",
-    "AI Agents",
+    "Operations",
+    "Finance",
+    "Legal",
+    "HR & Hiring",
   ];
+  const scopeItems = [...document.querySelectorAll("#hero-scope span")];
+  let activeScope = -1;
+  const setScope = (index) => {
+    if (index === activeScope) return;
+    activeScope = index;
+    scopeItems.forEach((item, itemIndex) => {
+      item.classList.toggle("is-on", itemIndex === index);
+    });
+  };
   const stage = host.parentElement || host;
   const labels = NAMES.map((n, i) => {
     const d = document.createElement("div");
@@ -273,9 +282,11 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       sceneryCtx.fillRect(-1, -1, 2, 2);
       sceneryCtx.restore();
     };
-    haze(0.80, 0.40, 0.43, 0.55, [186, 209, 194], 0.32);
-    haze(0.61, 0.84, 0.46, 0.22, [158, 187, 172], 0.20);
-    haze(0.95, 0.68, 0.31, 0.30, [206, 211, 191], 0.26);
+    sceneryCtx.fillStyle = "#04100b";
+    sceneryCtx.fillRect(0, 0, W, Ht);
+    haze(0.80, 0.40, 0.43, 0.55, [18, 78, 55], 0.34);
+    haze(0.61, 0.84, 0.46, 0.22, [11, 54, 39], 0.3);
+    haze(0.95, 0.68, 0.31, 0.30, [36, 90, 66], 0.22);
     // Fine paper grain, generated once per resize rather than animated noise.
     // A separate seed keeps texture changes independent of branch geometry.
     const grain = document.createElement("canvas");
@@ -288,10 +299,10 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       grainSeed = (Math.imul(grainSeed, 1664525) + 1013904223) >>> 0;
       const noise = grainSeed / 4294967296;
       const light = noise > 0.5;
-      pixels.data[i] = light ? 255 : 92;
-      pixels.data[i + 1] = light ? 255 : 110;
-      pixels.data[i + 2] = light ? 250 : 98;
-      pixels.data[i + 3] = Math.round(Math.abs(noise - 0.5) * 28);
+      pixels.data[i] = light ? 80 : 0;
+      pixels.data[i + 1] = light ? 116 : 24;
+      pixels.data[i + 2] = light ? 96 : 16;
+      pixels.data[i + 3] = Math.round(Math.abs(noise - 0.5) * 18);
     }
     grainCtx.putImageData(pixels, 0, 0);
     sceneryCtx.drawImage(grain, 0, 0, W, Ht);
@@ -299,9 +310,9 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     for (let i = 0; i < 3; i++) {
       const y = Ht * (0.77 + i * 0.075);
       const ink = sceneryCtx.createLinearGradient(W * 0.34, 0, W, 0);
-      ink.addColorStop(0, "rgba(130,160,142,0)");
-      ink.addColorStop(0.55, `rgba(130,160,142,${0.10 - i * 0.02})`);
-      ink.addColorStop(1, "rgba(130,160,142,0)");
+      ink.addColorStop(0, "rgba(80,160,120,0)");
+      ink.addColorStop(0.55, `rgba(80,160,120,${0.08 - i * 0.015})`);
+      ink.addColorStop(1, "rgba(80,160,120,0)");
       sceneryCtx.beginPath();
       sceneryCtx.moveTo(W * 0.28, y + Ht * 0.07);
       sceneryCtx.bezierCurveTo(W * 0.55, y - Ht * 0.08,
@@ -557,6 +568,8 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   let active = startActive;
   let disposed = false;
   let raf = 0;
+  let flashProgress = 0;
+  let flashFrom = null;
   const observer = new ResizeObserver(() => {
     size();
     if (reduce) draw(performance.now());
@@ -598,6 +611,21 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       acc += s.dur;
     }
     const agent = seg.type === "visit" ? NEAR.primaries[seg.agent] : null;
+    if (T < WAKE) {
+      setScope(-1);
+    } else if (T < TOUR) {
+      setScope(0);
+    } else {
+      let scopeIndex = 0;
+      for (const sequenceItem of SEQ) {
+        if (sequenceItem === seg) break;
+        if (sequenceItem.type === "visit") scopeIndex += 1;
+      }
+      setScope(scopeIndex % 4);
+    }
+    if (flashProgress <= 0.001) {
+      flashFrom = (agent || NEAR.primaries[0]).end;
+    }
 
     treeA = waking ? 0 : revealing ? easeOut((T - WAKE) / REVEAL) : 1;
     revealR = waking ? 0 : revealing ? easeOut((T - WAKE) / REVEAL) * 1500 : 1e9;
@@ -815,6 +843,52 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       ctx.fillStyle = rgba(PIN, Math.min(0.94, (0.72 + beat * 0.12) * (1 - cdf) * cf * coreGain));
       ctx.fill();
     }
+
+    // Match the dark handoff transition: the currently lit node overloads
+    // first, then its light expands until it becomes the next section's ground.
+    if (flashProgress > 0.001) {
+      const fp = project(flashFrom || (agent ? agent.end : NEAR.primaries[0].end));
+      const fx = fp[0];
+      const fy = fp[1];
+      const diagonal = Math.hypot(W, Ht);
+      const flare = Math.min(1, flashProgress / 0.4);
+      const whiteProgress = Math.max(0, Math.min(1, (flashProgress - 0.2) / 0.55));
+      const white = whiteProgress * whiteProgress * (3 - 2 * whiteProgress);
+
+      ctx.globalCompositeOperation = "lighter";
+      glow(fx, fy, diagonal * (0.08 + 0.55 * flare), 0.95 * flare, PULSE);
+      glow(fx, fy, diagonal * (0.03 + 0.16 * flare), flare, PIN);
+      const core = ctx.createRadialGradient(
+        fx,
+        fy,
+        0,
+        fx,
+        fy,
+        diagonal * (0.02 + 0.14 * flare),
+      );
+      core.addColorStop(0, `rgba(255,255,255,${flare})`);
+      core.addColorStop(0.45, `rgba(240,255,246,${0.55 * flare})`);
+      core.addColorStop(1, "rgba(240,255,246,0)");
+      ctx.fillStyle = core;
+      ctx.fillRect(0, 0, W, Ht);
+      ctx.globalCompositeOperation = "source-over";
+
+      if (white > 0) {
+        const radius = diagonal * 1.4 * white;
+        const ground = ctx.createRadialGradient(fx, fy, 0, fx, fy, radius);
+        ground.addColorStop(0, "rgba(247,248,245,1)");
+        ground.addColorStop(0.55, "rgba(247,248,245,1)");
+        ground.addColorStop(0.8, `rgba(247,248,245,${0.55 + 0.45 * white})`);
+        ground.addColorStop(1, `rgba(247,248,245,${white * white})`);
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, 0, W, Ht);
+      }
+
+      const fade = Math.max(0, 1 - flashProgress * 2.4);
+      labels.forEach((label) => {
+        label.style.opacity = String(Math.min(Number(label.style.opacity) || 0, fade));
+      });
+    }
   }
 
   function shouldRun() {
@@ -870,6 +944,21 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         ? Math.max(0, Math.min(1, value))
         : 0;
       if (reduce) draw(performance.now());
+    },
+    setFlashProgress(next = 0) {
+      const value = Number(next);
+      flashProgress = Number.isFinite(value)
+        ? Math.max(0, Math.min(1, value))
+        : 0;
+      if (reduce) draw(performance.now());
+    },
+    isFlashCoveringPoint(x, y) {
+      if (flashProgress <= 0.2 || !W || !Ht) return false;
+      const source = project(flashFrom || NEAR.primaries[0].end);
+      const whiteProgress = Math.max(0, Math.min(1, (flashProgress - 0.2) / 0.55));
+      const white = whiteProgress * whiteProgress * (3 - 2 * whiteProgress);
+      const radius = Math.hypot(W, Ht) * 1.4 * white;
+      return Math.hypot(Number(x) - source[0], Number(y) - source[1]) <= radius;
     },
     setActive(next) {
       const on = Boolean(next);

@@ -15,6 +15,9 @@
       window.addEventListener("pageshow", () => window.scrollTo(0, 0));
     </script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&display=swap" />
     <style>
       @font-face {
         font-family: "Apfel Grotezk";
@@ -44,7 +47,8 @@
         --muted: #3C4C49;
         --surface: color-mix(in srgb, var(--mist) 46%, var(--page));
         --line: color-mix(in srgb, var(--forest) 24%, transparent);
-        --sans: "Geist", "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --sans: "Apfel Grotezk", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
         --section-join: 22vh;
         --content-max: 90rem;
         --reading-max: 42rem;
@@ -96,146 +100,6 @@
         -webkit-tap-highlight-color: transparent;
       }
 
-      .skip-link {
-        position: fixed;
-        inset-block-start: max(0.75rem, env(safe-area-inset-top));
-        inset-inline-start: 1rem;
-        z-index: 100;
-        padding: 0.75rem 1rem;
-        border-radius: var(--radius-control);
-        background: var(--deep-forest);
-        color: var(--paper);
-        font-size: 0.95rem;
-        transform: translateY(calc(-100% - 2rem));
-        transition: transform 0.2s ease;
-      }
-
-      .skip-link:focus {
-        transform: translateY(0);
-      }
-
-      #welcome-bumper {
-        position: fixed;
-        inset: 0;
-        z-index: 80;
-        overflow: hidden;
-        background: #ffffff;
-        cursor: default;
-        isolation: isolate;
-        touch-action: none;
-      }
-
-      .welcome-backdrop {
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        background: #ffffff;
-      }
-
-      .welcome-atmosphere {
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-        background:
-          radial-gradient(circle at 50% 48%, rgb(255 255 255 / 0.86) 0%, rgb(255 255 255 / 0.2) 19%, transparent 43%),
-          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, rgb(255 255 255 / 0.64) 100%),
-          linear-gradient(to bottom, rgb(255 255 255 / 0.9) 0%, transparent 20%, transparent 64%, #ffffff 100%);
-      }
-
-      .welcome-field {
-        position: absolute;
-        inset: 0;
-        z-index: 2;
-        perspective: 1100px;
-        perspective-origin: 50% 48%;
-        transform-style: preserve-3d;
-        pointer-events: none;
-      }
-
-      .welcome-slab {
-        --slab-glow: var(--signal);
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: var(--slab-w);
-        height: var(--slab-h);
-        margin: 0;
-        color: var(--ink);
-        background: currentColor;
-        box-shadow:
-          0 0 14px color-mix(in srgb, var(--slab-glow) 58%, transparent),
-          0 0 42px color-mix(in srgb, var(--slab-glow) 22%, transparent);
-        backface-visibility: hidden;
-        transform-origin: 50% 50%;
-        will-change: transform, opacity;
-      }
-
-      .welcome-slab.is-gold {
-        color: var(--signal);
-        --slab-glow: var(--signal);
-        box-shadow:
-          0 0 16px color-mix(in srgb, var(--signal) 70%, transparent),
-          0 0 52px color-mix(in srgb, var(--signal) 28%, transparent);
-      }
-
-      .welcome-slab.is-peri {
-        color: var(--sage);
-        --slab-glow: var(--sage);
-      }
-
-      .welcome-slab.is-steel {
-        color: var(--deep-forest);
-        --slab-glow: var(--mist);
-      }
-
-      .welcome-slab.is-dim {
-        color: color-mix(in srgb, var(--deep-forest) 58%, var(--sage));
-        --slab-glow: color-mix(in srgb, var(--signal) 70%, var(--sage));
-      }
-
-      .welcome-title-layer {
-        position: absolute;
-        inset: 0;
-        z-index: 4;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 18svh 6vw 16svh;
-        pointer-events: none;
-      }
-
-      .welcome-title {
-        width: 100%;
-        max-width: min(22ch, 92vw);
-        margin: 0;
-        text-align: center;
-        font-family: var(--sans);
-        font-size: clamp(3.375rem, 5.7vw, 5.25rem);
-        font-weight: 400;
-        line-height: 1.12;
-        letter-spacing: -0.03em;
-        color: var(--ink);
-      }
-
-      .welcome-title-line {
-        display: flex;
-        justify-content: center;
-        gap: 0.22em;
-      }
-
-      .welcome-word-mask {
-        display: inline-block;
-        overflow: hidden;
-        padding-block: 0.08em;
-        margin-block: -0.08em;
-      }
-
-      .welcome-word {
-        display: block;
-        will-change: transform, opacity;
-      }
-
       #pin-slot {
         position: relative;
         z-index: 12;
@@ -248,7 +112,7 @@
       inset: 0;
       z-index: 1;
       pointer-events: none;
-      background: #ffffff;
+      background: #04100b;
     }
 
     #root {
@@ -260,8 +124,6 @@
         background: transparent;
       z-index: 12;
       pointer-events: none;
-      clip-path: inset(0 0 round 0);
-      will-change: clip-path;
       }
 
       #hero {
@@ -278,9 +140,7 @@
         overflow: hidden;
         isolation: isolate;
       pointer-events: none;
-      background: var(--page);
-      clip-path: inset(0 0 round 0);
-      will-change: clip-path;
+      background: #04100b;
       }
 
       #nadi-cluster {
@@ -298,12 +158,12 @@
         align-items: center;
         gap: 12px;
         font-family: var(--sans);
-        font-weight: 600;
+        font-weight: 700;
         font-size: 30.4px;
         letter-spacing: -0.01em;
-        color: var(--ink);
+        color: #ddf7ea;
         opacity: 0;
-        text-shadow: 0 0 10px var(--page), 0 1px 0 var(--page);
+        text-shadow: 0 0 22px #04100b, 0 0 7px #04100b;
         transform: translate(18px, -50%);
       }
 
@@ -311,7 +171,7 @@
         content: "";
         width: 26px;
         height: 1.5px;
-        background: linear-gradient(90deg, rgba(28, 133, 92, 0), var(--signal));
+        background: linear-gradient(90deg, rgb(110 240 178 / 0), #6ef0b2);
         flex-shrink: 0;
         transform-origin: left;
         transform: scaleX(var(--k, 1));
@@ -319,12 +179,12 @@
 
       .nadi-lbl small {
         display: block;
-        font-family: ui-monospace, Menlo, monospace;
+        font-family: var(--mono);
         font-weight: 500;
         font-size: 16px;
         letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: var(--signal);
+        color: #5fbf95;
         margin-bottom: 2px;
       }
 
@@ -335,7 +195,7 @@
 
       .nadi-lbl.is-left::before {
         transform-origin: right;
-        background: linear-gradient(270deg, rgba(28, 133, 92, 0), var(--signal));
+        background: linear-gradient(270deg, rgb(110 240 178 / 0), #6ef0b2);
       }
 
       #site-nav {
@@ -385,7 +245,7 @@
         z-index: 22;
         display: flex;
         align-items: center;
-        width: min(45vw, 44rem);
+        width: min(62vw, 52rem);
         padding: 7.5rem 0 5rem clamp(24px, 4vw, 64px);
         box-sizing: border-box;
         pointer-events: none;
@@ -394,7 +254,8 @@
 
       #hero-copy .doctrine-block {
         display: grid;
-        gap: 1.55rem;
+        gap: 18px;
+        width: 100%;
         max-width: 42rem;
         height: auto;
         min-height: 0;
@@ -408,36 +269,69 @@
         min-height: 0;
       }
 
-      #hero-copy h2 {
+      #hero-copy h1 {
         margin: 0;
         font-family: var(--sans);
-        font-weight: 500;
-        max-width: 11.5ch;
-        font-size: clamp(3rem, 4.85vw, 5.25rem);
-        line-height: 1.02;
-        letter-spacing: -0.048em;
-        color: var(--ink);
+        font-weight: 400;
+        max-width: none;
+        font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+        line-height: 1;
+        letter-spacing: -0.05em;
+        color: #f2fbf6;
+        text-wrap: balance;
       }
 
       #hero-copy .hero-title-line {
         display: block;
         overflow: hidden;
+        padding-bottom: 0.16em;
+        margin-bottom: -0.16em;
       }
 
       #hero-copy .hero-title-line > span {
         display: block;
+        white-space: nowrap;
         will-change: transform, opacity;
       }
 
       #hero-copy p {
         margin: 0;
-        max-width: 47ch;
+        max-width: 30ch;
         font-family: var(--sans);
         font-weight: 400;
-        font-size: clamp(1.2rem, 1.55vw, 1.5rem);
+        font-size: clamp(13.5px, 1.25vw, 16px);
         line-height: 1.55;
-        letter-spacing: -0.01em;
-        color: #5b6865;
+        color: #96b7a7;
+      }
+
+      .hero-scope {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        margin-top: 2px;
+        font-family: var(--sans);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #4a7a66;
+      }
+
+      .hero-scope span {
+        transition: color 0.55s ease, text-shadow 0.55s ease;
+      }
+
+      .hero-scope span.is-on {
+        color: #9bf3cb;
+        text-shadow: 0 0 18px rgb(110 240 178 / 0.5);
+      }
+
+      .hero-scope i {
+        width: 3px;
+        height: 3px;
+        border-radius: 2px;
+        background: #2c5243;
+        flex-shrink: 0;
       }
 
       .station-actions {
@@ -553,36 +447,6 @@
         }
       }
 
-      @media (max-width: 767px) {
-        .welcome-title-layer {
-          padding: 12svh 1.1rem 0;
-        }
-
-        .welcome-title {
-          max-width: min(18ch, 92vw);
-          font-size: clamp(2.55rem, 11.1vw, 3.225rem);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .welcome-slab,
-        .welcome-atmosphere {
-          display: none;
-        }
-      }
-
-      :root #welcome-bumper,
-      :root .welcome-backdrop {
-        background: var(--page);
-      }
-
-      :root .welcome-atmosphere {
-        background:
-          radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--paper) 86%, transparent) 0%, color-mix(in srgb, var(--paper) 20%, transparent) 19%, transparent 43%),
-          radial-gradient(ellipse 78% 72% at 50% 48%, transparent 40%, color-mix(in srgb, var(--paper) 64%, transparent) 100%),
-          linear-gradient(to bottom, color-mix(in srgb, var(--paper) 90%, transparent) 0%, transparent 20%, transparent 64%, var(--page) 100%);
-      }
-
       #chapters {
         display: none;
       }
@@ -610,7 +474,7 @@
         inset: -12% -18% -18% -12%;
         z-index: -1;
         pointer-events: none;
-        background: radial-gradient(ellipse 70% 80% at 18% 48%, rgb(247 248 245 / 0.92) 0%, rgb(247 248 245 / 0.55) 46%, transparent 74%);
+        background: radial-gradient(ellipse 70% 80% at 18% 48%, rgb(4 16 11 / 0.94) 0%, rgb(4 16 11 / 0.58) 46%, transparent 74%);
       }
 
       .chapter-kicker {
@@ -644,9 +508,9 @@
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
     <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=hear-stream" />
     <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css" />
     <noscript>
       <style>
-        #welcome-bumper,
         #nadi-stage {
           display: none;
         }
@@ -678,25 +542,6 @@
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to content</a>
-    <div id="welcome-bumper" aria-hidden="true">
-      <div class="welcome-backdrop"></div>
-      <div class="welcome-atmosphere"></div>
-      <div class="welcome-field"></div>
-      <div class="welcome-title-layer">
-        <p class="welcome-title">
-          <span class="welcome-title-line" aria-hidden="true">
-            <span class="welcome-word-mask"><span class="welcome-word">Your</span></span>
-            <span class="welcome-word-mask"><span class="welcome-word">Gateway</span></span>
-            <span class="welcome-word-mask"><span class="welcome-word">To</span></span>
-          </span>
-          <span class="welcome-title-line" aria-hidden="true">
-            <span class="welcome-word-mask"><span class="welcome-word">Intelligent</span></span>
-            <span class="welcome-word-mask"><span class="welcome-word">Products</span></span>
-          </span>
-        </p>
-      </div>
-    </div>
   <div id="hero-matte" aria-hidden="true"></div>
   <div id="nadi-stage">
       <canvas id="nadi-cluster" aria-hidden="true"></canvas>
@@ -717,17 +562,21 @@
           <div id="hero-copy">
             <div class="doctrine-block">
               <div class="doctrine-copy-stage">
-                <h2 id="doctrine-title">
-                  <span class="hero-title-line"><span>Your Gateway to</span></span>
-                  <span class="hero-title-line"><span>Intelligent Products</span></span>
-                </h2>
+                <h1 id="doctrine-title">
+                  <span class="hero-title-line"><span>Connected</span></span>
+                  <span class="hero-title-line"><span>AI agents made</span></span>
+                  <span class="hero-title-line"><span>for your company.</span></span>
+                </h1>
                 <p id="doctrine-lead">
-                  Explore a growing collection of AI products designed for real-world business needs. Choose what fits your workflow, put it to work, and move faster.
+                  Every agent is designed around your company's process. Nadi connects them into one system.
                 </p>
+                <div class="hero-scope" id="hero-scope" aria-label="Scope of work">
+                  <span class="is-on">Build</span><i></i><span>Scale</span><i></i><span>Govern</span><i></i><span>Optimize</span>
+                </div>
               </div>
               <div class="station-actions">
-                <a class="station-cta" href="#work"><span>See Products</span></a>
-                <a class="station-cta is-primary" href="#contact"><span>Book a Demo</span></a>
+                <a class="station-cta is-primary" href="#work"><span>See the agents</span></a>
+                <a class="station-cta" href="#contact"><span>Book a demo</span></a>
               </div>
             </div>
           </div>
@@ -771,6 +620,142 @@
         </section>
       </div>
     </div>
+
+    <section class="ns-root" id="system" aria-labelledby="system-title">
+      <div class="sys-grid">
+        <div class="sys-col">
+          <div class="sys-head">
+            <h2 class="ns-title" id="system-title">
+              <span class="ns-line"><span>The System Behind</span></span>
+              <span class="ns-line"><span>Every <strong class="ns-em">Agent</strong></span></span>
+            </h2>
+            <p class="sys-support">Every product below is an agent on the same network. This is what the network does for your company.</p>
+          </div>
+          <ol class="sys-list" id="sys-list">
+            <li class="is-on" data-system-state="ecosystem">
+              <span class="n">01</span>
+              <div><h3>Ecosystem <em>One network, many agents.</em></h3><p>Each agent handles one job. Nadi routes conversations and context between them, so they work as one system instead of a stack of tools.</p></div>
+            </li>
+            <li data-system-state="build">
+              <span class="n">02</span>
+              <div><h3>Build <em>Designed from your process.</em></h3><p>No templates. Each agent is built around how your company already works, starting with the process you run most often.</p></div>
+            </li>
+            <li data-system-state="scale">
+              <span class="n">03</span>
+              <div><h3>Scale <em>Add agents, not systems.</em></h3><p>The next agent joins the same network and inherits what is already there. More teams and more load on one system.</p></div>
+            </li>
+            <li data-system-state="govern">
+              <span class="n">04</span>
+              <div><h3>Govern <em>Your rules, enforced.</em></h3><p>You define what each agent may do and when a person has to approve. Every action is logged and traceable.</p></div>
+            </li>
+            <li data-system-state="secure">
+              <span class="n">05</span>
+              <div><h3>Secure <em>Your data stays yours.</em></h3><p>Operational data stays inside your environment. Models can run on-premise, on your own infrastructure, when your policy requires it.</p></div>
+            </li>
+            <li data-system-state="optimize">
+              <span class="n">06</span>
+              <div><h3>Optimize <em>Measured, then tuned.</em></h3><p>Every agent is measured on response time, accuracy, and the work it takes off your team. What performs gets expanded; what lags gets fixed.</p></div>
+            </li>
+            <li data-system-state="managed">
+              <span class="n">07</span>
+              <div><h3>Managed <em>Operated by DOT.</em></h3><p>The system is not handed over at go-live. DOT runs it: monitoring, incidents, model updates, and changes whenever your process changes.</p></div>
+            </li>
+          </ol>
+        </div>
+        <div class="sys-stage">
+          <svg class="bp" id="system-blueprint" viewBox="0 0 640 640" data-state="ecosystem" aria-hidden="true">
+            <defs>
+              <marker id="system-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0 0L8 4L0 8z" fill="#1c855c"></path>
+              </marker>
+            </defs>
+            <g class="state state-secure">
+              <rect x="46" y="46" width="548" height="548" rx="28" fill="none" stroke="#1c855c" stroke-width="1.4" stroke-dasharray="6 7"></rect>
+              <g transform="translate(64 62)">
+                <rect x="0" y="6" width="14" height="11" rx="2" fill="#1c855c"></rect>
+                <path d="M3 6V4a4 4 0 0 1 8 0v2" fill="none" stroke="#1c855c" stroke-width="1.6"></path>
+              </g>
+              <text class="blueprint-label" x="86" y="76">YOUR ENVIRONMENT</text>
+            </g>
+            <g class="net">
+              <path class="branch-1" d="M320 320 C250 270 200 230 156 150"></path>
+              <path class="branch-2" d="M320 320 C380 260 430 230 486 168"></path>
+              <path class="branch-3" d="M320 320 C400 320 460 330 528 326"></path>
+              <path class="branch-4" d="M320 320 C380 390 430 430 472 500"></path>
+              <path class="branch-5" d="M320 320 C270 390 230 430 190 508"></path>
+              <path class="branch-6" d="M320 320 C250 330 180 320 110 330"></path>
+              <path class="twig branch-1" d="M156 150C140 120 130 100 128 76M156 150C130 140 110 138 90 122"></path>
+              <path class="twig branch-2" d="M486 168C500 140 520 128 546 110M486 168C510 170 530 160 556 158"></path>
+              <path class="twig branch-3" d="M528 326C552 310 570 300 596 296M528 326C552 340 566 356 590 372"></path>
+              <path class="twig branch-4" d="M472 500C494 516 506 536 520 560M472 500C492 490 516 492 540 486"></path>
+              <path class="twig branch-5" d="M190 508C172 530 160 546 146 570M190 508C166 512 146 526 120 530"></path>
+              <path class="twig branch-6" d="M110 330C86 316 70 306 44 300M110 330C90 348 74 360 52 380"></path>
+            </g>
+            <g class="state state-build">
+              <g transform="translate(26 196)">
+                <rect width="60" height="20" rx="4" fill="#fff" stroke="#1c855c" stroke-width="1.2"></rect><text class="state-small" x="8" y="14">BRIEF</text>
+                <rect y="30" width="60" height="20" rx="4" fill="#fff" stroke="#1c855c" stroke-width="1.2"></rect><text class="state-small" x="8" y="44">REVIEW</text>
+                <rect y="60" width="60" height="20" rx="4" fill="#fff" stroke="#1c855c" stroke-width="1.2"></rect><text class="state-small" x="8" y="74">PUBLISH</text>
+                <path d="M60 10C96 10 104-20 120-38M60 40C100 40 108-10 121-35M60 70C104 70 112 0 122-33" fill="none" stroke="#1c855c" stroke-width="1.2" marker-end="url(#system-arrow)"></path>
+              </g>
+              <text class="blueprint-label" x="26" y="188">YOUR PROCESS</text>
+            </g>
+            <g class="state state-scale">
+              <path class="next-branch" d="M320 320C320 250 322 200 326 120" fill="none" stroke="#1c855c" stroke-width="1.6" stroke-dasharray="5 6" stroke-dashoffset="220"></path>
+              <circle cx="326" cy="120" r="9" fill="#fff" stroke="#1c855c" stroke-width="1.6" stroke-dasharray="3 3"></circle>
+              <path d="M326 115v10M321 120h10" stroke="#1c855c" stroke-width="1.6" stroke-linecap="round"></path>
+              <text class="blueprint-label" x="342" y="124">NEXT AGENT</text>
+            </g>
+            <g class="state state-govern">
+              <g class="gate" transform="translate(228 232)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g class="gate" transform="translate(410 240)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g class="gate" transform="translate(430 324)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g class="gate" transform="translate(404 408)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g class="gate" transform="translate(246 418)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g class="gate" transform="translate(206 326)"><path d="M0-7L7 0 0 7-7 0z" fill="#fff" stroke="#1c855c" stroke-width="1.5"></path><path d="m-3 0 2 2 4-4" fill="none" stroke="#1c855c" stroke-width="1.5"></path></g>
+              <g transform="translate(404 408)"><rect x="-70" y="16" width="140" height="24" rx="12" fill="#fff" stroke="#1c855c"></rect><text class="blueprint-label" x="0" y="32" text-anchor="middle">NEEDS APPROVAL</text></g>
+            </g>
+            <g class="state state-optimize" fill="#1c855c">
+              <g transform="translate(168 128)"><rect y="8" width="4" height="10" rx="1"></rect><rect x="7" y="4" width="4" height="14" rx="1"></rect><rect x="14" width="4" height="18" rx="1"></rect></g>
+              <g transform="translate(460 132)"><rect y="10" width="4" height="8" rx="1"></rect><rect x="7" y="6" width="4" height="12" rx="1"></rect><rect x="14" y="2" width="4" height="16" rx="1"></rect></g>
+              <g transform="translate(540 300)"><rect y="6" width="4" height="12" rx="1"></rect><rect x="7" y="2" width="4" height="16" rx="1"></rect><rect x="14" width="4" height="18" rx="1"></rect></g>
+              <g transform="translate(486 480)"><rect y="12" width="4" height="6" rx="1"></rect><rect x="7" y="8" width="4" height="10" rx="1"></rect><rect x="14" y="4" width="4" height="14" rx="1"></rect></g>
+              <g transform="translate(150 486)"><rect y="8" width="4" height="10" rx="1"></rect><rect x="7" y="2" width="4" height="16" rx="1"></rect><rect x="14" width="4" height="18" rx="1"></rect></g>
+              <g transform="translate(74 344)"><rect y="10" width="4" height="8" rx="1"></rect><rect x="7" y="4" width="4" height="14" rx="1"></rect><rect x="14" width="4" height="18" rx="1"></rect></g>
+              <text class="blueprint-label" x="320" y="612" text-anchor="middle">RESPONSE · ACCURACY · WORK MOVED</text>
+            </g>
+            <g class="state state-managed">
+              <circle class="managed-ring" cx="320" cy="320" r="44" fill="none" stroke="#1c855c" stroke-width="1.2" stroke-dasharray="4 8"></circle>
+              <path d="M320 364C380 430 470 520 528 556" fill="none" stroke="#1c855c" stroke-width="1.2" stroke-dasharray="2 5"></path>
+              <circle cx="528" cy="556" r="16" fill="#002010"></circle>
+              <text class="dot-label" x="528" y="560" text-anchor="middle">DOT</text>
+              <text class="blueprint-label" x="470" y="596" text-anchor="middle">MONITORED · UPDATED · TUNED</text>
+            </g>
+            <g class="nodes">
+              <g class="node node-1" transform="translate(156 150)"><circle r="8"></circle><text x="-14" y="-14" text-anchor="end">MARKETING &amp; CONTENT</text></g>
+              <g class="node node-2" transform="translate(486 168)"><circle r="8"></circle><text x="14" y="-14">CUSTOMER ENGAGEMENT</text></g>
+              <g class="node node-3" transform="translate(528 326)"><circle r="8"></circle><text x="0" y="28" text-anchor="middle">OPERATIONS</text></g>
+              <g class="node node-4" transform="translate(472 500)"><circle r="8"></circle><text x="14" y="22">FINANCE</text></g>
+              <g class="node node-5" transform="translate(190 508)"><circle r="8"></circle><text x="-14" y="22" text-anchor="end">LEGAL</text></g>
+              <g class="node node-6" transform="translate(110 330)"><circle r="8"></circle><text x="0" y="-16" text-anchor="middle">HR &amp; HIRING</text></g>
+              <g class="core" transform="translate(320 320)"><circle class="halo" r="23"></circle><circle class="body" r="10"></circle><text class="core-label" x="0" y="42" text-anchor="middle">NADI</text></g>
+            </g>
+            <g class="pulses" fill="#1c855c">
+              <circle r="3.2"><animateMotion dur="3.2s" repeatCount="indefinite" path="M320 320C250 270 200 230 156 150"></animateMotion></circle>
+              <circle r="3.2"><animateMotion dur="3.6s" begin="0.6s" repeatCount="indefinite" path="M320 320C380 260 430 230 486 168"></animateMotion></circle>
+              <circle r="3.2"><animateMotion dur="3s" begin="1.3s" repeatCount="indefinite" path="M320 320C400 320 460 330 528 326"></animateMotion></circle>
+              <circle r="3.2"><animateMotion dur="3.4s" begin="1.9s" repeatCount="indefinite" path="M320 320C380 390 430 430 472 500"></animateMotion></circle>
+              <circle r="3.2"><animateMotion dur="3.3s" begin="2.4s" repeatCount="indefinite" path="M320 320C270 390 230 430 190 508"></animateMotion></circle>
+              <circle r="3.2"><animateMotion dur="3.1s" begin="0.9s" repeatCount="indefinite" path="M320 320C250 330 180 320 110 330"></animateMotion></circle>
+            </g>
+          </svg>
+          <div class="sys-cap" id="sys-cap">
+            <span class="ck">01 · ECOSYSTEM</span>
+            <p>Each agent handles one job. Nadi routes conversations and context between them, so they work as one system instead of a stack of tools.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div id="work-root" class="work-pad">
       <section class="chapter" id="work" aria-labelledby="index-title">
@@ -939,7 +924,7 @@
     </div>
     </main>
 
-    <script src="videos/gateway-hero/welcome.js"></script>
+    <script src="videos/gateway-hero/nadi-system.js"></script>
     <script type="module" src="videos/gateway-hero/work.js"></script>
     <script type="module" src="videos/gateway-hero/voice.js?v=cartoon-nod-13"></script>
   </body>
