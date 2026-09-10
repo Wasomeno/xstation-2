@@ -6,10 +6,6 @@ import vm from "node:vm";
 const source = (await readFile(new URL("./voice.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "")
   .replace(/afterWelcome\(bindVoice\);\s*$/, "");
-const flatSource = (await readFile(new URL("./voice-variant-1.js", import.meta.url), "utf8"))
-  .replace("export default function", "function");
-const smoothSource = (await readFile(new URL("./voice-variant-2.js", import.meta.url), "utf8"))
-  .replace("export default function", "function");
 const flush = () => new Promise(setImmediate);
 test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
   const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
@@ -144,15 +140,17 @@ test("energy smoothing attacks faster than release and is frame-rate independent
   }
 });
 
-test("all three variants preserve their visuals, react to audio, and respect reduced motion", () => {
-  const render = (state, reduced = false, loud = false, variant = "2") => {
+test("voice orb preserves face visuals, reacts to audio, and respects reduced motion", () => {
+  const render = (state, reduced = false, loud = false, variant = "3", frameCount = 30, speaking = false, returnToIdle = false) => {
     let pixels, nextFrame, radius, squash;
-    const paths = [], fills = [], arcs = [], rectangles = [];
-    const surface = { dataset: { state, variant } };
+    const eyeSamples = [];
+    const nodSamples = [];
+    const paths = [], fills = [], arcs = [], rectangles = [], translates = [];
+    const surface = { dataset: { state, variant, speaking: String(speaking) } };
     const ctx = {
-      save() {}, restore() {}, translate() {}, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
+      save() {}, restore() {}, translate(x, y) { translates.push([x, y]); }, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
       roundRect(x, y, width, height, corner) { radius = width / 2; rectangles.push({ width, height, corner }); },
-      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; rectangles.length = 0; },
+      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; rectangles.length = 0; translates.length = 0; },
       moveTo(...point) { paths.push(point); }, lineTo(...point) { paths.push(point); },
       closePath() {}, fill() { fills.push(this.fillStyle); },
       rotate(angle) { paths.push(["rotate", angle]); }, setTransform() {}, drawImage() {},
@@ -166,57 +164,158 @@ test("all three variants preserve their visuals, react to audio, and respect red
       matchMedia: () => Object.assign(new EventTarget(), { matches: reduced }),
     });
     const colors = { "--deep-forest": "#083B28", "--signal": "#1C855C", "--sage": "#90B0A0", "--mist": "#C8D8C8" };
+    const faceLayers = () => ["--mist", "--sage", "--deep-forest"].map(name => fills.indexOf(colors[name]));
     const sandbox = vm.createContext({
       window, document, canvas,
       getComputedStyle: () => ({ getPropertyValue: (name) => colors[name] }),
       performance: { now: () => 1000 }, cancelAnimationFrame() {},
       requestAnimationFrame(callback) { assert.equal(reduced, false); nextFrame = callback; return 1; },
     });
-    const wave = vm.runInContext(`${flatSource}\n${smoothSource}\n${source}\ncreateWaveform(canvas);`, sandbox);
+    const wave = vm.runInContext(`${source}\ncreateWaveform(canvas);`, sandbox);
     wave.setAnalyser({
       frequencyBinCount: 128, fftSize: 256,
       getByteTimeDomainData(data) { data.fill(loud ? 148 : 128); },
       getByteFrequencyData(data) { data.fill(loud ? 180 : 0); },
     });
-    for (let i = 1; i <= 30 && nextFrame; i++) nextFrame(1000 + i * 34);
+    for (let i = 1; i <= frameCount && nextFrame; i++) {
+      nextFrame(1000 + i * 34);
+      if (variant === "3") nodSamples.push(translates[0][1] - 44);
+      if (variant === "3" && i >= 180) eyeSamples.push(faceLayers().slice(0, 2).map(layer => ({
+        width: paths[layer * 82 + 1][0], height: paths[layer * 82 + 21][1],
+        position: translates[layer + 1].slice(),
+      })));
+    }
     if (variant === "3") {
+      const layers = state === "idle" ? [0, 1, 2] : faceLayers();
+      const blobs = layers.map(layer => translates[layer + 1]);
+      const eyes = blobs.filter(([, y]) => y < 0);
+      const mouths = blobs.filter(([, y]) => y > 0);
+      if (reduced && ["listening", "thinking"].includes(state)) {
+        const reference = state === "listening"
+          ? [[-0.178061, -0.208187, 0.373516, 0.526891], [0.619170, -0.206809, 0.234552, 0.397226], [-0.094579, 0.678436]]
+          : [[-0.384411, -0.037947, 0.412864, 0.670817], [0.439721, -0.234707, 0.366162, 0.490939], [0.372745, 0.605300]];
+        reference.forEach(([x, y, rx, ry], layer) => {
+          assert.ok(Math.abs(blobs[layer][0] / radius - x) < 0.001, "Match SVG horizontal placement");
+          assert.ok(Math.abs(blobs[layer][1] / radius - y) < 0.001, "Match SVG vertical placement");
+          if (layer === 2) return;
+          for (const [px, py] of paths.slice(layers[layer] * 82 + 1, layers[layer] * 82 + 82)) {
+            assert.ok(Math.abs((px / (radius * rx)) ** 2 + (py / (radius * ry)) ** 2 - 1) < 0.001,
+              "Eyes remain clean ellipses without water-like deformation");
+          }
+        });
+      }
+      if (state === "listening") {
+        assert.equal(eyes.length, 2, "Listening is two eye circles");
+        assert.equal(mouths.length, 1, "Listening is one mouth circle");
+        assert.ok(eyes[0][0] * eyes[1][0] < 0, "Eyes sit on opposite sides");
+      }
       if (state === "thinking") {
-        assert.equal(arcs.length, 0, "Processing is not an ellipse");
+        assert.equal(arcs.length, 0, "The face keeps the existing contour renderer");
         assert.equal(rectangles.length, 1);
-        assert.ok(rectangles[0].width > rectangles[0].height * 1.8);
-        assert.equal(rectangles[0].corner, rectangles[0].height / 2, "Processing has fully rounded ends");
+        assert.ok(Math.abs(rectangles[0].width - rectangles[0].height) < 0.01, "Thinking stays a round face");
+        assert.equal(eyes.length, 2, "Thinking keeps two eyes");
+        assert.ok(eyes[0][0] * eyes[1][0] < 0, "Thinking eyes stay on opposite sides");
+        assert.ok(eyes[0][1] - eyes[1][1] > 3, "Thinking raises one eye in a curious expression");
       } else assert.ok(paths.length > 0, "Variant 3 restores the earlier layered contours");
       assert.equal(fills.length, 3);
+      if (state === "idle") assert.deepEqual(fills, [colors["--deep-forest"], colors["--sage"], colors["--mist"]], "Idle colors stay unchanged");
+      if (["listening", "thinking"].includes(state)) assert.deepEqual(layers.map(layer => fills[layer]), [colors["--mist"], colors["--sage"], colors["--deep-forest"]], "Active eyes swap colors, mouth stays unchanged");
       assert.ok(fills.every((fill) => Object.values(colors).includes(fill)));
-      return { paths: paths.slice(), radius, squash, arcs: arcs.slice() };
-    }
-    assert.ok(pixels?.length, "Render a continuous fluid color field");
-    const flatColors = new Set(["8,59,40", "28,133,92", "144,176,160", "200,216,200"]);
-    if (variant === "1") {
-      for (let i = 0; i < pixels.length; i += 4) {
-        assert.ok(flatColors.has(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`), "Variant 1 preserves solid colors");
+      if (returnToIdle) {
+        const exitFrames = [];
+        surface.dataset.state = "idle";
+        for (let i = 0; i <= 75; i++) {
+          if (i) nextFrame(1000 + frameCount * 34 + i * 16);
+          exitFrames.push({
+            colors: fills.map(hex => [1, 3, 5].map(offset => parseInt(hex.slice(offset, offset + 2), 16))),
+            positions: translates.slice(-3).map(point => point.slice()),
+            rotations: [0, 1, 2].map(layer => paths[layer * 82][1]),
+            head: translates[0][1],
+          });
+        }
+        return exitFrames;
       }
-    } else {
-      const alphas = pixels.filter((_, i) => i % 4 === 3);
-      assert.ok(alphas.every((alpha) => alpha === 255), "Variant 2 restores the filled circular fluid surface");
-      const blendedColors = new Set();
-      for (let i = 0; i < pixels.length; i += 4) blendedColors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
-      assert.ok(blendedColors.size > 4, "Variant 2 restores smooth color transitions");
+      return { paths: paths.slice(), radius, squash, arcs: arcs.slice(), blobs, eyeSamples, nodSamples };
     }
     return pixels;
   };
-  for (const variant of ["1", "2", "3"]) {
-    const idle = render("idle", false, false, variant);
-    const hearing = render("listening", false, false, variant);
-    assert.notDeepEqual(idle, hearing);
-    if (variant === "3") {
-      assert.equal(idle.radius, 24);
-      assert.ok(hearing.radius > 33 && hearing.radius <= 34);
+  const idle = render("idle");
+  const hearing = render("listening");
+  assert.notDeepEqual(idle, hearing);
+  assert.equal(idle.radius, 24);
+  assert.ok(hearing.radius > 33 && hearing.radius <= 34);
+  assert.notDeepEqual(hearing, render("listening", false, true));
+  assert.notDeepEqual(hearing, render("thinking"));
+  assert.notDeepEqual(render("listening", true).blobs, render("thinking", true).blobs,
+    "Reduced motion preserves distinct listening and curious expressions");
+  assert.deepEqual(render("thinking", true, false), render("thinking", true, true));
+  assert.deepEqual(render("listening", true, false), render("listening", true, true));
+  const idleStart = render("idle", false, false, "3", 30);
+  const idleLater = render("idle", false, false, "3", 180);
+  idleStart.blobs.forEach((point, layer) => {
+    assert.ok(Math.hypot(...point.map((value, axis) => value - idleLater.blobs[layer][axis])) > 1,
+      "Idle circle centers orbit instead of spinning at fixed positions");
+  });
+  for (const state of ["connecting", "listening", "thinking"]) {
+    const exit = render(state, false, state === "listening", "3", 214, state === "listening", true);
+    exit.forEach(frame => assert.deepEqual(frame.colors, exit[0].colors,
+      "Each circle retains its solid color for the entire transition; only its geometry changes"));
+    exit.slice(1).forEach((frame, i) => {
+      assert.ok(Math.abs(frame.head - exit[i].head) < 0.6, "An interrupted nod settles without snapping");
+      frame.positions.forEach((point, layer) => {
+        assert.ok(Math.hypot(...point.map((value, axis) => value - exit[i].positions[layer][axis])) < 4,
+          "All state returns move continuously toward the running idle orbit");
+      });
+    });
+    const final = exit.at(-1);
+    final.positions.forEach(([x, y], layer) => {
+      const spin = final.rotations[layer];
+      const offset = 0.3 - layer * 0.25;
+      assert.ok(Math.hypot(x - 24 * (offset * Math.cos(spin) - 0.22 * Math.sin(spin)),
+        y - 24 * (offset * Math.sin(spin) + 0.22 * Math.cos(spin))) < 0.05,
+        "Return rejoins the moving idle orbit at its current angle");
+    });
+  }
+  for (const state of ["listening", "thinking"]) {
+    const quick = render(state, false, false, "3", 13);
+    const reference = render(state, true, false, "3");
+    assert.ok(Math.abs(quick.radius - reference.radius) < 0.3, "State size settles within about 450ms");
+    quick.blobs.forEach((position, i) => position.forEach((value, axis) => {
+      assert.ok(Math.abs(value - reference.blobs[i][axis]) < 0.5, "Face pose settles within about 450ms");
+    }));
+    const { eyeSamples } = render(state, false, false, "3", 900);
+    const fullHeights = state === "listening" ? [0.526891 * 34, 0.397226 * 34] : [0.670817 * 32, 0.490939 * 32];
+    const ratios = eyeSamples.map(eyes => eyes.map((eye, i) => eye.height / fullHeights[i]));
+    let blinks = 0, closed = false;
+    for (const [left, right] of ratios) {
+      const nextClosed = left < 0.3 && right < 0.3;
+      if (nextClosed && !closed) blinks++;
+      closed = nextClosed;
     }
-    assert.notDeepEqual(hearing, render("listening", false, true, variant));
-    assert.notDeepEqual(hearing, render("thinking", false, false, variant));
-    assert.deepEqual(render("thinking", true, false, variant), render("thinking", true, true, variant));
-    assert.deepEqual(render("listening", true, false, variant), render("listening", true, true, variant));
+    assert.ok(blinks >= 1 && blinks <= 3, "Blink rarely over 24 seconds");
+    assert.ok(ratios.some(([left, right]) => left > 0.4 && left < 0.85 && right > 0.4), "Eyes squint between blinks");
+    if (state === "thinking") {
+      assert.ok(ratios.some(([left, right]) => Math.abs(left - right) > 0.06), "Thinking shows subtle curiosity");
+      for (const [left, right] of ratios) {
+        if (Math.max(left, right) > 0.95) assert.ok(Math.min(left, right) > 0.87, "Curious eyes never squint harshly outside a blink");
+      }
+    }
+    for (const eyes of eyeSamples) eyes.forEach((eye, i) => {
+      assert.ok(Math.abs(eye.width - eyeSamples[0][i].width) < 0.001, "Expression changes eye height only");
+      eye.position.forEach((value, axis) => assert.ok(Math.abs(value - eyeSamples[0][i].position[axis]) < 0.001, "Eyes stay in their reference positions"));
+    });
+  }
+  const nods = render("listening", false, true, "3", 900, true).nodSamples;
+  let count = 0;
+  nods.forEach((value, i) => { if (value > 0.1 && !(nods[i - 1] > 0.1)) count++; });
+  assert.ok(count >= 2 && count <= 5, "Sustained speech receives occasional nods, not constant bobbing");
+  assert.ok(Math.max(...nods) <= 2.5, "Nods stay small");
+  for (const [state, reduced, loud, speaking] of [
+    ["listening", false, true, false], ["listening", false, false, true],
+    ["thinking", false, true, true], ["idle", false, true, true], ["listening", true, true, true],
+  ]) {
+    assert.ok(render(state, reduced, loud, "3", 240, speaking).nodSamples.every(value => value === 0),
+      "Only audible, recognized speech while listening can trigger nods; reduced motion stays still");
   }
 });
 
@@ -312,11 +411,14 @@ test("a command finished during startup is submitted once and processing stays p
   feed(0, 3000);
   feed(0.1, 3100);
   socket.message({ type: "ready" });
-  assert.deepEqual(socket.messages.map(message => message.type), ["audio", "audio", "commit"]);
+  assert.ok(!socket.messages.some(message => message.type === "commit"));
+  assert.equal(h.ui.root.dataset.state, "listening");
+  socket.message({ type: "delta", text: "buka CoDev" });
+  assert.equal(socket.messages.at(-1).type, "commit");
   assert.equal(h.ui.root.dataset.state, "thinking");
   feed(0.1, 3200);
   socket.message({ type: "ready" });
-  assert.equal(socket.messages.length, 3);
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
   assert.equal(h.ui.root.dataset.state, "thinking");
   socket.message({ type: "decision", action: "show", section: "codev" });
   feed(0.1, 4000);
@@ -433,7 +535,9 @@ test("protocol keeps transcripts in listening, navigates decisions, and sends PC
   socket.message({ type: "delta", text: "buka proyek" });
   assert.equal(h.ui.root.dataset.state, "listening");
   assert.equal(h.ui.transcript.textContent, "buka proyek");
+  assert.equal(h.ui.root.dataset.speaking, "true", "Recognized speech enables an audio-gated nod");
   socket.message({ type: "final", text: "buka proyek" });
+  assert.equal(h.ui.root.dataset.speaking, "false", "Processing clears the speech signal");
   assert.equal(h.ui.root.dataset.state, "thinking");
   assert.equal(h.ui.transcript.textContent, "");
   socket.message({ type: "decision", action: "show", section: "projects" });
@@ -448,12 +552,38 @@ test("protocol keeps transcripts in listening, navigates decisions, and sends PC
   assert.deepEqual(socket.messages.at(-1), { type: "stop" });
 });
 
+test("empty captions stay hidden and do not enter processing", async () => {
+  const h = browser();
+  const { socket, context } = await h.connect();
+  socket.message({ type: "ready" });
+  socket.message({ type: "speech_started", item_id: "empty" });
+  socket.message({ type: "delta", item_id: "empty", text: "" });
+  socket.message({ type: "delta", item_id: "empty", text: "   " });
+  assert.equal(h.ui.transcript.textContent, "");
+  socket.message({ type: "speech_stopped", item_id: "empty" });
+  socket.message({ type: "final", item_id: "empty", transcript: "" });
+  assert.equal(h.ui.root.dataset.state, "listening", "Empty finals must not process");
+  const frame = (level, now) => {
+    h.sandbox.performance.now = () => now;
+    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
+  };
+  frame(0.1, 1000);
+  for (let now = 1100; now <= 3000; now += 100) frame(0, now);
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 0);
+  assert.equal(h.ui.root.dataset.state, "listening", "Silence without words must not process");
+  socket.message({ type: "delta", item_id: "empty", text: "buka Arkiv" });
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  assert.ok(socket.messages.some(message => message.type === "commit"));
+  h.escape();
+});
+
 test("processing pauses audio streaming and ignores interruptions until the original result", async () => {
   const h = browser();
   const { socket, context } = await h.connect();
   const frame = () => context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) } });
   socket.message({ type: "ready" });
   socket.message({ type: "speech_started", item_id: "first" });
+  socket.message({ type: "delta", item_id: "first", text: "CoDev" });
   frame();
   socket.message({ type: "final", item_id: "first" });
   const sent = socket.messages.length;
@@ -487,6 +617,8 @@ test("successive requests accept their first caption after the audio was submitt
   };
   for (const [item, start] of [["A", 1000], ["B", 5000]]) {
     frame(0.1, start);
+    socket.message({ type: "speech_started", item_id: item });
+    socket.message({ type: "delta", item_id: item, text: "CoDev" });
     for (let now = start + 100; now <= start + 1900; now += 100) frame(0, now);
     assert.equal(h.ui.root.dataset.state, "thinking");
     const sent = socket.messages.length;
@@ -593,6 +725,7 @@ test("softer speech after a loud opening keeps streaming beyond twelve seconds",
   const h = browser();
   const { socket, context, track } = await h.connect();
   socket.message({ type: "ready" });
+  socket.message({ type: "delta", text: "buka CoDev" });
   const step = 4096 / context.sampleRate * 1000;
   const feed = (level, elapsed) => {
     h.sandbox.performance.now = () => 1000 + elapsed;
@@ -674,7 +807,7 @@ test("unmatched commands shake once, successful navigation and idle silence do n
   assert.equal(h.animations.length, 2);
   socket.message({ type: "final" });
   socket.message({ type: "noop" });
-  assert.equal(h.animations.length, 3);
+  assert.equal(h.animations.length, 2, "Empty silence must not shake as a failed command");
   h.escape();
   assert.equal(h.animations.at(-1).cancelled, true);
   const reduced = browser({ reducedMotion: true });
