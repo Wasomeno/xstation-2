@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js";
+import { createCluster } from "./cluster.js?v=surface-13";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -355,7 +355,14 @@ function bindHeroScroll() {
     trigger: "#system",
     start: "top top",
     end: "max",
-    onEnter: () => cluster.setActive(false),
+    onEnter: () => {
+      // The system section is transparent and reads the canvas as its ground.
+      // A fast scroll can reach it before the scrubbed glare finishes, so the
+      // glare is completed and painted before the loop stops; otherwise the
+      // frozen frame is the dark hero sky sitting behind a light section.
+      cluster.setFlashProgress(1);
+      requestAnimationFrame(() => requestAnimationFrame(() => cluster.setActive(false)));
+    },
     onLeaveBack: () => cluster.setActive(true),
   });
 }

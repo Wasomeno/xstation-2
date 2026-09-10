@@ -538,9 +538,7 @@ body.nav-on-dark #site-links a[aria-current] {
 
 .clients-inner {
   display: grid;
-  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
-  align-items: center;
-  gap: clamp(2.5rem, 6vw, 6rem);
+  gap: clamp(2rem, 4vw, 3rem);
   width: var(--shell);
   margin-inline: auto;
 }
@@ -566,6 +564,7 @@ body.nav-on-dark #site-links a[aria-current] {
 
 .clients-title {
   margin: 0;
+  max-width: 22ch;
   font-size: clamp(1.55rem, 2.3vw, 2.15rem);
   font-weight: 400;
   letter-spacing: -0.03em;
@@ -573,53 +572,71 @@ body.nav-on-dark #site-links a[aria-current] {
   color: #f2fbf6;
 }
 
+/* The client marks arrive in every shape and colour — a crest, gold wordmarks,
+   a lime monogram — so each one sits on its own light chip instead of being
+   flattened to a white silhouette that would erase the detailed ones. */
 .client-list {
   list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: clamp(2rem, 5vw, 4.5rem);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: clamp(0.75rem, 1.5vw, 1.1rem);
 }
 
 .client-list li {
   display: grid;
   place-items: center;
   min-width: 0;
-  min-height: 3.5rem;
+  min-height: 5.75rem;
+  padding: 0.95rem 1.25rem;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 0.85rem;
+  background: rgb(247 248 245 / 0.94);
 }
 
 .client-list img {
   display: block;
   width: auto;
-  height: 2.5rem;
+  max-width: 100%;
+  height: 2.35rem;
   object-fit: contain;
   object-position: center;
-  filter: brightness(0) invert(1);
-  opacity: 0.78;
+}
+
+.client-list [data-client="pama"] img {
+  height: 3.6rem;
+}
+
+.client-list [data-client="brawijaya"] img {
+  height: 3.6rem;
+}
+
+.client-list [data-client="meetandmove"] img {
+  height: 2.4rem;
+}
+
+.client-list [data-client="collins"] img,
+.client-list [data-client="hakuhodo"] img {
+  height: 1.95rem;
 }
 
 .client-list [data-client="bina"] img {
-  height: 2.5rem;
+  height: 2rem;
 }
 
 .client-list [data-client="qasir"] img {
-  height: 2.15rem;
+  height: 1.8rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .client-list img {
+  .client-list li {
     transition:
-      opacity 0.45s cubic-bezier(0.32, 0.72, 0, 1),
-      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+      border-color 0.45s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  .client-list:hover img {
-    opacity: 0.42;
-  }
-
-  .client-list li:hover img {
-    opacity: 1;
+  .client-list li:hover {
     transform: translateY(-2px);
+    border-color: rgb(143 226 184 / 0.55);
   }
 }
 
@@ -804,7 +821,20 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .site-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   justify-self: start;
+}
+
+.site-footer-tag {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.18em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .site-footer-brand img {
@@ -966,15 +996,22 @@ body.nav-on-dark #site-links a[aria-current] {
   }
 
   .client-list {
-    gap: 1.75rem 2.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 0.6rem;
   }
 
   .client-list li {
-    min-height: 3rem;
+    min-height: 4.25rem;
+    padding: 0.7rem 0.85rem;
   }
 
   .client-list img {
-    height: 2.2rem;
+    height: 1.75rem;
+  }
+
+  .client-list [data-client="pama"] img,
+  .client-list [data-client="brawijaya"] img {
+    height: 2.5rem;
   }
 
   .inquiry {

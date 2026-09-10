@@ -921,6 +921,10 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       if (on === active) return;
       active = on;
       if (!active) {
+        // Paint one last frame before the loop stops. Without it the canvas
+        // keeps whatever frame the previous tick left, which on a fast scroll
+        // is the dark sky halfway through the glare.
+        draw(performance.now());
         if (!pausedAt) pausedAt = performance.now();
         if (raf) {
           cancelAnimationFrame(raf);
