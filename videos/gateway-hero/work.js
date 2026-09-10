@@ -156,30 +156,86 @@ const VOICE_SECTIONS = new Set([
   "clients",
   "contact",
 ]);
+const voiceHistory = [];
 
-function showSection(id) {
+function currentVoiceSection() {
+  let current = null;
+  let distance = Infinity;
+  for (const id of VOICE_SECTIONS) {
+    if (id === "root") continue;
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const bounds = el.getBoundingClientRect();
+    if (!bounds.height || bounds.top >= window.innerHeight || bounds.top + bounds.height <= 0) continue;
+    const centerDistance = Math.max(bounds.top - window.innerHeight / 2, window.innerHeight / 2 - bounds.top - bounds.height, 0);
+    if (centerDistance < distance) { current = id; distance = centerDistance; }
+  }
+  return current;
+}
+
+function showSection(id, focusContact = false) {
   const sectionId = id === "root" ? "hero" : id;
   if (!VOICE_SECTIONS.has(sectionId)) return false;
   const el = document.getElementById(sectionId);
   if (!el) return false;
+  const target = focusContact ? el.querySelector('.project-cta, .inquiry-email') : el;
+  if (!target) return false;
+  showSection._focus = focusContact ? target : null;
   const duration = reduce ? 0.05 : 1.15;
-  const bounds = el.getBoundingClientRect();
+  const bounds = target.getBoundingClientRect();
   const headerHeight = document.getElementById("site-nav")?.getBoundingClientRect().height || 0;
-  const offset = sectionId === "work" ? -(headerHeight + 16)
+  const offset = focusContact ? (bounds.height - window.innerHeight) / 2
+    : sectionId === "work" ? -(headerHeight + 16)
     : sectionId === "hero" ? 0 : (bounds.height - window.innerHeight) / 2;
+  if (Math.abs(bounds.top + offset) > 1) voiceHistory.push({ top: window.scrollY, focus: document.activeElement });
   if (smoothInstance) {
-    smoothInstance.scrollTo(el, { offset, duration });
+    smoothInstance.scrollTo(target, { offset, duration });
   } else {
     window.scrollTo({ top: window.scrollY + bounds.top + offset, behavior: reduce ? "auto" : "smooth" });
   }
   document.querySelectorAll(".is-voice-shown").forEach((node) => node.classList.remove("is-voice-shown"));
-  el.classList.add("is-voice-shown");
+  target.classList.add("is-voice-shown");
+  if (focusContact) target.focus({ preventScroll: true });
   window.clearTimeout(showSection._timer);
-  showSection._timer = window.setTimeout(() => el.classList.remove("is-voice-shown"), 1800);
+  showSection._timer = window.setTimeout(() => target.classList.remove("is-voice-shown"), 1800);
   return true;
 }
 
+function runPageAction(decision) {
+  if (decision.action === "back") {
+    const previous = voiceHistory.pop();
+    if (!previous) return false;
+    showSection._focus = null;
+    if (smoothInstance) smoothInstance.scrollTo(previous.top, { duration: 1.15 });
+    else window.scrollTo({ top: previous.top, behavior: reduce ? "auto" : "smooth" });
+    previous.focus?.focus({ preventScroll: true });
+    return true;
+  }
+  if (decision.action === "next") {
+    const order = [...VOICE_SECTIONS].filter(id => !["root", "system", "contact"].includes(id));
+    const current = currentVoiceSection();
+    const index = order.indexOf(current === "system" ? "hero" : current);
+    if (index < 0 || index >= order.length - 1) return false;
+    return showSection(order[index + 1]);
+  }
+  const id = decision.section === "current" ? currentVoiceSection() : decision.section;
+  if (!VOICE_SECTIONS.has(id)) return false;
+  if (decision.action === "show" || decision.action === "contact") {
+    return showSection(id, decision.action === "contact" || id === "contact");
+  }
+  const section = document.getElementById(id);
+  if (decision.action === "whatsapp") {
+    const cta = section?.querySelector('.project-cta, .inquiry-email');
+    if (!cta || !cta.href.startsWith("https://wa.me/")) return false;
+    // Same-tab navigation works without a transient click gesture from speech.
+    window.location.assign(cta.href);
+    return true;
+  }
+  return false;
+}
+
 window.xstationShowSection = showSection;
+window.xstationPageAction = runPageAction;
 
 function stopSmooth() {
   smoothInstance?.__nadiDestroy?.();
@@ -622,7 +678,9 @@ function bindEnter() {
       tl.fromTo(
         cta,
         { autoAlpha: 0 },
-        { autoAlpha: 1, duration: 0.45, ease: "power3.out" },
+        { autoAlpha: 1, duration: 0.45, ease: "power3.out", onComplete: () => {
+          if (cta.includes(showSection._focus)) showSection._focus.focus({ preventScroll: true });
+        } },
         ">"
       );
     }

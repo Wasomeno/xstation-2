@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from sections import SECTION_BY_ID, catalog_for_prompt, resolve_section
+from sections import PRODUCT_IDS, SECTION_BY_ID, catalog_for_prompt, resolve_section
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
@@ -14,26 +14,68 @@ UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
 
 SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs NADI. Kamu driver, bukan pemandu.
 
-Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk dibawa ke sebuah Section.
-Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog.
+Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk navigasi atau aksi halaman.
+Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog dan aksi di bawah.
 
 Kalau Command menunjuk tepat satu Section, kembalikan Show.
 "Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
 Kalau tujuan belum pasti, kembalikan Clarification paling banyak dua hipotesis, meskipun hanya satu dugaan.
 Sapaan, ucapan terima kasih, suara tidak jelas, di luar topik, atau "lanjut/yang tadi" tanpa rujukan yang pasti: noop. Jangan menebak tujuan.
 Hero HANYA untuk permintaan eksplisit kembali ke beranda / halaman awal / paling atas. Hero bukan fallback untuk ucapan yang tidak dipahami atau kata "mulai".
-JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / demo / kontak / QR.
+JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / menjadwalkan demo / kontak / QR.
 Hormati penyangkalan: "jangan ke beranda" tidak boleh Show hero.
 "produk apa saja?" adalah Show work. "customer service WhatsApp" adalah Show crm-ai-agent.
 "kelola dokumen" adalah Show arkiv. "buat prototype" adalah Show coframe.
-Untuk konten sosial yang belum membedakan BikinKonten dan Lubna, Clarification; jangan pilih sembarang.
+"Bagaimana cara kerja NADI?" dan "Show me the system behind every agent" adalah Show system.
+Section system menjelaskan jaringan/ekosistem agent NADI: Build, Scale, Govern, Secure, Optimize, dan Managed by DOT; bukan produk atau CTA kontak.
+Kebutuhan ide konten, produksi konten pemasaran rutin, dan membuat banyak konten adalah BikinKonten.
+Lubna khusus asisten marketing lewat chat, dari brief sampai publikasi. Kalau hanya "konten sosial" tanpa kebutuhan yang membedakan, Clarification.
+Otomasi customer operations dan mengelola pelanggan adalah CRM AI Agent, bukan section Clients (logo pelanggan).
+Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
+Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
+
+"back" mengembalikan posisi/state sebelumnya; "next" mengeksplorasi bagian berikutnya sesuai posisi halaman.
+Pemutaran demo/video tidak tersedia. Permintaan menonton/memutar demo adalah noop, jangan arahkan ke contact.
+Permintaan menjadwalkan/book demo adalah contact, bukan memutar video.
+"contact" menampilkan dan memfokuskan CTA: produk yang disebut, "current" untuk "produk ini", atau "contact" untuk kontak umum.
+"whatsapp" HANYA untuk permintaan eksplisit membuka WhatsApp. Membicarakan solusi WhatsApp adalah Show crm-ai-agent.
+Contact/conversion tidak otomatis membuka WhatsApp. Semua URL dan elemen ditentukan halaman, jangan keluarkan URL atau selector.
 
 Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
+{{"action":"back"}}
+{{"action":"next"}}
+{{"action":"contact","section":"<id produk, current, atau contact>"}}
+{{"action":"whatsapp","section":"<id produk, current, atau contact>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
 {{"action":"noop"}}
 
 Tulis teks Clarification dalam Bahasa Indonesia.
+
+Knowledge dari AI Product Showcase - AI Voice Nav (contoh Command → JSON; pahami juga parafrase dan terjemahannya):
+1. "Show me the solutions." → {{"action":"show","section":"work"}}
+2. "Take me to the contact section." → {{"action":"contact","section":"contact"}}
+3. "Go back." → {{"action":"back"}}
+4. "Take me to the top." → {{"action":"show","section":"hero"}}
+5. "Go home." → {{"action":"show","section":"hero"}}
+6. "What else can I explore?" → {{"action":"next"}}
+7. "Show me the CRM AI Agent." → {{"action":"show","section":"crm-ai-agent"}}
+8. "Show me your AI products." → {{"action":"show","section":"work"}}
+9. "I want to see the demo." → {{"action":"noop"}} (demo video dikecualikan)
+10. "Play the demo." → {{"action":"noop"}} (demo video dikecualikan)
+11. "I want to automate my customer operations." → {{"action":"show","section":"crm-ai-agent"}}
+12. "I need something to help manage my customers." → {{"action":"show","section":"crm-ai-agent"}}
+13. "I need help coming up with content ideas." → {{"action":"show","section":"bikinkonten"}}
+14. "I have to create a lot of marketing content every week." → {{"action":"show","section":"bikinkonten"}}
+15. "I need help screening candidates." → {{"action":"show","section":"hireassess"}}
+16. "I want to find the right candidates faster." → {{"action":"show","section":"hireassess"}}
+17. "I want AI to help my developers build faster." → {{"action":"show","section":"codev"}}
+18. "I want to reduce the time it takes to build features on my project development" → {{"action":"show","section":"codev"}}
+19. "I want to make our financial processes more efficient." → {{"action":"show","section":"cofinance"}}
+20. "I need help keeping track of our financial data." → {{"action":"show","section":"cofinance"}}
+21. "I want to talk to your team." → {{"action":"contact","section":"contact"}}
+22. "How can I get in touch?" → {{"action":"contact","section":"contact"}}
+23. "I'm interested in Product BikinKonten. I want discuss with the team" → {{"action":"contact","section":"bikinkonten"}}
 
 Sections:
 {catalog_for_prompt()}
@@ -125,8 +167,27 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
         hypotheses = []
 
     guessed = _unique_sections(hypotheses)
-    section = resolve_section(payload.get("section"))
+    raw_section = payload.get("section")
+    section = resolve_section(raw_section) if isinstance(raw_section, str) else None
     text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
+
+    if action in {"back", "next", "contact", "whatsapp"}:
+        blob = " ".join((transcript or "").lower().replace("’", "'").split())
+        patterns = {
+            "back": r"\b(back|previous|kembali|balik|sebelumnya)\b",
+            "next": r"\b(next|what else|anything else|lanjut|berikutnya|selanjutnya|lainnya|apa lagi)\b",
+            "whatsapp": r"\b(open|launch|buka|bukakan)\b.*\b(whatsapp|wa)\b",
+        }
+        requested = mentions_contact(blob) if action == "contact" else re.search(patterns[action], blob)
+        if not requested or re.search(r"\b(jangan|bukan|tidak|don't|do not|not)\b", blob):
+            return _clarify([], UNCLEAR_ASK)
+        if action in {"back", "next"}:
+            return _clarify(guessed, None) if guessed or raw_section else {"action": action}
+        target = section or ("current" if raw_section == "current" else None)
+        allowed = PRODUCT_IDS | {"current", "contact"}
+        if target not in allowed or (guessed and guessed != [target]):
+            return _clarify(guessed, None)
+        return {"action": action, "section": target}
 
     if action == "show" or action == "scroll":
         if section and (not guessed or guessed == [section]):

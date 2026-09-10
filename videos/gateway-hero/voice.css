@@ -99,21 +99,6 @@
   transform: scale(0.96);
 }
 
-.voice-stop {
-  position: absolute;
-  color: var(--paper);
-  pointer-events: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  background: currentColor;
-  opacity: 0;
-}
-
-#voice-surface:is([data-state="connecting"], [data-state="listening"], [data-state="thinking"]) .voice-orb:is(:hover, :focus-visible) .voice-stop {
-  opacity: 1;
-}
-
 .is-voice-shown {
   box-shadow: inset 0 0 0 2px var(--signal);
 }

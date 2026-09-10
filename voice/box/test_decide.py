@@ -22,13 +22,23 @@ class ParseModelJsonTests(unittest.TestCase):
 class DecideTests(unittest.TestCase):
     def test_catalog_destinations_exist_in_the_landing_page(self):
         ids = set()
+        sections = set()
 
         class Page(HTMLParser):
             def handle_starttag(self, tag, attrs):
                 ids.add(dict(attrs).get("id"))
+                if tag == "section" and dict(attrs).get("id"):
+                    sections.add(dict(attrs)["id"])
 
         Page().feed((Path(__file__).resolve().parents[2] / "index.html").read_text())
         self.assertFalse(set(SECTION_IDS) - ids)
+        self.assertEqual(set(SECTION_IDS), sections)
+
+    def test_system_section_is_navigable_but_not_a_product_contact(self):
+        for alias in ("system", "The System Behind Every Agent", "ekosistem NADI"):
+            self.assertEqual(decide({"action": "show", "section": alias}),
+                             {"action": "show", "section": "system"})
+        self.assertEqual(decide({"action": "contact", "section": "system"}, "hubungi tim")["action"], "clarify")
 
     def test_removed_poc_actions_are_rejected(self):
         for target in ("bikinkonten-demo", "talk-to-us"):
@@ -122,6 +132,44 @@ class DecideTests(unittest.TestCase):
     def test_contact_show_when_asked_is_allowed(self):
         result = decide({"action": "show", "section": "contact"}, transcript="mau book demo")
         self.assertEqual(result, {"action": "show", "section": "contact"})
+
+    def test_showcase_actions_are_validated(self):
+        for transcript, payload in (
+            ("Go back.", {"action": "back"}),
+            ("What else can I explore?", {"action": "next"}),
+            ("I want to talk to your team.", {"action": "contact", "section": "contact"}),
+            ("How can I get in touch?", {"action": "contact", "section": "contact"}),
+            ("Saya ingin berbicara dengan tim Anda", {"action": "contact", "section": "contact"}),
+            ("Bagaimana cara menghubungi tim kalian?", {"action": "contact", "section": "contact"}),
+            ("Can I schedule a demo?", {"action": "contact", "section": "contact"}),
+            ("Jadwalkan demo BikinKonten", {"action": "contact", "section": "bikinkonten"}),
+            ("I'm interested in Product BikinKonten. I want discuss with the team", {"action": "contact", "section": "bikinkonten"}),
+            ("Buka WhatsApp BikinKonten", {"action": "whatsapp", "section": "bikinkonten"}),
+        ):
+            with self.subTest(transcript=transcript):
+                self.assertEqual(decide(payload, transcript), payload)
+        self.assertEqual(decide({"action": "show", "section": "contact"}, "How can I get in touch?"),
+                         {"action": "show", "section": "contact"})
+
+    def test_showcase_actions_do_not_guess_or_accept_arbitrary_targets(self):
+        for transcript, payload in (
+            ("hello", {"action": "back"}),
+            ("thank you", {"action": "next"}),
+            ("CRM AI Agent", {"action": "contact", "section": "crm-ai-agent"}),
+            ("Play the demo", {"action": "demo", "section": "pricing"}),
+            ("Play the demo", {"action": "demo", "section": "hero"}),
+            ("Play the demo", {"action": "demo", "section": "current"}),
+            ("Play the BikinKonten demo", {"action": "demo", "section": "bikinkonten"}),
+            ("Play the demo", {"action": "demo", "section": ["bikinkonten"]}),
+            ("Talk to us", {"action": "contact", "section": "clients"}),
+            ("Don't play the demo", {"action": "demo", "section": "bikinkonten"}),
+            ("Jangan kembali", {"action": "back"}),
+            ("I need WhatsApp customer service", {"action": "whatsapp", "section": "crm-ai-agent"}),
+            ("Buka WhatsApp", {"action": "whatsapp", "section": "https://evil.test"}),
+            ("Play the demo", {"action": "demo", "section": "arkiv", "hypotheses": ["bikinkonten"]}),
+        ):
+            with self.subTest(transcript=transcript):
+                self.assertEqual(decide(payload, transcript)["action"], "clarify")
 
     def test_default_clarify_is_indonesian(self):
         result = decide({"action": "clarify", "hypotheses": ["HireAssess", "Arkiv"]})

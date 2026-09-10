@@ -14,7 +14,8 @@ class Section:
 
 SECTIONS: tuple[Section, ...] = (
     Section("hero", "Hero", ("home", "top", "start", "beginning", "gateway", "root", "beranda", "halaman awal")),
-    Section("work", "Products", ("products", "explore", "catalog", "index", "what you can do", "produk", "daftar produk")),
+    Section("system", "The System Behind Every Agent", ("the system behind", "NADI system", "how NADI works", "ecosystem", "ekosistem NADI", "sistem NADI", "cara kerja NADI", "arsitektur NADI")),
+    Section("work", "Products", ("products", "solutions", "AI products", "explore", "catalog", "index", "what you can do", "produk", "solusi", "daftar produk")),
     Section("bikinkonten", "BikinKonten", ("bikin konten", "content", "marketing", "social", "workspace konten gambar dan video")),
     Section("lubna", "Lubna", ("brand", "social content", "asisten pemasaran lewat chat", "brief sampai publikasi konten")),
     Section("crm-ai-agent", "CRM AI Agent", ("crm", "whatsapp", "customer agent", "ai agent", "layanan pelanggan", "customer service")),
@@ -24,11 +25,12 @@ SECTIONS: tuple[Section, ...] = (
     Section("coframe", "CoFrame", ("prototype", "prototyping", "wireframe", "prototipe")),
     Section("cofinance", "CoFinance", ("finance", "cashflow", "invoice", "keuangan", "arus kas")),
     Section("clients", "Clients", ("trusted by", "logos", "customers", "klien")),
-    Section("contact", "Contact", ("demo", "book", "talk", "qr", "email", "hubungi", "kontak")),
+    Section("contact", "Contact", ("book", "talk", "get in touch", "discuss", "reach out", "schedule a demo", "schedule demo", "qr", "email", "hubungi", "menghubungi", "kontak", "diskusi", "bicara", "berbicara", "jadwalkan demo", "menjadwalkan demo")),
 )
 
 SECTION_IDS = tuple(section.id for section in SECTIONS)
 SECTION_BY_ID = {section.id: section for section in SECTIONS}
+PRODUCT_IDS = frozenset(SECTION_IDS) - {"hero", "system", "work", "clients", "contact"}
 
 _ALIAS_TO_ID = {}
 for section in SECTIONS:

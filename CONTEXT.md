@@ -37,8 +37,8 @@ Scrolling a Section into view along the site's existing smooth scroll, then a sh
 _Avoid_: jump, open, navigate, hash
 
 **Page Action**:
-A Show. Contact is a Section (the QR) only when the Visitor asked for it. Foreign-language clips do not Show. No other hands in this experience.
-_Avoid_: tool call, control, navigation, click, fill, mailto, answer
+A Show, a return to the previous voice navigation position, exploration of the next Section, or focus on a Contact CTA. Contact requests focus the named/current product's CTA or the general Contact Section; opening WhatsApp requires an explicit request and never sends a message. Video demo commands are excluded. All actions use the page's catalog and existing elements.
+_Avoid_: tool call, generic browser control, fill, mailto, answer
 
 **Clarification**:
 What the Station Agent asks when a Command has zero or several Hypotheses, or when the clip is a foreign language. It names the Hypotheses or asks the Visitor to repeat in Bahasa Indonesia. No Page Action that turn. The Session stays open.

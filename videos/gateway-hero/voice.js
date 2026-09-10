@@ -298,7 +298,6 @@ function createSurface() {
     </div>
     <button class="voice-orb" type="button" aria-pressed="false" aria-label="Mulai mendengarkan">
       <canvas class="voice-wave" width="88" height="88" aria-hidden="true"></canvas>
-      <span class="voice-stop" aria-hidden="true"></span>
     </button>
   `;
   document.body.append(root);
@@ -402,8 +401,8 @@ function bindVoice() {
   };
 
   const applyDecision = (decision) => {
-    let navigated = false;
-    if (decision?.action === "show" && typeof decision.section === "string" && decision.section) {
+    let navigated = window.xstationPageAction?.(decision) === true;
+    if (!window.xstationPageAction && decision?.action === "show" && typeof decision.section === "string" && decision.section) {
       navigated = window.xstationShowSection?.(decision.section) === true;
     }
     if (navigated) {

@@ -902,3 +902,58 @@ test("voice navigation starts at the project list and centers individual content
     }
   }
 });
+
+test("voice showcase actions use the visible product, focus its CTA, and restore navigation", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
+  const h = browser();
+  let focused, opened;
+  const ids = ['hero', 'work', 'bikinkonten', 'lubna', 'crm-ai-agent', 'hireassess', 'arkiv', 'codev', 'coframe', 'cofinance', 'clients', 'contact'];
+  const elements = Object.fromEntries(ids.map((id, index) => [id, {
+    id, classList: { add() {}, remove() {} },
+    getBoundingClientRect: () => ({ top: index * 800 - h.sandbox.window.scrollY, bottom: (index + 1) * 800 - h.sandbox.window.scrollY, height: 800 }),
+    querySelector(selector) {
+      if (selector.includes('cta') || selector.includes('inquiry')) return {
+        href: `https://wa.me/123?text=${id}`, focus() { focused = id; }, classList: { add() {}, remove() {} },
+        getBoundingClientRect: () => ({ top: index * 800 + 600 - h.sandbox.window.scrollY, height: 44 }),
+      };
+      return null;
+    },
+  }]));
+  Object.assign(h.sandbox.window, { innerHeight: 800, scrollY: 0, clearTimeout() {}, setTimeout() {},
+    scrollTo({ top }) { this.scrollY = top; }, location: { assign(href) { opened = href; } },
+  });
+  Object.assign(h.sandbox.document, {
+    getElementById: id => elements[id],
+    querySelectorAll: () => [],
+  });
+  Object.assign(h.sandbox, { reduce: true, smoothInstance: null });
+  vm.runInContext(`${navigation}\nwindow.xstationShowSection = showSection; window.xstationPageAction = runPageAction;`, h.sandbox);
+  const { socket } = await h.connect();
+  socket.message({ type: 'ready' });
+  const action = payload => socket.message({ type: 'decision', ...payload });
+  action({ action: 'show', section: 'crm-ai-agent' });
+  assert.equal(h.sandbox.window.scrollY, 3200);
+  action({ action: 'back' });
+  assert.equal(h.sandbox.window.scrollY, 0);
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, 784);
+  h.sandbox.window.scrollY = 1600; // A manual scroll changes the contextual product.
+  action({ action: 'contact', section: 'current' });
+  assert.equal(focused, 'bikinkonten');
+  assert.equal(opened, undefined, 'Conversion focuses the CTA without opening WhatsApp');
+  action({ action: 'contact', section: 'contact' });
+  assert.equal(focused, 'contact');
+  const before = h.sandbox.window.scrollY;
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, before, 'Exploration must not wrap around from the footer');
+  assert.equal(vm.runInContext('runPageAction({action:"demo",section:"bikinkonten"})', h.sandbox), false);
+  action({ action: 'whatsapp', section: 'bikinkonten' });
+  assert.equal(opened, 'https://wa.me/123?text=bikinkonten');
+  assert.equal(vm.runInContext('runPageAction({action:"show",section:"unknown"})', h.sandbox), false);
+  elements.bikinkonten.getBoundingClientRect = () => ({ top: -1100, height: 1600 });
+  elements.lubna.getBoundingClientRect = () => ({ top: 500, height: 400 });
+  h.sandbox.window.scrollY = 2700;
+  assert.equal(vm.runInContext('currentVoiceSection()', h.sandbox), 'bikinkonten', 'The centered CTA still belongs to its tall mobile section');
+  h.escape();
+});
