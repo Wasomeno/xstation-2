@@ -37,7 +37,7 @@ Scrolling a Section into view along the site's existing smooth scroll, then a sh
 _Avoid_: jump, open, navigate, hash
 
 **Page Action**:
-A Show, a return to the previous voice navigation position, exploration of the next Section, or focus on a Contact CTA. Contact requests focus the named/current product's CTA or the general Contact Section; opening WhatsApp requires an explicit request and never sends a message. Video demo commands are excluded. All actions use the page's catalog and existing elements.
+A Show, back/next through the in-memory action log at its active index, exploration of the next Section, or focus on a Contact CTA. New actions replace forward history after going back. Contact requests focus the named/current product's CTA or the general Contact Section; opening WhatsApp requires an explicit request and never sends a message. Video demo commands are excluded. All actions use the page's catalog and existing elements.
 _Avoid_: tool call, generic browser control, fill, mailto, answer
 
 **Clarification**:

@@ -136,7 +136,9 @@ class DecideTests(unittest.TestCase):
     def test_showcase_actions_are_validated(self):
         for transcript, payload in (
             ("Go back.", {"action": "back"}),
-            ("What else can I explore?", {"action": "next"}),
+            ("Go next.", {"action": "next"}),
+            ("Go forward.", {"action": "next"}),
+            ("What else can I explore?", {"action": "explore"}),
             ("I want to talk to your team.", {"action": "contact", "section": "contact"}),
             ("How can I get in touch?", {"action": "contact", "section": "contact"}),
             ("Saya ingin berbicara dengan tim Anda", {"action": "contact", "section": "contact"}),

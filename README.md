@@ -31,7 +31,9 @@ npm run voice      # box on :4175
 
 Point the live site at a tunneled box with `?box=https://your-tunnel`.
 
-The voice prompt includes the navigation and contact knowledge from **AI Product Showcase - AI Voice Nav**: product needs map to the relevant section, "go back" restores the previous voice navigation position, and "what else can I explore?" advances through the page. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing its knowledge in `voice/box/decide.py`.
+The voice prompt includes the navigation and contact knowledge from **AI Product Showcase - AI Voice Nav**: product needs map to the relevant section, "go back" and "go next" traverse action history, and "what else can I explore?" advances through the page. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing its knowledge in `voice/box/decide.py`.
+
+`window.voiceActionLog` holds `{ entries, index }` in memory: entry 0 is the initial position, followed by successful actions and their destinations/scroll positions. Back/next move the index without appending entries; a new action after going back replaces the forward history. Replaying a WhatsApp entry restores its page position without reopening the external link. Reloading the page clears the log.
 
 ## Deploy on one domain
 

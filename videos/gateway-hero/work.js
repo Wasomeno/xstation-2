@@ -156,7 +156,17 @@ const VOICE_SECTIONS = new Set([
   "clients",
   "contact",
 ]);
-const voiceHistory = [];
+const voiceActionLog = { entries: [], index: -1 };
+
+function recordVoiceAction(entry) {
+  if (!voiceActionLog.entries.length) {
+    voiceActionLog.entries.push({ action: "position", top: window.scrollY, focus: document.activeElement });
+    voiceActionLog.index = 0;
+  }
+  voiceActionLog.entries.splice(voiceActionLog.index + 1);
+  voiceActionLog.entries.push(entry);
+  voiceActionLog.index = voiceActionLog.entries.length - 1;
+}
 
 function currentVoiceSection() {
   let current = null;
@@ -173,7 +183,7 @@ function currentVoiceSection() {
   return current;
 }
 
-function showSection(id, focusContact = false) {
+function showSection(id, focusContact = false, record = true) {
   const sectionId = id === "root" ? "hero" : id;
   if (!VOICE_SECTIONS.has(sectionId)) return false;
   const el = document.getElementById(sectionId);
@@ -187,7 +197,7 @@ function showSection(id, focusContact = false) {
   const offset = focusContact ? (bounds.height - window.innerHeight) / 2
     : sectionId === "work" ? -(headerHeight + 16)
     : sectionId === "hero" ? 0 : (bounds.height - window.innerHeight) / 2;
-  if (Math.abs(bounds.top + offset) > 1) voiceHistory.push({ top: window.scrollY, focus: document.activeElement });
+  if (record) recordVoiceAction({ action: focusContact ? "contact" : "show", section: sectionId, top: window.scrollY + bounds.top + offset });
   if (smoothInstance) {
     smoothInstance.scrollTo(target, { offset, duration });
   } else {
@@ -202,16 +212,22 @@ function showSection(id, focusContact = false) {
 }
 
 function runPageAction(decision) {
-  if (decision.action === "back") {
-    const previous = voiceHistory.pop();
-    if (!previous) return false;
+  if (decision.action === "back" || decision.action === "next") {
+    const index = voiceActionLog.index + (decision.action === "back" ? -1 : 1);
+    const entry = voiceActionLog.entries[index];
+    if (!entry) return false;
     showSection._focus = null;
-    if (smoothInstance) smoothInstance.scrollTo(previous.top, { duration: 1.15 });
-    else window.scrollTo({ top: previous.top, behavior: reduce ? "auto" : "smooth" });
-    previous.focus?.focus({ preventScroll: true });
+    if (entry.action === "show" || entry.action === "contact") {
+      if (!showSection(entry.section, entry.action === "contact", false)) return false;
+    } else {
+      if (smoothInstance) smoothInstance.scrollTo(entry.top, { duration: reduce ? 0.05 : 1.15 });
+      else window.scrollTo({ top: entry.top, behavior: reduce ? "auto" : "smooth" });
+      entry.focus?.focus({ preventScroll: true });
+    }
+    voiceActionLog.index = index;
     return true;
   }
-  if (decision.action === "next") {
+  if (decision.action === "explore") {
     const order = [...VOICE_SECTIONS].filter(id => !["root", "system", "contact"].includes(id));
     const current = currentVoiceSection();
     const index = order.indexOf(current === "system" ? "hero" : current);
@@ -227,6 +243,7 @@ function runPageAction(decision) {
   if (decision.action === "whatsapp") {
     const cta = section?.querySelector('.project-cta, .inquiry-email');
     if (!cta || !cta.href.startsWith("https://wa.me/")) return false;
+    recordVoiceAction({ action: "whatsapp", section: id, top: window.scrollY, focus: document.activeElement });
     // Same-tab navigation works without a transient click gesture from speech.
     window.location.assign(cta.href);
     return true;
@@ -236,6 +253,7 @@ function runPageAction(decision) {
 
 window.xstationShowSection = showSection;
 window.xstationPageAction = runPageAction;
+window.voiceActionLog = voiceActionLog;
 
 function stopSmooth() {
   smoothInstance?.__nadiDestroy?.();

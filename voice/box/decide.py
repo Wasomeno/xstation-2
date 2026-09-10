@@ -34,7 +34,8 @@ Otomasi customer operations dan mengelola pelanggan adalah CRM AI Agent, bukan s
 Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
 Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
 
-"back" mengembalikan posisi/state sebelumnya; "next" mengeksplorasi bagian berikutnya sesuai posisi halaman.
+"back"/"go back" mundur satu entri action log; "next"/"go next"/"go forward" maju satu entri action log. Browser menyimpan indeksnya, jangan menebak section.
+"explore"/"What else can I explore?" mengeksplorasi section berikutnya sesuai posisi halaman, bukan maju dalam riwayat.
 Pemutaran demo/video tidak tersedia. Permintaan menonton/memutar demo adalah noop, jangan arahkan ke contact.
 Permintaan menjadwalkan/book demo adalah contact, bukan memutar video.
 "contact" menampilkan dan memfokuskan CTA: produk yang disebut, "current" untuk "produk ini", atau "contact" untuk kontak umum.
@@ -45,6 +46,7 @@ Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
 {{"action":"back"}}
 {{"action":"next"}}
+{{"action":"explore"}}
 {{"action":"contact","section":"<id produk, current, atau contact>"}}
 {{"action":"whatsapp","section":"<id produk, current, atau contact>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
@@ -58,7 +60,7 @@ Knowledge dari AI Product Showcase - AI Voice Nav (contoh Command → JSON; paha
 3. "Go back." → {{"action":"back"}}
 4. "Take me to the top." → {{"action":"show","section":"hero"}}
 5. "Go home." → {{"action":"show","section":"hero"}}
-6. "What else can I explore?" → {{"action":"next"}}
+6. "What else can I explore?" → {{"action":"explore"}}
 7. "Show me the CRM AI Agent." → {{"action":"show","section":"crm-ai-agent"}}
 8. "Show me your AI products." → {{"action":"show","section":"work"}}
 9. "I want to see the demo." → {{"action":"noop"}} (demo video dikecualikan)
@@ -171,17 +173,18 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
     section = resolve_section(raw_section) if isinstance(raw_section, str) else None
     text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
 
-    if action in {"back", "next", "contact", "whatsapp"}:
+    if action in {"back", "next", "explore", "contact", "whatsapp"}:
         blob = " ".join((transcript or "").lower().replace("’", "'").split())
         patterns = {
             "back": r"\b(back|previous|kembali|balik|sebelumnya)\b",
-            "next": r"\b(next|what else|anything else|lanjut|berikutnya|selanjutnya|lainnya|apa lagi)\b",
+            "next": r"\b(next|forward|maju|lanjut|berikutnya|selanjutnya)\b",
+            "explore": r"\b(explore|what else|anything else|jelajah|eksplorasi|lainnya|apa lagi|section berikutnya|bagian berikutnya)\b",
             "whatsapp": r"\b(open|launch|buka|bukakan)\b.*\b(whatsapp|wa)\b",
         }
         requested = mentions_contact(blob) if action == "contact" else re.search(patterns[action], blob)
         if not requested or re.search(r"\b(jangan|bukan|tidak|don't|do not|not)\b", blob):
             return _clarify([], UNCLEAR_ASK)
-        if action in {"back", "next"}:
+        if action in {"back", "next", "explore"}:
             return _clarify(guessed, None) if guessed or raw_section else {"action": action}
         target = section or ("current" if raw_section == "current" else None)
         allowed = PRODUCT_IDS | {"current", "contact"}
