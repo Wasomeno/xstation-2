@@ -135,7 +135,7 @@ function createWaveform(canvas) {
 
   const draw = (now = performance.now()) => {
     raf = 0;
-    if (document.hidden) return;
+    if (document.hidden || (root.dataset.shaking === "true" && !motion.matches)) return;
     const state = root.dataset.state;
     const failed = state === "deaf" || state === "blocked";
     const listening = state === "listening";
@@ -220,7 +220,7 @@ function createWaveform(canvas) {
         // Listening focuses together; thinking gives a soft, curious eye gesture.
         const squintPhase = expressionTime % (6 - curiosity);
         const squint = alive ? Math.exp(-(((squintPhase - 2 - curiosity * role * 1.7) / 0.75) ** 2)) : 0;
-        to.ry *= blink * (1 - squint * (0.18 - curiosity * (role === 0 ? 0.08 : 0.12)) - energy * 0.07);
+        to.ry *= blink * (1 - squint * (0.18 - curiosity * (role === 0 ? 0.08 : 0.12)));
       } else to.ry *= 1 + energy * 0.16;
       const turn = Math.PI * 2;
       let delta = ((to.spin - from.spin) % turn + turn) % turn;
@@ -231,6 +231,7 @@ function createWaveform(canvas) {
       feature.ry = from.ry + (to.ry - from.ry) * morph;
       feature.spin = from.spin + delta * morph;
       ctx.save();
+      ctx.globalAlpha = role === 2 ? 1 - morph : 1;
       ctx.translate(feature.x * radius, feature.y * radius);
       ctx.rotate(feature.spin);
       ctx.beginPath();
@@ -322,6 +323,11 @@ function bindVoice() {
   let audioContext = null;
   let processor = null;
   let feedbackAnimation = null;
+  const cancelFeedback = () => {
+    feedbackAnimation?.cancel();
+    feedbackAnimation = null;
+    ui.root.dataset.shaking = "false";
+  };
   const setCopy = (status, transcript = "", state = "idle") => {
     ui.status.textContent = status || "";
     ui.transcript.textContent = state === "listening" && typeof transcript === "string" ? transcript.trim() : "";
@@ -339,13 +345,22 @@ function bindVoice() {
   };
 
   const showNoAction = () => {
+    cancelFeedback();
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ui.root.dataset.shaking = String(!reduced);
     setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening");
-    feedbackAnimation?.cancel();
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reduced) return;
     feedbackAnimation = ui.button.animate(
       [0, -5, 5, -3, 3, 0].map(x => ({ transform: `translateX(${x}px)` })),
       { duration: 360, easing: "ease-in-out" },
     );
+    const animation = feedbackAnimation;
+    animation.onfinish = () => {
+      if (feedbackAnimation !== animation) return;
+      feedbackAnimation = null;
+      ui.root.dataset.shaking = "false";
+      ui.wave.refresh();
+    };
   };
 
   const teardownAudio = () => {
@@ -379,7 +394,7 @@ function bindVoice() {
   };
 
   const endSession = (state = "idle", status = COPY[state]) => {
-    feedbackAnimation?.cancel();
+    cancelFeedback();
     session = false;
     generation += 1;
     teardownAudio();
@@ -392,13 +407,18 @@ function bindVoice() {
       navigated = window.xstationShowSection?.(decision.section) === true;
     }
     if (navigated) {
-      feedbackAnimation?.cancel();
+      cancelFeedback();
       showHearing();
     } else showNoAction();
   };
 
-  const startCapture = (isCurrent, isReady, onPause, turn) => {
+  const startCapture = (isCurrent, isReady, onPause) => {
     const source = audioContext.createMediaStreamSource(stream);
+    const windFilter = audioContext.createBiquadFilter();
+    windFilter.type = "highpass";
+    // Reduce wind rumble before transcription, pause detection, and the visual meter.
+    windFilter.frequency.value = 150;
+    windFilter.Q.value = Math.SQRT1_2;
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
     analyser.smoothingTimeConstant = 0.62;
@@ -416,11 +436,7 @@ function bindVoice() {
       else pending.push(data);
     };
     const commitTurn = () => {
-      if (!turn.captioned) {
-        turn.held = true;
-        return;
-      }
-      turn.held = false;
+      // Manual transcription needs committed audio before it can return captions.
       send({ type: "commit" });
       if (isReady()) onPause();
       else pendingCommit = true;
@@ -439,8 +455,9 @@ function bindVoice() {
       const action = pause.update(input, performance.now());
       if (action === "commit") commitTurn();
     };
-    source.connect(analyser);
-    source.connect(processor);
+    source.connect(windFilter);
+    windFilter.connect(analyser);
+    windFilter.connect(processor);
     processor.connect(mute);
     mute.connect(audioContext.destination);
     return {
@@ -451,11 +468,9 @@ function bindVoice() {
         bufferedSamples = 0;
         if (pendingCommit) {
           pendingCommit = false;
-          if (turn.captioned) onPause();
-          else turn.held = true;
+          onPause();
         }
       },
-      release() { commitTurn(); },
     };
   };
 
@@ -476,7 +491,7 @@ function bindVoice() {
     let submittedItem = null;
     const ignoredItems = new Set();
     let pause = null;
-    const turn = { captioned: false, held: false };
+    const turn = { captioned: false };
     const noteCaption = (value) => {
       const text = typeof value === "string" ? value.trim() : "";
       if (text) turn.captioned = true;
@@ -484,7 +499,6 @@ function bindVoice() {
     };
     const clearTurn = () => {
       turn.captioned = false;
-      turn.held = false;
     };
     const isReady = () => isCurrent() && backendReady && captureReady && socket?.readyState === 1;
     const listenWhenReady = () => {
@@ -519,7 +533,7 @@ function bindVoice() {
         pause = startCapture(isCurrent, isReady, () => {
           submittedItem = currentItem;
           setCopy(COPY.thinking, "", "thinking");
-        }, turn);
+        });
         captureReady = true;
         listenWhenReady();
       }).catch(fail);
@@ -575,7 +589,7 @@ function bindVoice() {
           return;
         }
         if (payload.type === "speech_started") {
-          feedbackAnimation?.cancel();
+          cancelFeedback();
           currentItem = payload.item_id || null;
           submittedItem = null;
           clearTurn();
@@ -597,7 +611,6 @@ function bindVoice() {
           pause?.transcript(performance.now());
           showHearing(text);
           ui.root.dataset.speaking = "true";
-          if (turn.held) pause?.release();
         }
         else if (payload.type === "final" || payload.type === "speech_stopped") {
           ui.root.dataset.speaking = "false";

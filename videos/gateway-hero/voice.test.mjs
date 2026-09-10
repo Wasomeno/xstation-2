@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = (await readFile(new URL("./voice.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "")
-  .replace(/afterWelcome\(bindVoice\);\s*$/, "");
+  .replace(/bindVoice\(\);\s*$/, "");
 const flush = () => new Promise(setImmediate);
 test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
   const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
@@ -62,7 +62,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     open() { this.readyState = 1; emit(this, "open"); }
     message(data) { emit(this, "message", { data: JSON.stringify(data) }); }
   }
-  const node = () => ({ connect() {}, disconnect() { this.disconnected = true; } });
+  const node = () => ({ connections: [], connect(target) { this.connections.push(target); }, disconnect() { this.disconnected = true; } });
   class Audio {
     state = "suspended";
     sampleRate = 24000;
@@ -70,7 +70,8 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     constructor() { contexts.push(this); }
     async resume() { if (resume) await resume.promise; this.state = "running"; }
     async close() { this.state = "closed"; }
-    createMediaStreamSource() { return node(); }
+    createMediaStreamSource() { this.source = node(); return this.source; }
+    createBiquadFilter() { this.filter = { ...node(), frequency: { value: 350 }, Q: { value: 1 } }; return this.filter; }
     createAnalyser() { return node(); }
     createScriptProcessor() { this.processor = node(); return this.processor; }
     createGain() { return { ...node(), gain: { value: 1 } }; }
@@ -145,14 +146,14 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
     let pixels, nextFrame, radius, squash;
     const eyeSamples = [];
     const nodSamples = [];
-    const paths = [], fills = [], arcs = [], rectangles = [], translates = [];
+    const paths = [], fills = [], opacities = [], arcs = [], rectangles = [], translates = [];
     const surface = { dataset: { state, variant, speaking: String(speaking) } };
     const ctx = {
       save() {}, restore() {}, translate(x, y) { translates.push([x, y]); }, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
       roundRect(x, y, width, height, corner) { radius = width / 2; rectangles.push({ width, height, corner }); },
-      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; arcs.length = 0; rectangles.length = 0; translates.length = 0; },
+      fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; opacities.length = 0; arcs.length = 0; rectangles.length = 0; translates.length = 0; },
       moveTo(...point) { paths.push(point); }, lineTo(...point) { paths.push(point); },
-      closePath() {}, fill() { fills.push(this.fillStyle); },
+      closePath() {}, fill() { fills.push(this.fillStyle); opacities.push(this.globalAlpha); },
       rotate(angle) { paths.push(["rotate", angle]); }, setTransform() {}, drawImage() {},
       stroke() { assert.fail("Voice visuals should not draw state rings"); },
       createImageData: (width, height) => ({ data: new Uint8ClampedArray(width * height * 4) }),
@@ -216,7 +217,7 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       }
       if (state === "listening") {
         assert.equal(eyes.length, 2, "Listening is two eye circles");
-        assert.equal(mouths.length, 1, "Listening is one mouth circle");
+        assert.equal(mouths.length, 1, "Keep the idle layer geometry while its mouth appearance fades out");
         assert.ok(eyes[0][0] * eyes[1][0] < 0, "Eyes sit on opposite sides");
       }
       if (state === "thinking") {
@@ -245,7 +246,7 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
         }
         return exitFrames;
       }
-      return { paths: paths.slice(), radius, squash, arcs: arcs.slice(), blobs, eyeSamples, nodSamples };
+      return { paths: paths.slice(), opacities: opacities.slice(), radius, squash, arcs: arcs.slice(), blobs, eyeSamples, nodSamples };
     }
     return pixels;
   };
@@ -253,6 +254,17 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
   const hearing = render("listening");
   assert.notDeepEqual(idle, hearing);
   assert.equal(idle.radius, 24);
+  assert.deepEqual(idle.opacities, [1, 1, 1], "Idle retains all three circles");
+  for (const state of ["listening", "thinking", "connecting"]) {
+    const quiet = render(state, false, false, "3", 180);
+    const noisy = render(state, false, true, "3", 180);
+    assert.ok(quiet.opacities[0] < 0.001, "Active face hides the mouth layer");
+    assert.deepEqual(quiet.opacities.slice(1), [1, 1], "Eyes remain visible");
+    quiet.eyeSamples.forEach((eyes, frame) => eyes.forEach((eye, i) => {
+      assert.ok(Math.abs(eye.height - noisy.eyeSamples[frame][i].height) < 0.001,
+        "Microphone noise cannot change eye height");
+    }));
+  }
   assert.ok(hearing.radius > 33 && hearing.radius <= 34);
   assert.notDeepEqual(hearing, render("listening", false, true));
   assert.notDeepEqual(hearing, render("thinking"));
@@ -396,6 +408,18 @@ test("Escape stops capture and stale socket callbacks cannot revive a session", 
   h.click();
 });
 
+test("wind filtering feeds both pause detection and visualization without a raw microphone bypass", async () => {
+  const h = browser();
+  const { context } = await h.connect();
+  assert.deepEqual(context.source.connections, [context.filter]);
+  assert.deepEqual(context.filter.connections, [h.ui.wave.analyser, context.processor]);
+  assert.equal(context.filter.type, "highpass");
+  assert.equal(context.filter.frequency.value, 150);
+  assert.equal(context.filter.Q.value, Math.SQRT1_2);
+  h.escape();
+  assert.equal(context.state, "closed");
+});
+
 test("startup captures the first words before health and transcription are ready", async () => {
   const h = browser();
   h.click();
@@ -433,8 +457,8 @@ test("a command finished during startup is submitted once and processing stays p
   feed(0, 3000);
   feed(0.1, 3100);
   socket.message({ type: "ready" });
-  assert.ok(!socket.messages.some(message => message.type === "commit"));
-  assert.equal(h.ui.root.dataset.state, "listening");
+  assert.equal(socket.messages.at(-1).type, "commit");
+  assert.equal(h.ui.root.dataset.state, "thinking");
   socket.message({ type: "delta", text: "buka CoDev" });
   assert.equal(socket.messages.at(-1).type, "commit");
   assert.equal(h.ui.root.dataset.state, "thinking");
@@ -574,7 +598,7 @@ test("protocol keeps transcripts in listening, navigates decisions, and sends PC
   assert.deepEqual(socket.messages.at(-1), { type: "stop" });
 });
 
-test("empty captions stay hidden and do not enter processing", async () => {
+test("speech commits after a pause before manual transcription produces captions", async () => {
   const h = browser();
   const { socket, context } = await h.connect();
   socket.message({ type: "ready" });
@@ -591,11 +615,13 @@ test("empty captions stay hidden and do not enter processing", async () => {
   };
   frame(0.1, 1000);
   for (let now = 1100; now <= 3000; now += 100) frame(0, now);
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 0);
-  assert.equal(h.ui.root.dataset.state, "listening", "Silence without words must not process");
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
+  assert.equal(h.ui.root.dataset.state, "thinking", "Detected speech must commit before captions arrive");
   socket.message({ type: "delta", item_id: "empty", text: "buka Arkiv" });
   assert.equal(h.ui.root.dataset.state, "thinking");
   assert.ok(socket.messages.some(message => message.type === "commit"));
+  socket.message({ type: "noop", item_id: "empty" });
+  assert.equal(h.ui.root.dataset.state, "listening", "An unusable transcript releases the turn");
   h.escape();
 });
 
@@ -820,13 +846,18 @@ test("unmatched commands shake once, successful navigation and idle silence do n
   assert.equal(h.animations.length, 0);
   socket.message({ type: "decision", action: "clarify", hypotheses: [] });
   assert.equal(h.animations.length, 1);
+  assert.equal(h.ui.root.dataset.shaking, "true");
+  h.animations[0].onfinish();
+  assert.equal(h.ui.root.dataset.shaking, "false", "Listening resumes after the shake finishes");
   assert.equal(h.ui.root.dataset.state, "listening");
   assert.equal(track.stopped, false);
   socket.message({ type: "decision", action: "noop" });
   assert.equal(h.animations.length, 2);
-  assert.equal(h.animations[0].cancelled, true);
+  assert.equal(h.ui.root.dataset.shaking, "true");
   socket.message({ type: "decision", action: "show", section: "codev" });
   assert.equal(h.animations.length, 2);
+  h.animations[1].onfinish();
+  assert.equal(h.ui.root.dataset.shaking, "false", "Cancelled feedback cannot pause listening again");
   socket.message({ type: "final" });
   socket.message({ type: "noop" });
   assert.equal(h.animations.length, 2, "Empty silence must not shake as a failed command");
