@@ -587,10 +587,11 @@ function bindHeaderState() {
 function bindBrandVisibility() {
   if (shot || !gsap) return () => {};
 
+  const nav = document.getElementById("site-nav");
   const brand = document.getElementById("brand");
   const brandLabel = brand?.querySelector("em");
   const brandMask = brand?.querySelector(".brand-mask");
-  if (!brand || !brandLabel || !brandMask) return () => {};
+  if (!nav || !brand || !brandLabel || !brandMask) return () => {};
 
   let visible = true;
   let lastY = window.scrollY;
@@ -599,15 +600,26 @@ function bindBrandVisibility() {
   function setVisible(nextVisible) {
     if (nextVisible === visible) return;
     visible = nextVisible;
+    nav.style.pointerEvents = nextVisible ? "auto" : "none";
     brand.style.pointerEvents = nextVisible ? "auto" : "none";
 
     if (reduce) {
+      gsap.set(nav, { yPercent: 0, autoAlpha: nextVisible ? 1 : 0 });
       gsap.set([brandMask, brandLabel], {
         autoAlpha: nextVisible ? 1 : 0,
         yPercent: 0,
       });
       return;
     }
+
+    // The whole header leaves on the way down and comes back on the first
+    // upward move, with the wordmark keeping its own staggered lift.
+    gsap.to(nav, {
+      yPercent: nextVisible ? 0 : -100,
+      duration: nextVisible ? 0.42 : 0.32,
+      ease: nextVisible ? "power3.out" : "power2.in",
+      overwrite: "auto",
+    });
 
     gsap.to([brandMask, brandLabel], {
       autoAlpha: nextVisible ? 1 : 0,
@@ -623,13 +635,10 @@ function bindBrandVisibility() {
     ticking = false;
     const y = window.scrollY;
     const delta = y - lastY;
+    const band = navBandHeight();
 
-    // The wordmark only ducks out of the way while the hero glare is sweeping
-    // past it. Below the hero the header is a real bar, so it stays put.
-    const overHero = document.body.classList.contains("nav-on-dark");
-
-    if (delta < -2 || !overHero) setVisible(true);
-    else if (delta > 2 && document.body.classList.contains("glare-passed-brand")) setVisible(false);
+    if (y <= band || delta < -2) setVisible(true);
+    else if (delta > 2 && y > band * 1.5) setVisible(false);
 
     lastY = y;
   };
@@ -640,19 +649,8 @@ function bindBrandVisibility() {
     requestAnimationFrame(update);
   };
 
-  // Leaving the hero can happen inside a single scroll event, after the last
-  // update() already ducked the wordmark. Watch the header state itself so the
-  // wordmark comes back as soon as the header sits on a light section.
-  const stateObserver = new MutationObserver(() => {
-    if (!document.body.classList.contains("nav-on-dark")) setVisible(true);
-  });
-  stateObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-
   window.addEventListener("scroll", onScroll, { passive: true });
-  return () => {
-    stateObserver.disconnect();
-    window.removeEventListener("scroll", onScroll);
-  };
+  return () => window.removeEventListener("scroll", onScroll);
 }
 
 function bindInquiryEntry() {

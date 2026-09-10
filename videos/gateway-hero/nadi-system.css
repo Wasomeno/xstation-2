@@ -107,7 +107,7 @@ body.nav-on-dark #brand .brand-tag {
   z-index: 20;
   display: flex;
   min-height: 100svh;
-  padding: clamp(1.25rem, 3.5vh, 2.5rem) var(--system-pad);
+  padding-block: clamp(1.25rem, 3.5vh, 2.5rem);
   box-sizing: border-box;
   align-items: center;
   overflow: clip;
@@ -122,7 +122,8 @@ body.nav-on-dark #brand .brand-tag {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: clamp(2rem, 5vw, 5rem);
-  width: 100%;
+  width: var(--shell);
+  margin-inline: auto;
   align-items: center;
 }
 

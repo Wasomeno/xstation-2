@@ -75,7 +75,7 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .work-pad {
-  --pad: clamp(1.15rem, 4vw, 2.75rem);
+  --pad: var(--shell-pad);
   --project-gap: clamp(4.5rem, 8vh, 7rem);
 }
 
@@ -218,7 +218,7 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .index-mark {
-  margin: clamp(5.5rem, 11vh, 8rem) var(--pad) 0;
+  margin: clamp(5.5rem, 11vh, 8rem) auto 0 var(--shell-edge);
   max-width: 11em;
   font-size: clamp(2.15rem, 4.6vw, 3.7rem);
   font-weight: 400;
@@ -256,9 +256,9 @@ body.nav-on-dark #site-links a[aria-current] {
 .space {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 80dvh;
-  gap: 0;
-  padding: 0 var(--pad);
+  gap: 0 clamp(1.5rem, 4vw, 3.5rem);
+  width: var(--shell);
+  margin-inline: auto;
   background: #ffffff;
 }
 
@@ -279,7 +279,7 @@ body.nav-on-dark #site-links a[aria-current] {
 
 .space-stage {
   position: relative;
-  min-height: 27.2rem;
+  aspect-ratio: 1;
   overflow: hidden;
 }
 
@@ -325,10 +325,9 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .space-panel {
-  padding: 1.7rem 1.75rem 1.8rem;
+  padding: 1.7rem 0 1.8rem;
   display: grid;
   align-content: center;
-  min-height: 27.2rem;
 }
 
 .field-mark {
@@ -519,7 +518,7 @@ body.nav-on-dark #site-links a[aria-current] {
   overflow: hidden;
   min-height: 0;
   margin-top: clamp(3rem, 7vh, 5.5rem);
-  padding: clamp(4.25rem, 9vh, 6.5rem) var(--pad);
+  padding-block: clamp(4.25rem, 9vh, 6.5rem);
   border-top: 1px solid rgb(95 227 168 / 0.22);
   background: var(--deepest);
   color: #eaf6ef;
@@ -542,9 +541,8 @@ body.nav-on-dark #site-links a[aria-current] {
   grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
   align-items: center;
   gap: clamp(2.5rem, 6vw, 6rem);
-  width: 100%;
-  max-width: var(--content-max);
-  margin: 0 auto;
+  width: var(--shell);
+  margin-inline: auto;
 }
 
 .clients-kicker {
@@ -631,10 +629,9 @@ body.nav-on-dark #site-links a[aria-current] {
   gap: clamp(2rem, 5vw, 5rem);
   align-items: center;
   min-height: 0;
-  width: 100%;
-  max-width: var(--content-max);
-  margin: 0 auto;
-  padding: clamp(5rem, 11vh, 8rem) var(--pad) clamp(4.5rem, 9vh, 6.5rem);
+  width: var(--shell);
+  margin-inline: auto;
+  padding-block: clamp(5rem, 11vh, 8rem) clamp(4.5rem, 9vh, 6.5rem);
   background: #ffffff;
 }
 
@@ -768,8 +765,10 @@ body.nav-on-dark #site-links a[aria-current] {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: clamp(1.5rem, 4vw, 4rem);
-  padding: 2rem var(--pad) 2.25rem;
-  border-top: 1px solid var(--line);
+  position: relative;
+  width: var(--shell);
+  margin-inline: auto;
+  padding-block: 2rem 2.25rem;
   background: #ffffff;
 }
 
@@ -790,6 +789,18 @@ body.nav-on-dark #site-links a[aria-current] {
 
 .site-footer-links a:hover {
   border-bottom-color: currentColor;
+}
+
+/* The divider stays full-bleed while the footer content keeps the page frame. */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  height: 1px;
+  transform: translateX(-50%);
+  background: var(--line);
 }
 
 .site-footer-brand {
@@ -871,9 +882,8 @@ body.nav-on-dark #site-links a[aria-current] {
     justify-self: center;
   }
 
-  .space-stage,
   .space-panel {
-    min-height: 20.8rem;
+    min-height: 0;
   }
 
   .index-mark {
@@ -988,20 +998,15 @@ body.nav-on-dark #site-links a[aria-current] {
 /* Project detail treatment: keep the reference hierarchy inside NADI's light green theme. */
 .space,
 .space.is-flip {
-  align-items: stretch;
+  align-items: center;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: clamp(34rem, 70dvh, 46rem);
   background: #ffffff;
 }
 
-.space-stage {
-  min-height: clamp(27.2rem, 66dvh, 42rem);
-}
-
 .space-panel {
-  padding: clamp(2.25rem, 5vw, 4.5rem) clamp(1.75rem, 5vw, 5.5rem);
-  min-height: clamp(27.2rem, 66dvh, 42rem);
-  align-content: start;
+  padding-block: clamp(2.25rem, 5vw, 4.5rem);
+  padding-inline: 0;
+  align-content: center;
 }
 
 .space-copy {
@@ -1081,6 +1086,16 @@ body.nav-on-dark #site-links a[aria-current] {
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The WhatsApp mark replaces the outbound arrow where tapping opens the app. */
+.cta-wa {
+  display: none;
+  flex-shrink: 0;
+}
+
+.support-tap {
+  display: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .project-cta:hover .project-cta-icon {
     transform: translate(0.16rem, -0.16rem);
@@ -1089,8 +1104,8 @@ body.nav-on-dark #site-links a[aria-current] {
 
 @media (max-width: 1024px) {
   .space-panel {
-    min-height: 20.8rem;
-    padding: 2.5rem clamp(1.5rem, 5vw, 3rem) 3rem;
+    min-height: 0;
+    padding: 2.5rem 0 3rem;
   }
 
   .space-panel h2 {
@@ -1103,13 +1118,9 @@ body.nav-on-dark #site-links a[aria-current] {
     min-height: 0;
   }
 
-  .space-stage {
-    min-height: min(76vw, 28rem);
-  }
-
   .space-panel {
     min-height: 0;
-    padding: 2rem 1rem 2.75rem;
+    padding: 2rem 0 2.75rem;
   }
 
   .field-mark {
