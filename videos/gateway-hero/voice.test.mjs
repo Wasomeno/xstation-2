@@ -316,15 +316,21 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
     });
   }
   const nods = render("listening", false, true, "3", 900, true).nodSamples;
-  let count = 0, activeFrames = 0;
+  const nodStarts = [];
+  let activeFrames = 0;
   nods.forEach((value, i) => {
     if (value > 0.1) {
-      if (!(nods[i - 1] > 0.1)) count++;
+      if (!(nods[i - 1] > 0.1)) nodStarts.push(i);
       activeFrames++;
       assert.ok(activeFrames <= 12, "Cartoon nod finishes within 400ms");
     } else activeFrames = 0;
   });
-  assert.ok(count >= 2 && count <= 5, "Sustained speech receives occasional nods, not constant bobbing");
+  assert.ok(nodStarts.length >= 18 && nodStarts.length <= 22, "Sustained speech receives frequent double nods");
+  nodStarts.slice(1).forEach((start, i) => {
+    const gap = start - nodStarts[i];
+    assert.ok(i % 2 === 0 ? gap >= 9 && gap <= 13 : gap >= 55 && gap <= 65,
+      "Nods arrive in quick pairs with a 2.4-second trigger cooldown");
+  });
   assert.ok(Math.max(...nods) > 2 && Math.max(...nods) <= 3.5, "Eyes make a small but readable nod");
   for (const [state, reduced, loud, speaking] of [
     ["listening", false, true, false], ["listening", false, false, true],

@@ -121,7 +121,7 @@ function createWaveform(canvas) {
   let phase = 0;
   let expressionTime = 0;
   let speechTime = 0;
-  let nodTime = 0.38;
+  let nodTime = 0.76;
   let nodCooldown = 0;
   let visualRadius = 24;
   let visualFace = 0;
@@ -178,17 +178,17 @@ function createWaveform(canvas) {
       speechTime = root.dataset.speaking === "true" && energy > 0.12 ? speechTime + seconds : 0;
       if (speechTime >= 0.32 && nodCooldown === 0) {
         nodTime = 0;
-        nodCooldown = 6.5;
+        nodCooldown = 2.4;
         speechTime = 0;
       }
-      nodTime = Math.min(0.38, nodTime + seconds);
+      nodTime = Math.min(0.76, nodTime + seconds);
     } else {
       speechTime = 0;
-      nodTime = alive ? Math.min(0.38, nodTime + seconds) : 0.38;
+      nodTime = alive ? Math.min(0.76, nodTime + seconds) : 0.76;
     }
-    // Cartoon timing: a quick 100ms dip, then a crisp ease-out return.
-    const nodProgress = nodTime / 0.38;
-    const nod = nodProgress < 1
+    // Two quick cartoon dips, each with a crisp ease-out return.
+    const nodProgress = (nodTime % 0.38) / 0.38;
+    const nod = nodTime < 0.76
       ? (nodProgress < 0.28 ? (nodProgress / 0.28) ** 2 : ((1 - nodProgress) / 0.72) ** 3) * morph
       : 0;
     // A brief blink every 10.5 seconds, independent of microphone intensity.
