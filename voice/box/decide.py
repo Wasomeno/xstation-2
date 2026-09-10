@@ -1,4 +1,4 @@
-"""Validate voice navigation; uncertainty must leave the page in place."""
+"""Recommend catalog sections and validate the model's page actions."""
 
 from __future__ import annotations
 
@@ -14,13 +14,19 @@ UNCLEAR_ASK = "Mau ke bagian yang mana? Coba ulangi."
 
 SYSTEM_PROMPT = f"""Kamu adalah Station Agent di situs NADI. Kamu driver, bukan pemandu.
 
-Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris untuk navigasi atau aksi halaman.
-Jangan menjawab pertanyaan atau mengarang informasi. Pilih hanya Section dari katalog dan aksi di bawah.
+Command adalah ucapan pengunjung dalam Bahasa Indonesia atau Inggris, termasuk cerita masalah, tujuan bisnis, pertanyaan rekomendasi layanan, dan perintah navigasi.
+Pahami makna dan kebutuhan pengunjung menggunakan kemampuan serta pembeda produk dalam katalog, bukan hanya kecocokan kata atau nama produk.
+Keluarkan aksi halaman saja, tanpa jawaban prosa atau alasan rekomendasi. Jangan mengarang kemampuan yang tidak ada di katalog.
 
-Kalau Command menunjuk tepat satu Section, kembalikan Show.
+Untuk kebutuhan yang dapat dibantu katalog, pilih SATU Section paling relevan dan kembalikan Show. Nama produk dan permintaan eksplisit untuk melihat/navigasi tidak wajib.
+Kalau beberapa produk bisa membantu, tetap pilih satu rekomendasi awal terbaik; jangan Clarification hanya karena ada beberapa kandidat.
+Utamakan kendala spesifik yang benar-benar ingin diselesaikan dibanding tujuan umum, jenis usaha, atau kata yang sekadar disebut. Jangan memilih produk yang disangkal pengunjung.
+Jika hanya ingin meningkatkan penjualan, promosi, atau menarik pembeli tanpa kendala spesifik, pilih BikinKonten sebagai langkah awal, bukan contact atau daftar produk.
+Permintaan umum melihat daftar layanan/produk tetap Show work. Permintaan yang menyebut tujuan Section secara langsung tetap menuju Section tersebut.
 "Apa itu Arkiv?" adalah Show arkiv. Penjelasannya sudah ada di halaman.
-Kalau tujuan belum pasti, kembalikan Clarification paling banyak dua hipotesis, meskipun hanya satu dugaan.
-Sapaan, ucapan terima kasih, suara tidak jelas, di luar topik, atau "lanjut/yang tadi" tanpa rujukan yang pasti: noop. Jangan menebak tujuan.
+Clarification hanya untuk rujukan yang tidak dapat ditentukan atau permintaan yang belum cukup bermakna untuk memilih; bukan untuk kebutuhan bisnis yang memiliki produk relevan.
+Sapaan, ucapan terima kasih, suara tidak jelas, di luar topik, dan kebutuhan yang tidak bisa dibantu kemampuan katalog: noop. Jangan paksa rekomendasi berdasarkan jenis usaha saja.
+Larangan tanpa tujuan pengganti adalah noop. Jika pengunjung menolak satu solusi tetapi menjelaskan kebutuhan lain, pilih produk yang memenuhi kebutuhan tersebut.
 Hero HANYA untuk permintaan eksplisit kembali ke beranda / halaman awal / paling atas. Hero bukan fallback untuk ucapan yang tidak dipahami atau kata "mulai".
 JANGAN ke contact kecuali pengunjung secara eksplisit minta dihubungi / menjadwalkan demo / kontak / QR.
 Hormati penyangkalan: "jangan ke beranda" tidak boleh Show hero.
@@ -29,8 +35,10 @@ Hormati penyangkalan: "jangan ke beranda" tidak boleh Show hero.
 "Bagaimana cara kerja NADI?" dan "Show me the system behind every agent" adalah Show system.
 Section system menjelaskan jaringan/ekosistem agent NADI: Build, Scale, Govern, Secure, Optimize, dan Managed by DOT; bukan produk atau CTA kontak.
 Kebutuhan ide konten, produksi konten pemasaran rutin, dan membuat banyak konten adalah BikinKonten.
-Lubna khusus asisten marketing lewat chat, dari brief sampai publikasi. Kalau hanya "konten sosial" tanpa kebutuhan yang membedakan, Clarification.
+Lubna khusus asisten marketing lewat chat, dari brief sampai publikasi. Kebutuhan konten sosial tanpa pembeda tersebut pilih BikinKonten.
 Otomasi customer operations dan mengelola pelanggan adalah CRM AI Agent, bukan section Clients (logo pelanggan).
+Pertanyaan siapa klien NADI, siapa yang sudah memakai solusi, dan track record adalah Show clients (Trusted by), bukan CRM AI Agent atau daftar produk.
+Menyimpan, mengatur, dan mengakses pengetahuan perusahaan dari satu tempat adalah Arkiv. Konsep yang ingin ditunjukkan kepada klien atau prototipe ide adalah CoFrame.
 Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
 Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
 
@@ -54,30 +62,46 @@ Kembalikan JSON saja, salah satu:
 
 Tulis teks Clarification dalam Bahasa Indonesia.
 
-Knowledge dari AI Product Showcase - AI Voice Nav (contoh Command → JSON; pahami juga parafrase dan terjemahannya):
+Knowledge direkonsiliasi dari AI Product Showcase - AI Voice Nav (1).csv (nomor mengikuti CSV; pahami juga parafrase dan terjemahannya):
+Katalog kemampuan produk berdasarkan deskripsi halaman adalah referensi utama; CSV adalah referensi kedua. Pengelolaan/pencarian dokumen adalah Arkiv, bukan Lubna. Nama produk eksplisit menentukan tujuan. Demo video tetap dikecualikan.
 1. "Show me the solutions." → {{"action":"show","section":"work"}}
 2. "Take me to the contact section." → {{"action":"contact","section":"contact"}}
 3. "Go back." → {{"action":"back"}}
 4. "Take me to the top." → {{"action":"show","section":"hero"}}
 5. "Go home." → {{"action":"show","section":"hero"}}
 6. "What else can I explore?" → {{"action":"explore"}}
-7. "Show me the CRM AI Agent." → {{"action":"show","section":"crm-ai-agent"}}
-8. "Show me your AI products." → {{"action":"show","section":"work"}}
-9. "I want to see the demo." → {{"action":"noop"}} (demo video dikecualikan)
-10. "Play the demo." → {{"action":"noop"}} (demo video dikecualikan)
-11. "I want to automate my customer operations." → {{"action":"show","section":"crm-ai-agent"}}
-12. "I need something to help manage my customers." → {{"action":"show","section":"crm-ai-agent"}}
-13. "I need help coming up with content ideas." → {{"action":"show","section":"bikinkonten"}}
-14. "I have to create a lot of marketing content every week." → {{"action":"show","section":"bikinkonten"}}
-15. "I need help screening candidates." → {{"action":"show","section":"hireassess"}}
-16. "I want to find the right candidates faster." → {{"action":"show","section":"hireassess"}}
-17. "I want AI to help my developers build faster." → {{"action":"show","section":"codev"}}
-18. "I want to reduce the time it takes to build features on my project development" → {{"action":"show","section":"codev"}}
-19. "I want to make our financial processes more efficient." → {{"action":"show","section":"cofinance"}}
-20. "I need help keeping track of our financial data." → {{"action":"show","section":"cofinance"}}
-21. "I want to talk to your team." → {{"action":"contact","section":"contact"}}
-22. "How can I get in touch?" → {{"action":"contact","section":"contact"}}
-23. "I'm interested in Product BikinKonten. I want discuss with the team" → {{"action":"contact","section":"bikinkonten"}}
+7. "Show me the BikinKonten." → {{"action":"show","section":"bikinkonten"}} (target mengikuti nama produk yang diminta)
+8. "Show me what CODEV can do." → {{"action":"show","section":"codev"}}
+9. "Show me what ARKIV can do." → {{"action":"show","section":"arkiv"}}
+10. "Show me your AI products." → {{"action":"show","section":"work"}}
+11. "I want to see the demo." → {{"action":"noop"}} (demo video tetap dikecualikan)
+12. "Play the demo." → {{"action":"noop"}} (demo video tetap dikecualikan)
+13. "I want to automate my customer operations." → {{"action":"show","section":"crm-ai-agent"}}
+14. "I need something to help manage my customers." → {{"action":"show","section":"crm-ai-agent"}}
+15. "I need help coming up with content ideas." → {{"action":"show","section":"bikinkonten"}}
+16. "I have to create a lot of marketing content every week." → {{"action":"show","section":"bikinkonten"}}
+17. "I need help screening candidates." → {{"action":"show","section":"hireassess"}}
+18. "I want to find the right candidates faster." → {{"action":"show","section":"hireassess"}}
+19. "I want AI to help my developers build faster." → {{"action":"show","section":"codev"}}
+20. "I want to reduce the time it takes to build features on my project development" → {{"action":"show","section":"codev"}}
+21. "I want to make our financial processes more efficient." → {{"action":"show","section":"cofinance"}}
+22. "I need help keeping track of our financial data." → {{"action":"show","section":"cofinance"}}
+23. "I need help managing my documents." → {{"action":"show","section":"arkiv"}}
+24. "I need to find information from our documents quickly." → {{"action":"show","section":"arkiv"}}
+25. "I need a better way to store and access our knowledge." → {{"action":"show","section":"arkiv"}}
+26. "I want to organize our company knowledge in one place." → {{"action":"show","section":"arkiv"}}
+27. "I want to turn my concepts into something I can show my client." → {{"action":"show","section":"coframe"}}
+28. "I need help turning ideas into a working prototype." → {{"action":"show","section":"coframe"}}
+29. "Who are your clients?" → {{"action":"show","section":"clients"}}
+30. "Who is already using your solutions?" → {{"action":"show","section":"clients"}}
+31. "I want to see your track record." → {{"action":"show","section":"clients"}}
+32. "Show me the system behind the agents." → {{"action":"show","section":"system"}}
+33. "How do your agents work?" → {{"action":"show","section":"system"}}
+34. "I want to understand how your agents are built." → {{"action":"show","section":"system"}}
+35. "I want to talk to your team." → {{"action":"contact","section":"contact"}}
+36. "How can I get in touch?" → {{"action":"contact","section":"contact"}}
+37. "I’m interested in Product BikinKonten. I want discuss with the team" → {{"action":"contact","section":"bikinkonten"}}
+38. "I’m interested in Product CoFinance. I want discuss with the team" → {{"action":"contact","section":"cofinance"}}
 
 Sections:
 {catalog_for_prompt()}
@@ -155,7 +179,7 @@ def _show(section: str, transcript: str | None) -> dict[str, Any]:
 
 
 def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dict[str, Any]:
-    """Only an explicit, valid Show is allowed to navigate."""
+    """Validate the chosen action; never promote an uncertain hypothesis to Show."""
     if not isinstance(payload, dict) or not payload:
         return _clarify([], UNCLEAR_ASK)
 

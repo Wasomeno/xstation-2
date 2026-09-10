@@ -31,7 +31,32 @@ npm run voice      # box on :4175
 
 Point the live site at a tunneled box with `?box=https://your-tunnel`.
 
-The voice prompt includes the navigation and contact knowledge from **AI Product Showcase - AI Voice Nav**: product needs map to the relevant section, "go back" and "go next" traverse action history, and "what else can I explore?" advances through the page. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing its knowledge in `voice/box/decide.py`.
+The voice prompt includes all 38 commands from **AI Product Showcase - AI Voice Nav (1).csv**, reconciled against the product descriptions in `index.html` as the primary reference; the CSV is secondary. Business needs also select the best matching product without an explicit name or navigation command. General promotion or sales growth starts at BikinKonten; a more specific problem takes priority, such as unanswered customer messages selecting CRM AI Agent. Lubna handles marketing through chat from brief to publication. The catalog in `voice/box/sections.py` describes every product and the System services using the site's capabilities. Recommendations only navigate; they add no spoken or written explanation.
+
+Reconciled CSV targets:
+
+| CSV rows | Effective action | Reason |
+| --- | --- | --- |
+| 7 | Show BikinKonten | The command explicitly names BikinKonten. |
+| 23–24 | Show Arkiv | Its product description covers document management and information retrieval; Lubna handles marketing. |
+| 11–12 | No action | Video demo actions remain excluded by the prior product decision. |
+
+Knowledge storage and organization also select Arkiv. Prototypes select CoFrame; client references and track record select Trusted by (`clients`); agent architecture and operations select System. Product conversion requests focus that product's existing CTA, including CoFinance.
+
+"Go back" and "go next" traverse action history, and "what else can I explore?" advances through the page. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing `voice/box/sections.py` or `voice/box/decide.py`.
+
+Run offline checks separately from the live intent evaluation:
+
+```bash
+npm run test:voice
+node --test videos/gateway-hero/voice.test.mjs
+# Sends fixed sample commands and the catalog prompt to the configured DeepSeek API; uses API credits.
+voice/box/.venv/bin/python voice/box/eval_intents.py
+# Focused regression: the cake example must select BikinKonten three times.
+voice/box/.venv/bin/python voice/box/eval_intents.py --group cake
+```
+
+The live evaluation checks the 38 reconciled showcase commands, held-out Indonesian/English business needs for every product, client references, and System service, and commands that must not navigate. It uses the live stream's 12-second interpretation deadline and exits nonzero on any mismatch or API error. It is not part of the offline test command.
 
 `window.voiceActionLog` holds `{ entries, index }` in memory: entry 0 is the initial position, followed by successful actions and their destinations/scroll positions. Back/next move the index without appending entries; a new action after going back replaces the forward history. Replaying a WhatsApp entry restores its page position without reopening the external link. Reloading the page clears the log.
 

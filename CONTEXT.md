@@ -21,7 +21,7 @@ The silence that ends a Command inside a Session. Same handle on phone and deskt
 _Avoid_: endpointing, VAD, timeout, stop, hold, send
 
 **Section**:
-A named landmark on the station page (`hero`, `work`, product spaces, `clients`, `contact`).
+A named landmark on the station page (`hero`, `system`, `work`, product spaces, `clients`, `contact`).
 _Avoid_: page, screen, block, chapter
 
 **Voice Surface**:
@@ -29,7 +29,7 @@ The floating mic the visitor taps to start or end a session.
 _Avoid_: widget, chatbot, overlay, FAB
 
 **Station Agent**:
-The in-page driver that turns a Command into a Page Action on the opened tab, or asks a Clarification. It knows the Sections. It is not a generic browser-use robot, and it does not answer questions. “What is Arkiv?” is a Show of Arkiv. One Command yields one Page Action, and only when there is a single clear Hypothesis.
+The in-page driver that turns a Command into a Page Action on the opened tab. It knows the Sections and their capabilities. It is not a generic browser-use robot, and it does not give spoken or written product answers. “What is Arkiv?” is a Show of Arkiv. A business problem or recommendation request also selects one best matching Section without requiring its name. When several products could help, choose the best initial recommendation; specific needs take priority over general goals. General promotion or sales growth starts at BikinKonten, marketing through chat to publication selects Lubna, and unanswered customer messages select CRM AI Agent. One Command yields at most one Page Action.
 _Avoid_: main agent, browser agent, copilot, chatbot, guide
 
 **Show**:
@@ -41,7 +41,7 @@ A Show, back/next through the in-memory action log at its active index, explorat
 _Avoid_: tool call, generic browser control, fill, mailto, answer
 
 **Clarification**:
-What the Station Agent asks when a Command has zero or several Hypotheses, or when the clip is a foreign language. It names the Hypotheses or asks the Visitor to repeat in Bahasa Indonesia. No Page Action that turn. The Session stays open.
+An unresolved decision when a reference or incomplete Command cannot be interpreted. Several relevant products alone do not require Clarification: the Station Agent selects the best one. A Clarification never automatically becomes a Show of its first Hypothesis. The current Voice Surface signals no action and keeps the Session open without displaying a question. Greetings, unsupported needs, and refusals without an alternative produce no action.
 _Avoid_: error, fallback, retry, sorry
 
 **Hypothesis**:
