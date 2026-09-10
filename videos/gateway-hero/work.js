@@ -511,6 +511,11 @@ function bindProductsTitle() {
   });
 }
 
+function navBandHeight() {
+  const nav = document.getElementById("site-nav");
+  return Math.round(nav?.getBoundingClientRect().height || 72);
+}
+
 function bindHeaderState() {
   const nav = document.getElementById("site-nav");
   const hero = document.getElementById("hero");
@@ -540,6 +545,24 @@ function bindHeaderState() {
   });
   heroObserver.observe(hero);
 
+  // The header only keeps its light-on-dark treatment while the dark hero sits
+  // under it. Every section below the hero is a light surface, so the header has
+  // to switch back to ink there instead of turning invisible.
+  const darkSections = [hero];
+  const overDark = new Set(darkSections);
+
+  const darkObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) overDark.add(entry.target);
+      else overDark.delete(entry.target);
+    });
+    document.body.classList.toggle("nav-on-dark", overDark.size > 0);
+  }, {
+    rootMargin: `0px 0px -${Math.max(window.innerHeight - navBandHeight(), 0)}px 0px`,
+    threshold: 0,
+  });
+  darkSections.forEach((section) => darkObserver.observe(section));
+
   const sectionObserver = new IntersectionObserver((entries) => {
     const visible = entries
       .filter((entry) => entry.isIntersecting)
@@ -556,6 +579,7 @@ function bindHeaderState() {
 
   return () => {
     heroObserver.disconnect();
+    darkObserver.disconnect();
     sectionObserver.disconnect();
   };
 }
@@ -600,7 +624,11 @@ function bindBrandVisibility() {
     const y = window.scrollY;
     const delta = y - lastY;
 
-    if (delta < -2) setVisible(true);
+    // The wordmark only ducks out of the way while the hero glare is sweeping
+    // past it. Below the hero the header is a real bar, so it stays put.
+    const overHero = document.body.classList.contains("nav-on-dark");
+
+    if (delta < -2 || !overHero) setVisible(true);
     else if (delta > 2 && document.body.classList.contains("glare-passed-brand")) setVisible(false);
 
     lastY = y;
@@ -612,8 +640,19 @@ function bindBrandVisibility() {
     requestAnimationFrame(update);
   };
 
+  // Leaving the hero can happen inside a single scroll event, after the last
+  // update() already ducked the wordmark. Watch the header state itself so the
+  // wordmark comes back as soon as the header sits on a light section.
+  const stateObserver = new MutationObserver(() => {
+    if (!document.body.classList.contains("nav-on-dark")) setVisible(true);
+  });
+  stateObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
   window.addEventListener("scroll", onScroll, { passive: true });
-  return () => window.removeEventListener("scroll", onScroll);
+  return () => {
+    stateObserver.disconnect();
+    window.removeEventListener("scroll", onScroll);
+  };
 }
 
 function bindInquiryEntry() {

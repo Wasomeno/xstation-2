@@ -4,8 +4,8 @@
   margin-top: 0;
 }
 
-body:not(.system-reached) #site-nav,
-body:not(.system-reached) #site-nav.is-scrolled {
+body.nav-on-dark #site-nav,
+body.nav-on-dark #site-nav.is-scrolled {
   color: #f2fbf6;
   border-bottom-color: transparent;
   background: transparent;
@@ -13,7 +13,7 @@ body:not(.system-reached) #site-nav.is-scrolled {
   backdrop-filter: none;
 }
 
-body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
+body.nav-on-dark:not(.glare-passed-brand) #site-nav .brand-logo {
   filter: brightness(0) invert(1);
 }
 
@@ -29,7 +29,7 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
   text-transform: uppercase;
 }
 
-body:not(.system-reached) #brand .brand-tag {
+body.nav-on-dark #brand .brand-tag {
   color: #8ed2b4;
 }
 
@@ -39,15 +39,13 @@ body:not(.system-reached) #brand .brand-tag {
 
 #hero .station-cta {
   --cta-fill: #5fe3a8;
-  isolation: auto;
-  overflow: visible;
-  min-height: 3.3rem;
-  padding: 0 1.55rem;
+  min-height: 3.4rem;
+  padding: 0 1.6rem;
   border: 1.5px solid rgb(207 234 221 / 0.28);
-  border-radius: 9px;
+  border-radius: var(--radius-cta);
   color: #cfeadd;
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.005em;
   transition:
     background-color 0.22s ease,
@@ -66,7 +64,7 @@ body:not(.system-reached) #brand .brand-tag {
 }
 
 #hero .station-cta::before {
-  content: none;
+  background: #5fe3a8;
 }
 
 #hero .station-cta.is-primary {
@@ -87,11 +85,14 @@ body:not(.system-reached) #brand .brand-tag {
   background: #7cebb8;
 }
 
+#hero .station-cta:focus-visible {
+  color: #04120c;
+}
+
 @media (hover: hover) and (pointer: fine) {
   #hero .station-cta:hover {
-    border-color: rgb(207 234 221 / 0.55);
-    background: rgb(207 234 221 / 0.08);
-    color: #f2fbf6;
+    border-color: #5fe3a8;
+    color: #04120c;
   }
 
   #hero .station-cta.is-primary:hover {

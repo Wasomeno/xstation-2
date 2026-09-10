@@ -22,32 +22,24 @@ body {
 }
 
 .inquiry-email {
-  display: inline-flex;
-  align-items: center;
+  align-self: start;
   min-height: 44px;
-  margin-top: 0.5rem;
-  color: var(--deep-forest);
-  font-weight: 500;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-}
-
-.inquiry-email:hover,
-.inquiry-email:focus-visible {
-  color: var(--signal);
 }
 
 @media (min-width: 64rem) {
-  #site-links,
-  .site-footer-links {
-    display: none;
-  }
 
   #site-nav,
   #site-nav.is-scrolled {
     min-height: 0;
     padding: 28px clamp(20px, 4vw, 56px);
+  }
+
+  #site-nav.is-scrolled {
+    padding-block: 20px;
+  }
+
+  body.nav-on-dark #site-nav,
+  body.nav-on-dark #site-nav.is-scrolled {
     border-bottom-color: transparent;
     background: transparent;
     -webkit-backdrop-filter: none;
@@ -55,7 +47,11 @@ body {
   }
 
   .site-footer {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .site-footer-links {
+    justify-self: end;
   }
 }
 

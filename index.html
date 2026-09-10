@@ -57,6 +57,7 @@
         --section-space-compact: clamp(3rem, 7vw, 5rem);
         --nav-height: clamp(4rem, 6vw, 4.75rem);
         --radius-control: 0.25rem;
+        --radius-cta: 10px;
         --radius-panel: clamp(0.75rem, 1vw, 1rem);
         --deepest: #002010;
         --forest: #083B28;
@@ -246,7 +247,7 @@
         display: flex;
         align-items: center;
         width: min(62vw, 52rem);
-        padding: 7.5rem 0 5rem clamp(24px, 4vw, 64px);
+        padding: clamp(9rem, 20vh, 15rem) 0 5rem clamp(24px, 4vw, 64px);
         box-sizing: border-box;
         pointer-events: none;
         opacity: 0;
@@ -351,16 +352,16 @@
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        min-height: 3.55rem;
+        min-height: 3.4rem;
         padding: 0 1.7rem;
         border: 1px solid var(--cta-fill);
-        border-radius: 3px;
+        border-radius: var(--radius-cta);
         background: transparent;
         color: var(--cta-fill);
         font-family: var(--sans);
         font-size: 1rem;
-        font-weight: 400;
-        letter-spacing: 0.02em;
+        font-weight: 600;
+        letter-spacing: -0.005em;
         line-height: 1;
         white-space: nowrap;
         cursor: pointer;
@@ -505,10 +506,10 @@
         color: #5b6865;
       }
     </style>
-    <link rel="stylesheet" href="videos/gateway-hero/work.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-5" />
     <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=hear-stream" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
-    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-5" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-5" />
     <noscript>
       <style>
         #nadi-stage {
@@ -541,7 +542,7 @@
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/ScrollTrigger.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.21/dist/lenis.min.js"></script>
   </head>
-  <body>
+  <body class="nav-on-dark">
   <div id="hero-matte" aria-hidden="true"></div>
   <div id="nadi-stage">
       <canvas id="nadi-cluster" aria-hidden="true"></canvas>
@@ -891,7 +892,10 @@
 
       <section class="clients" id="clients" aria-labelledby="clients-title">
         <div class="clients-inner">
-          <h2 id="clients-title" class="clients-title js-enter">Trusted by</h2>
+          <div class="clients-copy js-enter">
+            <p class="clients-kicker">Trusted by</p>
+            <h2 id="clients-title" class="clients-title">Teams already running work on NADI.</h2>
+          </div>
           <ul class="client-list js-enter">
             <li class="js-enter-child" data-client="bina">
               <img src="videos/gateway-hero/media/clients/bina.svg" alt="Bina" width="112" height="35" loading="lazy" decoding="async" />
@@ -905,17 +909,18 @@
 
       <section class="inquiry" id="contact" aria-labelledby="inquiry-title">
         <div class="inquiry-copy">
+          <p class="inquiry-kicker js-enter">Get in touch</p>
           <h2 id="inquiry-title">
             <span class="inquiry-title-line"><span>Let's Build</span></span>
             <span class="inquiry-title-line"><span>Intelligent Solution</span></span>
             <span class="inquiry-title-line"><span>for Your Business</span></span>
           </h2>
-          <p class="inquiry-support">Scan the code or tap it to chat with us on WhatsApp.</p>
-          <a class="inquiry-email" href="https://wa.me/6281554551255?text=Hi%20NADI%21%20I%E2%80%99d%20like%20to%20explore%20how%20you%20could%20support%20our%20business%20operations.%20Can%20we%20discuss%3F" target="_blank" rel="noopener noreferrer">Talk to us on WhatsApp</a>
+          <p class="inquiry-support">Scan the code, or tap it, to start a WhatsApp chat with the team.</p>
+          <a class="station-cta project-cta inquiry-email" href="https://wa.me/6281554551255?text=Hi%20NADI%21%20I%E2%80%99d%20like%20to%20explore%20how%20you%20could%20support%20our%20business%20operations.%20Can%20we%20discuss%3F" target="_blank" rel="noopener noreferrer" aria-label="Start a WhatsApp chat with NADI"><span>Start the chat <span class="project-cta-icon" aria-hidden="true">↗</span></span></a>
         </div>
         <figure class="inquiry-code">
           <a class="inquiry-qr" href="https://wa.me/6281554551255?text=Hi%20NADI%21%20I%E2%80%99d%20like%20to%20explore%20how%20you%20could%20support%20our%20business%20operations.%20Can%20we%20discuss%3F" target="_blank" rel="noopener noreferrer" aria-label="Talk to NADI on WhatsApp">
-            <img class="inquiry-qr-image" src="videos/gateway-hero/media/whatsapp.svg" alt="" width="490" height="490" decoding="async" />
+            <img class="inquiry-qr-image" src="videos/gateway-hero/media/contact-qr-whatsapp.svg" alt="" width="770" height="770" decoding="async" />
           </a>
         </figure>
       </section>
@@ -931,8 +936,8 @@
     </div>
     </main>
 
-    <script src="videos/gateway-hero/nadi-system.js"></script>
-    <script type="module" src="videos/gateway-hero/work.js"></script>
+    <script src="videos/gateway-hero/nadi-system.js?v=surface-5"></script>
+    <script type="module" src="videos/gateway-hero/work.js?v=surface-5"></script>
     <script type="module" src="videos/gateway-hero/voice.js?v=eyes-only-17"></script>
   </body>
 </html>
