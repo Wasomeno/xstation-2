@@ -419,6 +419,17 @@ html.is-shot .site-footer {
     scroll-behavior: auto;
   }
 
+  #root,
+  #nadi-stage {
+    clip-path: inset(0 0 round 0) !important;
+    will-change: auto;
+  }
+
+  #hero-copy,
+  .stage-media img {
+    transform: none !important;
+  }
+
   #site-nav,
   #site-nav * {
     transition: none !important;

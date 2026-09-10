@@ -1,10 +1,11 @@
 import { createCluster } from "./cluster.js";
 
-const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+const reduce = reducedMotionMedia.matches;
 const shot = new URLSearchParams(window.location.search).get("shot");
 const gsap = window.gsap;
 const ScrollTrigger = window.ScrollTrigger;
-const ENHANCED_MOTION_QUERY = "(min-width: 64rem) and (hover: hover) and (pointer: fine)";
+const ENHANCED_MOTION_QUERY = "(min-width: 64rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
 const smoothScrollMedia = window.matchMedia("(min-width: 64rem)");
 
 const cluster = createCluster({
@@ -77,20 +78,17 @@ function bindHeroEntry() {
 
 function smooth() {
   if (
-    reduce
+    reducedMotionMedia.matches
     || shot
     || !smoothScrollMedia.matches
     || typeof window.Lenis !== "function"
   ) return null;
 
+  // Keep page traversal close to native; ScrollTrigger owns the hero choreography.
   const lenis = new window.Lenis({
-    duration: 2.6,
-    lerp: 0.032,
-    wheelMultiplier: 0.42,
-    touchMultiplier: 0.85,
-    easing: function (t) {
-      return 1 - Math.pow(1 - t, 5);
-    },
+    lerp: 0.09,
+    wheelMultiplier: 0.85,
+    touchMultiplier: 1,
     smoothWheel: true,
   });
 
@@ -117,7 +115,8 @@ function smooth() {
       const el = document.querySelector(href);
       if (!el) return;
       e.preventDefault();
-      lenis.scrollTo(el, { offset: -8, duration: 2.4 });
+      // Anchor jumps use one short, deterministic timing model instead of the global lerp.
+      lenis.scrollTo(el, { offset: -8, duration: 0.95, lerp: 0 });
     };
     a.addEventListener("click", onClick);
     anchorBindings.push([a, onClick]);
@@ -191,12 +190,12 @@ function stopSmooth() {
 }
 
 function bindSmoothStart() {
-  if (reduce || shot || typeof window.Lenis !== "function") return () => {};
+  if (shot || typeof window.Lenis !== "function") return () => {};
   let welcomeFinished = !document.getElementById("welcome-bumper");
 
   const sync = () => {
     if (!welcomeFinished) return;
-    if (smoothScrollMedia.matches) startSmooth();
+    if (!reducedMotionMedia.matches && smoothScrollMedia.matches) startSmooth();
     else stopSmooth();
   };
 
@@ -212,9 +211,11 @@ function bindSmoothStart() {
   }
 
   smoothScrollMedia.addEventListener("change", sync);
+  reducedMotionMedia.addEventListener("change", sync);
   return () => {
     window.removeEventListener("xstation:welcome-finished", onFinished);
     smoothScrollMedia.removeEventListener("change", sync);
+    reducedMotionMedia.removeEventListener("change", sync);
     stopSmooth();
   };
 }
@@ -240,7 +241,7 @@ function bindHeroScroll() {
         start: "top top",
         endTrigger: "#work",
         end: "top 12%",
-        scrub: 0.8,
+        scrub: true,
         invalidateOnRefresh: true,
       },
       onUpdate: () => cluster.setProgress(depth.progress),
@@ -531,7 +532,7 @@ function bindParallax() {
           trigger,
           start: "top bottom",
           end: "bottom top",
-          scrub: 0.8,
+          scrub: true,
           invalidateOnRefresh: true,
         },
       }
