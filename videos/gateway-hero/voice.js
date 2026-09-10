@@ -1,6 +1,4 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
-import createFlatWaveform from "./voice-variant-1.js";
-import createSmoothWaveform from "./voice-variant-2.js";
 
 const TARGET_RATE = 24000;
 
@@ -108,15 +106,8 @@ function createPauseDetector() {
   };
 }
 
-// Variant 3: the earlier flat, layered-circle animation.
+// Variant 3: layered idle circles unfold into an attentive, expressive face.
 function createWaveform(canvas) {
-  const variant = canvas.closest("#voice-surface")?.dataset.variant;
-  if (variant === "1") {
-    return createFlatWaveform(canvas, voiceEnergy, smoothVoiceEnergy);
-  }
-  if (variant === "2") {
-    return createSmoothWaveform(canvas, voiceEnergy, smoothVoiceEnergy);
-  }
   const ctx = canvas.getContext("2d");
   if (!ctx) return { setAnalyser() {}, refresh() {} };
   const root = canvas.closest("#voice-surface");
@@ -128,8 +119,24 @@ function createWaveform(canvas) {
   let analyser = null;
   let energy = 0;
   let phase = 0;
+  let expressionTime = 0;
+  let speechTime = 0;
+  let nodTime = 0.72;
+  let nodCooldown = 0;
   let visualRadius = 24;
-  let visualSquash = 1;
+  let visualFace = 0;
+  let curiosity = 0;
+  // Circle.svg's top and bottom faces, normalized to their circle radius.
+  const listeningPose = [
+    { x: -0.178061, y: -0.208187, rx: 0.373516, ry: 0.526891, spin: -0.286689 },
+    { x: 0.619170, y: -0.206809, rx: 0.234552, ry: 0.397226, spin: 0.080890 },
+    { x: -0.094579, y: 0.678436, rx: 0.161412, ry: 0.107188, spin: 0 },
+  ];
+  const thinkingPose = [
+    { x: -0.384411, y: -0.037947, rx: 0.412864, ry: 0.670817, spin: -0.117271 },
+    { x: 0.439721, y: -0.234707, rx: 0.366162, ry: 0.490939, spin: 0.098916 },
+    { x: 0.372745, y: 0.605300, rx: 0.112107, ry: 0.059774, spin: -0.596200 },
+  ];
   let lastTime = 0;
   let raf = 0;
   let size = 88;
@@ -150,39 +157,94 @@ function createWaveform(canvas) {
       target = Math.pow(voiceEnergy(waveform, frequency), 0.65);
     }
     energy = motion.matches || failed ? 0 : smoothVoiceEnergy(energy, target, seconds);
-    const speed = state === "thinking" ? 1.05 : state === "connecting" ? 0.65 : listening ? 0.55 + energy * 0.85 : 0.08;
+    const targetFace = !failed && (listening || processing) ? 1 : 0;
+    visualFace = motion.matches || failed ? targetFace
+      : visualFace + (targetFace - visualFace) * (1 - Math.exp(-seconds / 0.12));
+    const morph = visualFace * visualFace * (3 - 2 * visualFace);
+    const targetCuriosity = state === "thinking" ? 1 : 0;
+    curiosity = motion.matches || failed ? targetCuriosity
+      : curiosity + (targetCuriosity - curiosity) * (1 - Math.exp(-seconds / 0.12));
+    const speed = 0.08 + (0.65 + energy * 0.25 - 0.08) * visualFace;
     if (!motion.matches && !failed) phase += seconds * speed;
+    if (!motion.matches && !failed) expressionTime = targetFace ? expressionTime + seconds : 0;
     const t = motion.matches || failed ? 0 : phase;
     const targetRadius = listening ? 34 : state === "thinking" ? 32 : processing ? 30 : 24;
     visualRadius = motion.matches || failed ? targetRadius
-      : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.2));
-    const targetSquash = state === "thinking" ? 0.48 : 1;
-    visualSquash = motion.matches || failed ? targetSquash
-      : visualSquash + (targetSquash - visualSquash) * (1 - Math.exp(-seconds / 0.18));
+      : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.12));
     const radius = size * (visualRadius / 88);
+    const alive = !motion.matches && !failed;
+    nodCooldown = Math.max(0, nodCooldown - seconds);
+    if (alive && listening) {
+      speechTime = root.dataset.speaking === "true" && energy > 0.12 ? speechTime + seconds : 0;
+      if (speechTime >= 0.32 && nodCooldown === 0) {
+        nodTime = 0;
+        nodCooldown = 6.5;
+        speechTime = 0;
+      }
+      nodTime = Math.min(0.72, nodTime + seconds);
+    } else {
+      speechTime = 0;
+      nodTime = alive ? Math.min(0.72, nodTime + seconds) : 0.72;
+    }
+    const nod = nodTime < 0.72 ? Math.sin(Math.PI * nodTime / 0.72) ** 2 * morph : 0;
+    // A brief blink every 10.5 seconds, independent of microphone intensity.
+    const blinkPhase = expressionTime % 10.5;
+    const blink = alive ? 1 - 0.88 * Math.exp(-(((blinkPhase - 8.5) / 0.1) ** 2)) : 1;
+    // Match the original rotate-then-translate orbit, even while a face is visible.
+    const idlePose = [0, 1, 2].map(layer => {
+      const spin = t * (layer === 1 ? -0.7 : 1) + layer * 2.1;
+      const offset = 0.3 - layer * 0.25;
+      return {
+        x: offset * Math.cos(spin) - 0.22 * Math.sin(spin),
+        y: offset * Math.sin(spin) + 0.22 * Math.cos(spin),
+        rx: 1.06 - layer * 0.19,
+        ry: 1.06 - layer * 0.19,
+        spin,
+      };
+    });
+    const amplitude = 0.025 * (1 - morph);
     ctx.clearRect(0, 0, size, size);
     ctx.save();
-    ctx.translate(size / 2, size / 2);
+    ctx.translate(size / 2, size / 2 + nod * 2.5 * size / 88);
+    if (nod > 0) ctx.scale(1, 1 - nod * 0.035);
     ctx.beginPath();
-    ctx.roundRect(-radius, -radius * visualSquash, radius * 2, radius * visualSquash * 2, radius * visualSquash);
+    ctx.roundRect(-radius, -radius, radius * 2, radius * 2, radius);
     ctx.clip();
-    ctx.scale(1, visualSquash);
     ctx.fillStyle = failed ? palette[0] : palette[1];
     ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
-    // Three flat overlapping contours.
     for (let layer = 0; layer < 3; layer += 1) {
-      const rotation = t * (!processing && layer === 1 ? -0.7 : 1) + layer * 2.1;
-      const amplitude = processing ? 0.08 : listening ? 0.1 + energy * 0.15 : 0.025;
+      // Preserve each idle circle’s color and stacking order; move it to its facial role.
+      const role = 2 - layer;
+      const feature = {};
+      const from = idlePose[layer];
+      const to = {};
+      for (const key of ["x", "y", "rx", "ry", "spin"]) {
+        to[key] = listeningPose[role][key] + (thinkingPose[role][key] - listeningPose[role][key]) * curiosity;
+      }
+      if (role < 2) {
+        // Listening focuses together; thinking gives a soft, curious eye gesture.
+        const squintPhase = expressionTime % (6 - curiosity);
+        const squint = alive ? Math.exp(-(((squintPhase - 2 - curiosity * role * 1.7) / 0.75) ** 2)) : 0;
+        to.ry *= blink * (1 - squint * (0.18 - curiosity * (role === 0 ? 0.08 : 0.12)) - energy * 0.07);
+      } else to.ry *= 1 + energy * 0.16;
+      const turn = Math.PI * 2;
+      let delta = ((to.spin - from.spin) % turn + turn) % turn;
+      if (layer === 1 && delta !== 0) delta -= turn;
+      feature.x = from.x + (to.x - from.x) * morph;
+      feature.y = from.y + (to.y - from.y) * morph;
+      feature.rx = from.rx + (to.rx - from.rx) * morph;
+      feature.ry = from.ry + (to.ry - from.ry) * morph;
+      feature.spin = from.spin + delta * morph;
       ctx.save();
-      ctx.rotate(rotation);
-      ctx.translate(radius * (0.3 - layer * 0.25), radius * 0.22);
+      ctx.translate(feature.x * radius, feature.y * radius);
+      ctx.rotate(feature.spin);
       ctx.beginPath();
       for (let i = 0; i <= 80; i += 1) {
         const angle = i / 80 * Math.PI * 2;
-        const wave = Math.sin(angle * 2 + t + layer) + Math.sin(angle * 3 - t * 0.8) * 0.35;
-        const reach = radius * (1.06 - layer * 0.19) * (1 + wave * amplitude);
-        const x = Math.cos(angle) * reach;
-        const y = Math.sin(angle) * reach;
+        const wave = Math.sin(angle * 2 + t + layer) + Math.sin(angle * 3 - t * 0.8) * 0.35
+          + Math.sin(angle * 5 + t * 1.35 + layer * 2) * 0.28 * visualFace;
+        const x = Math.cos(angle) * radius * feature.rx * (1 + wave * amplitude);
+        const y = Math.sin(angle) * radius * feature.ry * (1 + wave * amplitude);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -233,8 +295,6 @@ function createSurface() {
   root.lang = "id";
   root.hidden = true;
   root.dataset.state = "idle";
-  const variant = new URLSearchParams(window.location.search).get("voice-variant");
-  root.dataset.variant = ["1", "2"].includes(variant) ? variant : "3";
   root.innerHTML = `
     <div class="voice-copy">
       <p class="voice-status" role="status" aria-live="polite"></p>
@@ -269,8 +329,9 @@ function bindVoice() {
   let feedbackAnimation = null;
   const setCopy = (status, transcript = "", state = "idle") => {
     ui.status.textContent = status || "";
-    ui.transcript.textContent = state === "listening" ? transcript : "";
+    ui.transcript.textContent = state === "listening" && typeof transcript === "string" ? transcript.trim() : "";
     ui.root.dataset.state = state;
+    if (state !== "listening") ui.root.dataset.speaking = "false";
     ui.button.setAttribute("aria-pressed", session ? "true" : "false");
     ui.button.setAttribute("aria-label", session
       ? (state === "connecting" ? COPY.cancel : COPY.stop)
@@ -341,7 +402,7 @@ function bindVoice() {
     } else showNoAction();
   };
 
-  const startCapture = (isCurrent, isReady, onPause) => {
+  const startCapture = (isCurrent, isReady, onPause, turn) => {
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
@@ -359,6 +420,16 @@ function bindVoice() {
       if (isReady()) socket.send(data);
       else pending.push(data);
     };
+    const commitTurn = () => {
+      if (!turn.captioned) {
+        turn.held = true;
+        return;
+      }
+      turn.held = false;
+      send({ type: "commit" });
+      if (isReady()) onPause();
+      else pendingCommit = true;
+    };
     processor.onaudioprocess = (event) => {
       if (!isCurrent() || pendingCommit || !["connecting", "listening"].includes(ui.root.dataset.state)) return;
       const input = event.inputBuffer.getChannelData(0);
@@ -371,11 +442,7 @@ function bindVoice() {
       }
       send({ type: "audio", pcm: floatToPcm16Base64(pcm) });
       const action = pause.update(input, performance.now());
-      if (action === "commit") {
-        send({ type: "commit" });
-        if (isReady()) onPause();
-        else pendingCommit = true;
-      }
+      if (action === "commit") commitTurn();
     };
     source.connect(analyser);
     source.connect(processor);
@@ -387,8 +454,13 @@ function bindVoice() {
         for (const data of pending) socket.send(data);
         pending.length = 0;
         bufferedSamples = 0;
-        if (pendingCommit) { pendingCommit = false; onPause(); }
+        if (pendingCommit) {
+          pendingCommit = false;
+          if (turn.captioned) onPause();
+          else turn.held = true;
+        }
       },
+      release() { commitTurn(); },
     };
   };
 
@@ -409,6 +481,16 @@ function bindVoice() {
     let submittedItem = null;
     const ignoredItems = new Set();
     let pause = null;
+    const turn = { captioned: false, held: false };
+    const noteCaption = (value) => {
+      const text = typeof value === "string" ? value.trim() : "";
+      if (text) turn.captioned = true;
+      return text;
+    };
+    const clearTurn = () => {
+      turn.captioned = false;
+      turn.held = false;
+    };
     const isReady = () => isCurrent() && backendReady && captureReady && socket?.readyState === 1;
     const listenWhenReady = () => {
       if (isReady()) { showHearing(); pause.flush(); }
@@ -442,7 +524,7 @@ function bindVoice() {
         pause = startCapture(isCurrent, isReady, () => {
           submittedItem = currentItem;
           setCopy(COPY.thinking, "", "thinking");
-        });
+        }, turn);
         captureReady = true;
         listenWhenReady();
       }).catch(fail);
@@ -458,10 +540,12 @@ function bindVoice() {
       const ws = new WebSocket(VOICE_BOX_WS);
       socket = ws;
       const finishTurn = () => {
+        ui.root.dataset.speaking = "false";
         pause?.reset();
         if (currentItem) ignoredItems.add(currentItem);
         currentItem = null;
         submittedItem = null;
+        clearTurn();
       };
       ws.addEventListener("message", (event) => {
         if (!isCurrent()) return;
@@ -499,7 +583,9 @@ function bindVoice() {
           feedbackAnimation?.cancel();
           currentItem = payload.item_id || null;
           submittedItem = null;
+          clearTurn();
           showHearing();
+          ui.root.dataset.speaking = "true";
           return;
         }
         if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
@@ -511,13 +597,18 @@ function bindVoice() {
         }
         else if (payload.type === "delta") {
           if (submittedItem && payload.item_id === submittedItem) return;
-          const text = typeof payload.text === "string" ? payload.text : "";
-          if (text.trim()) pause?.transcript(performance.now());
+          const text = noteCaption(payload.text);
+          if (!text) return;
+          pause?.transcript(performance.now());
           showHearing(text);
+          ui.root.dataset.speaking = "true";
+          if (turn.held) pause?.release();
         }
         else if (payload.type === "final" || payload.type === "speech_stopped") {
+          ui.root.dataset.speaking = "false";
+          noteCaption(payload.transcript || payload.text);
           pause?.reset();
-          setCopy(COPY.thinking, "", "thinking");
+          if (turn.captioned) setCopy(COPY.thinking, "", "thinking");
         }
         else if (payload.type === "decision") {
           finishTurn();
