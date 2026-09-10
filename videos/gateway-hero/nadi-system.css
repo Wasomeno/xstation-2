@@ -277,6 +277,13 @@ body:not(.system-reached) #brand .brand-tag {
   transition: fill 0.4s ease, r 0.4s ease;
 }
 
+.bp .node text {
+  paint-order: stroke fill;
+  stroke: var(--page);
+  stroke-width: 7px;
+  stroke-linejoin: round;
+}
+
 .bp .core .halo {
   fill: rgb(28 133 92 / 0.1);
   stroke: none;
