@@ -37,15 +37,11 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   });
   const LOOP = SEQ.reduce((a, s) => a + s.dur, 0);
 
-  const G = [61, 139, 103];
-  const GLOW = [74, 224, 157];
-  const PULSE = [110, 240, 178];
-  const HOT = [155, 243, 203];
-  const PIN = [226, 255, 240];
-  const HEAD = [45, 177, 112];
-  const PAPER_GAIN = 1.35;
+  // One emitted-light family keeps the dense canopy coherent. Depth, focus,
+  // and additive overlap create the variations instead of separate greens.
+  const G = [110, 240, 178];
+  const PALE = [228, 255, 241];
   const FAR_ALPHA_MUL = 0.22;
-  const CORE_BLOOM = 0.58;
   const NAMES = [
     "Marketing & Content",
     "Customer Engagement",
@@ -162,7 +158,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       const c = curve(origin, m.dir, m.len * scale, m.bow[0] * scale, m.bow[1] * scale, 44);
       const supporting = mainIndex >= NAMES.length;
       const v = { ...c, gen: 0, w: (supporting ? 2.3 : 2.9) * widthMul,
-        a: (supporting ? 0.30 : 0.40) * alphaMul, kids: [], dur: OUT, origin };
+        a: (supporting ? 0.30 : 0.40) * alphaMul, kids: [], dur: OUT, origin, supporting };
       all.push(v);
       [0.52, 0.70, 0.86].forEach((at, j) => {
         const i0 = Math.round(at * 44);
@@ -175,7 +171,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         );
         const len = m.len * scale * rr(0.34, 0.52);
         const sc = curve(base, dir, len, rr(-60, 60) * scale, rr(-50, 50) * scale, 18);
-        const sv = { ...sc, gen: 1, w: 1.7 * widthMul, a: 0.30 * alphaMul, kids: [], parent: v, at, dur: 0.40, origin };
+        const sv = { ...sc, gen: 1, w: 1.7 * widthMul, a: 0.30 * alphaMul, kids: [], parent: v, at, dur: 0.40, origin, supporting };
         all.push(sv);
         v.kids.push(sv);
         if (deep) {
@@ -189,7 +185,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
               rr(0.6, 1.1) * (k % 2 ? -1 : 1),
             );
             const tc = curve(b2, d2, len * rr(0.38, 0.6), rr(-30, 30) * scale, rr(-24, 24) * scale, 10);
-            const tv = { ...tc, gen: 2, w: 1.05 * widthMul, a: 0.20 * alphaMul, kids: [], parent: sv, at: at2, dur: 0.28, origin };
+            const tv = { ...tc, gen: 2, w: 1.05 * widthMul, a: 0.20 * alphaMul, kids: [], parent: sv, at: at2, dur: 0.28, origin, supporting };
             all.push(tv);
             sv.kids.push(tv);
           });
@@ -199,7 +195,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         const tan = tangentAt(c.pts, 43);
         const dir = rotAround(tan, norm(cross(tan, [rr(-1, 1), rr(-1, 1), rr(-1, 1)])), rr(0.5, 1.2));
         const tw = curve(c.end, dir, m.len * scale * rr(0.14, 0.24), rr(-20, 20) * scale, rr(-16, 16) * scale, 7);
-        const wv = { ...tw, gen: 3, w: 0.8 * widthMul, a: 0.18 * alphaMul, kids: [], parent: v, at: 1, dur: 0.22, origin };
+        const wv = { ...tw, gen: 3, w: 0.8 * widthMul, a: 0.18 * alphaMul, kids: [], parent: v, at: 1, dur: 0.22, origin, supporting };
         all.push(wv);
         v.kids.push(wv);
       }
@@ -221,7 +217,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         const extension = {
           pts, end, dir, gen: parent.gen + 1,
           w: parent.w * 0.58, a: parent.a * 0.85,
-          kids: [], parent, at: 1, dur: 0.22, origin,
+          kids: [], parent, at: 1, dur: 0.22, origin, supporting: parent.supporting,
         };
         all.push(extension);
         parent.kids.push(extension);
@@ -231,7 +227,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         const fork = {
           ...curve(pts[7], forkDir, len * 0.56, 8 * scale, -5 * scale, 8),
           gen: extension.gen + 1, w: extension.w * 0.64, a: extension.a * 0.8,
-          kids: [], parent: extension, at, dur: 0.18, origin,
+          kids: [], parent: extension, at, dur: 0.18, origin, supporting: parent.supporting,
         };
         all.push(fork);
         extension.kids.push(fork);
@@ -239,6 +235,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     }
     for (const v of all) {
       v.rad = v.pts.map((p) => Math.hypot(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]));
+      v.hbAmp = deep ? (v.supporting ? 0.72 : 1) : (v.supporting ? 0.38 : 0.5);
     }
     return { all, primaries };
   }
@@ -263,66 +260,6 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   let CX = 0;
   let CY = 0;
   let SC = 1;
-  // Cache the scenery on resize; only gentle parallax moves each frame.
-  const scenery = document.createElement("canvas");
-  const sceneryCtx = scenery.getContext("2d");
-  function paintScenery() {
-    scenery.width = host.width;
-    scenery.height = host.height;
-    sceneryCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    const haze = (x, y, rx, ry, color, alpha) => {
-      sceneryCtx.save();
-      sceneryCtx.translate(W * x, Ht * y);
-      sceneryCtx.scale(W * rx, Ht * ry);
-      const wash = sceneryCtx.createRadialGradient(0, 0, 0, 0, 0, 1);
-      wash.addColorStop(0, rgba(color, alpha));
-      wash.addColorStop(0.45, rgba(color, alpha * 0.55));
-      wash.addColorStop(1, rgba(color, 0));
-      sceneryCtx.fillStyle = wash;
-      sceneryCtx.fillRect(-1, -1, 2, 2);
-      sceneryCtx.restore();
-    };
-    sceneryCtx.fillStyle = "#04100b";
-    sceneryCtx.fillRect(0, 0, W, Ht);
-    haze(0.80, 0.40, 0.43, 0.55, [18, 78, 55], 0.34);
-    haze(0.61, 0.84, 0.46, 0.22, [11, 54, 39], 0.3);
-    haze(0.95, 0.68, 0.31, 0.30, [36, 90, 66], 0.22);
-    // Fine paper grain, generated once per resize rather than animated noise.
-    // A separate seed keeps texture changes independent of branch geometry.
-    const grain = document.createElement("canvas");
-    grain.width = scenery.width;
-    grain.height = scenery.height;
-    const grainCtx = grain.getContext("2d");
-    const pixels = grainCtx.createImageData(grain.width, grain.height);
-    let grainSeed = 9137;
-    for (let i = 0; i < pixels.data.length; i += 4) {
-      grainSeed = (Math.imul(grainSeed, 1664525) + 1013904223) >>> 0;
-      const noise = grainSeed / 4294967296;
-      const light = noise > 0.5;
-      pixels.data[i] = light ? 80 : 0;
-      pixels.data[i + 1] = light ? 116 : 24;
-      pixels.data[i + 2] = light ? 96 : 16;
-      pixels.data[i + 3] = Math.round(Math.abs(noise - 0.5) * 18);
-    }
-    grainCtx.putImageData(pixels, 0, 0);
-    sceneryCtx.drawImage(grain, 0, 0, W, Ht);
-    // Widely spaced contours suggest a distant ground plane.
-    for (let i = 0; i < 3; i++) {
-      const y = Ht * (0.77 + i * 0.075);
-      const ink = sceneryCtx.createLinearGradient(W * 0.34, 0, W, 0);
-      ink.addColorStop(0, "rgba(80,160,120,0)");
-      ink.addColorStop(0.55, `rgba(80,160,120,${0.08 - i * 0.015})`);
-      ink.addColorStop(1, "rgba(80,160,120,0)");
-      sceneryCtx.beginPath();
-      sceneryCtx.moveTo(W * 0.28, y + Ht * 0.07);
-      sceneryCtx.bezierCurveTo(W * 0.55, y - Ht * 0.08,
-        W * 0.72, y + Ht * 0.05, W * 1.05, y - Ht * 0.11);
-      sceneryCtx.strokeStyle = ink;
-      sceneryCtx.lineWidth = 0.8;
-      sceneryCtx.stroke();
-    }
-  }
-
   function size() {
     const r = host.getBoundingClientRect();
     DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -332,7 +269,6 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     host.width = Math.round(W * DPR);
     host.height = Math.round(Ht * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    paintScenery();
     const narrow = W < 820;
     CX = narrow ? W * 0.52 : W * 0.665;
     CY = narrow ? Ht * 0.40 : Ht * 0.50;
@@ -346,7 +282,6 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   let scrollProgress = 0;
   let scrollLift = 0;
   let scrollScale = 1;
-  let backdropLift = 0;
 
   function onPointerMove(e) {
     const r = host.getBoundingClientRect();
@@ -404,6 +339,14 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   let focusDepth = 1180;
   let treeA = 1;
   let revealR = 1e9;
+  let nowT = 0;
+  const HB = 1.25;
+  const HB_SPEED = 900;
+  const hbAt = (distance) => {
+    if (reduce) return 0;
+    const phase = frac((nowT - WAKE - distance / HB_SPEED) / HB);
+    return Math.exp(-phase * 7) + Math.exp(-Math.max(0, phase - 0.16) * 10) * 0.45;
+  };
 
   function rgba(rgb, a) {
     return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
@@ -422,124 +365,93 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   function vesselStroke(v, extraAlpha = 0) {
     const pts = v.pts;
     const n = pts.length;
-    const proj = new Array(n);
+    const projected = new Array(n);
+
     for (let i = 0; i < n; i++) {
-      const q = project(pts[i]);
-      proj[i] = [q[0], q[1], q[2], q[3]];
+      const point = project(pts[i]);
+      projected[i] = [point[0], point[1], point[2], point[3]];
     }
-    const CH_ = 4;
+
+    const chunk = 4;
     let front = -1;
-    for (let i = 0; i < n - 1; i += CH_) {
-      const j = Math.min(n - 1, i + CH_);
+
+    for (let i = 0; i < n - 1; i += chunk) {
+      const end = Math.min(n - 1, i + chunk);
       if (v.rad[i] > revealR) {
         front = i;
         break;
       }
-      const mid = proj[Math.min(n - 1, i + (CH_ >> 1))];
-      const k = mid[2];
-      const depth = mid[3];
-      const w = v.w * k * (1 - 0.42 * (i / n)) * 1.15;
-      const df = Math.min(1, Math.abs(depth - focusDepth) / 430);
-      const al = (v.a + extraAlpha) * fog(depth) * (1 - df * 0.35) * treeA * PAPER_GAIN;
-      const passes = df > 0.08
-        ? [
-            [1 + df * 4.8, al * 0.08, GLOW],
-            [1 + df * 2.2, al * 0.14, G],
-            [1 + df * 0.8, al * 0.44, G],
-          ]
-        : [
-            [2.35, al * 0.045, GLOW],
-            [1.15, al * 0.92, G],
-          ];
-      for (const [wm, a, color] of passes) {
-        strokeProjectedSegment(proj, i, j, w * wm, color, a);
-      }
 
-      // Only the selected vessel receives a luminous filament. This is the
-      // light-background equivalent of selective bloom in a WebGL pipeline.
-      if (extraAlpha > 0) {
-        const signalA = Math.min(
-          0.56,
-          (0.14 + extraAlpha * 2.2) * fog(depth) * (1 - df * 0.42) * treeA,
-        );
-        strokeProjectedSegment(proj, i, j, w * 4.2, GLOW, signalA * 0.11);
-        strokeProjectedSegment(proj, i, j, w * 1.75, PULSE, signalA * 0.42);
-        strokeProjectedSegment(proj, i, j, Math.max(0.34, w * 0.52), HOT, signalA * 0.52);
+      const mid = projected[Math.min(n - 1, i + (chunk >> 1))];
+      const depth = mid[3];
+      const heartbeat = nowT >= WAKE ? hbAt(v.rad[i]) * v.hbAmp : 0;
+      const width = v.w * mid[2] * (1 - 0.42 * (i / n)) * 1.15 * (1 + 0.30 * heartbeat);
+      const defocus = Math.min(1, Math.abs(depth - focusDepth) / 430);
+      const alpha = Math.min(
+        0.82,
+        (v.a + extraAlpha) * fog(depth) * (1 - defocus * 0.35) * treeA * (1 + 0.45 * heartbeat),
+      );
+      const passes = defocus > 0.08
+        ? [
+            [1 + defocus * 4.6, alpha * 0.10],
+            [1 + defocus * 2.3, alpha * 0.16],
+            [1 + defocus * 1.2, alpha * 0.38],
+          ]
+        : [[1, alpha]];
+
+      for (const [widthMultiplier, passAlpha] of passes) {
+        strokeProjectedSegment(projected, i, end, width * widthMultiplier, G, passAlpha);
       }
     }
+
     if (front > 0) {
-      const q = proj[front];
-      glow(q[0], q[1], 14 * q[2], 0.55 * fog(q[3]) * PAPER_GAIN, PULSE);
+      const point = projected[front];
+      glow(point[0], point[1], 14 * point[2], 0.55 * fog(point[3]));
     }
   }
 
-  function glow(x, y, r, a, rgb = G) {
-    if (r < 0.6 || a < 0.004) return;
-    const alpha = Math.min(0.9, a);
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, rgba(HOT, Math.min(0.94, alpha * 1.05)));
-    g.addColorStop(0.12, rgba(rgb, alpha * 0.86));
-    g.addColorStop(0.42, rgba(rgb, alpha * 0.24));
-    g.addColorStop(1, rgba(rgb, 0));
-    ctx.fillStyle = g;
+  function glow(x, y, radius, alpha) {
+    if (radius < 0.6 || alpha < 0.004) return;
+    const strength = Math.min(0.9, alpha);
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, rgba(G, strength));
+    gradient.addColorStop(0.4, rgba(G, strength * 0.32));
+    gradient.addColorStop(1, rgba(G, 0));
+    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, 6.2832);
+    ctx.arc(x, y, radius, 0, 6.2832);
     ctx.fill();
   }
 
-  function spark(v, f, strength, tail, headR, withHead) {
+  function spark(v, fraction, strength, tail, headRadius, withHead) {
     const n = v.pts.length - 1;
-    const fade = 1 - Math.pow(Math.min(1, f), 6);
-    const trail = [];
+    const fade = 1 - Math.pow(Math.min(1, fraction), 6);
+
     for (let i = tail; i >= 0; i--) {
-      const ff = f - i * (1.0 / (n * 0.9)) * (v.gen === 0 ? 1.0 : 1.6);
-      if (ff < 0) continue;
-      const pr = project(v.pts[Math.round(Math.min(1, ff) * n)]);
-      const kk = 1 - i / (tail + 1);
-      const df = Math.min(1, Math.abs(pr[3] - focusDepth) / 430);
-      const energy = Math.pow(kk, 1.7) * strength * fade * fog(pr[3]) * (1 - df * 0.5);
-      trail.push([pr[0], pr[1], pr[2], pr[3], kk, df, energy]);
-    }
+      const sample = fraction - i * (1 / (n * 0.9)) * (v.gen === 0 ? 1 : 1.6);
+      if (sample < 0) continue;
 
-    // Paint a tapered energized filament before the diffuse light. Keeping
-    // this pulse-only avoids turning the full network into a neon outline.
-    for (let i = 1; i < trail.length; i++) {
-      const prev = trail[i - 1];
-      const point = trail[i];
-      const energy = (prev[6] + point[6]) * 0.5;
-      const taper = (prev[4] + point[4]) * 0.5;
-      const scale = (prev[2] + point[2]) * 0.5;
-      const width = Math.max(0.42, (0.5 + headR * 0.17 * taper) * scale);
-      strokeProjectedSegment(trail, i - 1, i, width * 5.0, GLOW, energy * 0.10);
-      strokeProjectedSegment(trail, i - 1, i, width * 1.9, PULSE, energy * 0.38);
-      strokeProjectedSegment(trail, i - 1, i, width * 0.62, HOT, energy * 0.68);
-    }
-
-    for (const point of trail) {
+      const point = project(v.pts[Math.round(Math.min(1, sample) * n)]);
+      const taper = 1 - i / (tail + 1);
+      const defocus = Math.min(1, Math.abs(point[3] - focusDepth) / 430);
       glow(
         point[0],
         point[1],
-        (headR * 0.5 + headR * 3.2 * point[4]) * point[2] * (1 + point[5] * 1.5),
-        point[6],
-        PULSE,
+        (headRadius * 0.5 + headRadius * 3.2 * taper) * point[2] * (1 + defocus * 1.5),
+        Math.pow(taper, 1.7) * strength * fade * fog(point[3]) * (1 - defocus * 0.5),
       );
     }
-    if (withHead) {
-      const pr = project(v.pts[Math.round(Math.min(1, f) * n)]);
-      const df = Math.min(1, Math.abs(pr[3] - focusDepth) / 430);
-      const headAlpha = 0.95 * strength * fade * (1 - df * 0.6) * fog(pr[3]);
-      ctx.fillStyle = rgba(
-        HEAD,
-        headAlpha,
-      );
-      ctx.beginPath();
-      ctx.arc(pr[0], pr[1], (headR * 0.5 + df * 2.2) * pr[2], 0, 6.2832);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(pr[0], pr[1], Math.max(0.7, headR * 0.18 * pr[2]), 0, 6.2832);
-      ctx.fillStyle = rgba(PIN, Math.min(0.94, headAlpha * 1.45));
-      ctx.fill();
-    }
+
+    if (!withHead) return;
+    const point = project(v.pts[Math.round(Math.min(1, fraction) * n)]);
+    const defocus = Math.min(1, Math.abs(point[3] - focusDepth) / 430);
+    ctx.fillStyle = rgba(
+      PALE,
+      Math.min(0.94, 0.95 * strength * fade * (1 - defocus * 0.6) * fog(point[3])),
+    );
+    ctx.beginPath();
+    ctx.arc(point[0], point[1], (headRadius * 0.5 + defocus * 2.2) * point[2], 0, 6.2832);
+    ctx.fill();
   }
 
   function runPulse(root, t, gain, withHead) {
@@ -587,12 +499,12 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     }
     const clock = nowClock(now);
     const T = (clock - t0) / 1000;
+    nowT = T;
     const dt = Math.min(0.05, (clock - lastNow) / 1000);
     lastNow = clock;
     const scrollEase = scrollProgress * scrollProgress * (3 - 2 * scrollProgress);
     scrollLift = scrollEase * Ht * 0.055;
     scrollScale = 1 + scrollEase * 0.035;
-    backdropLift = scrollEase * Ht * 0.022;
 
     const waking = T < WAKE;
     const revealing = T >= WAKE && T < INTRO;
@@ -610,7 +522,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       }
       acc += s.dur;
     }
-    const agent = seg.type === "visit" ? NEAR.primaries[seg.agent] : null;
+    const agent = !reduce && seg.type === "visit" ? NEAR.primaries[seg.agent] : null;
     if (T < WAKE) {
       setScope(-1);
     } else if (T < TOUR) {
@@ -671,13 +583,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     ctx.clearRect(0, 0, W, Ht);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.globalCompositeOperation = "source-over";
-    ctx.save();
-    ctx.globalAlpha = waking ? 0.18 : 0.18 + treeA * 0.82;
-    const sceneryX = reduce ? 0 : mx * 5 + Math.sin(cam.yaw) * 9;
-    const sceneryY = reduce ? 0 : my * 3 + Math.sin(cam.pitch) * 6 - backdropLift;
-    ctx.drawImage(scenery, sceneryX - W * 0.02, sceneryY - Ht * 0.02, W * 1.04, Ht * 1.04);
-    ctx.restore();
+    ctx.globalCompositeOperation = "lighter";
 
     if (!waking) {
       const saveA = treeA;
@@ -685,7 +591,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       treeA = revealing ? easeOut(Math.max(0, (T - WAKE - 0.35) / REVEAL)) : 1;
       revealR = revealing ? treeA * 2600 : 1e9;
       for (const v of FAR.all) vesselStroke(v);
-      if (T >= TOUR) {
+      if (!reduce && T >= TOUR) {
         FAR.primaries.forEach((v, i) =>
           runPulse(v, frac(Ltime / (AMBIENT_PERIOD * 1.6) + i * 0.29) * AMBIENT_PERIOD * 1.6, 0.09, false),
         );
@@ -700,28 +606,59 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         vesselStroke(v, lit ? 0.12 : 0);
       }
 
+      const station = (v, size, baseAlpha) => {
+        const endpoint = project(v.end);
+        const defocus = Math.min(1, Math.abs(endpoint[3] - focusDepth) / 430);
+        const alpha = fog(endpoint[3]) * (1 - defocus * 0.5) * treeA;
+        const heartbeat = hbAt(v.rad[v.rad.length - 1]) * v.hbAmp;
+        const radius = size * endpoint[2] * (1 + 0.22 * heartbeat);
+
+        glow(
+          endpoint[0],
+          endpoint[1],
+          (12 + size * 2) * endpoint[2] * (1 + defocus) * (1 + 0.5 * heartbeat),
+          (baseAlpha + 0.34 * heartbeat) * alpha,
+        );
+
+        if (defocus < 0.85) {
+          const body = ctx.createRadialGradient(
+            endpoint[0], endpoint[1], 0,
+            endpoint[0], endpoint[1], radius,
+          );
+          const bodyAlpha = (0.9 + 0.1 * heartbeat) * Math.pow(1 - defocus, 2) * alpha;
+          body.addColorStop(0, rgba(PALE, bodyAlpha));
+          body.addColorStop(0.55, rgba(G, bodyAlpha * 0.9));
+          body.addColorStop(1, rgba(G, 0));
+          ctx.fillStyle = body;
+          ctx.beginPath();
+          ctx.arc(endpoint[0], endpoint[1], radius, 0, 6.2832);
+          ctx.fill();
+        }
+
+        if (size >= 4) {
+          ctx.beginPath();
+          ctx.arc(
+            endpoint[0],
+            endpoint[1],
+            Math.min(11, (size + 4) * endpoint[2]) * (1 + 0.2 * heartbeat),
+            0,
+            6.2832,
+          );
+          ctx.lineWidth = Math.max(0.3, Math.min(1.2, 0.9 * endpoint[2])) * (1 + 0.3 * heartbeat);
+          ctx.strokeStyle = rgba(G, (0.30 + 0.25 * heartbeat) * alpha);
+          ctx.stroke();
+        }
+      };
+
       NEAR.primaries.forEach((v) => {
         if (v === agent) return;
-        const ep = project(v.end);
-        const df = Math.min(1, Math.abs(ep[3] - focusDepth) / 430);
-        const a = fog(ep[3]) * (1 - df * 0.5) * treeA * PAPER_GAIN;
-        glow(ep[0], ep[1], 13 * ep[2] * (1 + df), 0.31 * a, PULSE);
-        ctx.beginPath();
-        ctx.arc(ep[0], ep[1], Math.max(1, 2.2 * ep[2]), 0, 6.2832);
-        ctx.fillStyle = rgba(HEAD, 0.72 * a);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(ep[0], ep[1], Math.min(10, 7.5 * ep[2]), 0, 6.2832);
-        ctx.lineWidth = Math.max(0.3, Math.min(1.2, 0.9 * ep[2]));
-        ctx.strokeStyle = rgba(PULSE, 0.58 * a);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(ep[0], ep[1], Math.max(0.55, 0.78 * ep[2]), 0, 6.2832);
-        ctx.fillStyle = rgba(PIN, 0.82 * a);
-        ctx.fill();
+        station(v, v.supporting ? 3.8 : 5.6, v.supporting ? 0.16 : 0.28);
       });
+      for (const v of NEAR.all) {
+        if (v.gen === 1) station(v, 2.5, 0.10);
+      }
 
-      if (T >= TOUR) {
+      if (!reduce && T >= TOUR) {
         NEAR.primaries.forEach((v, i) => {
           if (v === agent) return;
           runPulse(v, frac(Ltime / AMBIENT_PERIOD + i * 0.173) * AMBIENT_PERIOD, 0.22, false);
@@ -738,15 +675,14 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       glow(
         ep[0],
         ep[1],
-        32 * ep[2] * (1 + epdf),
-        (0.13 + (arr >= 0 && arr <= 1 ? (1 - arr) * 0.62 : 0)) * fog(ep[3]),
-        PULSE,
+        26 * ep[2] * (1 + epdf),
+        (0.10 + (arr >= 0 && arr <= 1 ? (1 - arr) * 0.55 : 0)) * fog(ep[3]),
       );
       if (arr >= 0 && arr <= 1) {
         ctx.beginPath();
         ctx.arc(ep[0], ep[1], (6 + easeOut(arr) * 30) * ep[2], 0, 6.2832);
         ctx.lineWidth = 1.2 * ep[2];
-        ctx.strokeStyle = rgba(PULSE, (1 - arr) * 0.38);
+        ctx.strokeStyle = rgba(G, (1 - arr) * 0.28);
         ctx.stroke();
       }
       labels.forEach((Lb, i) => {
@@ -785,7 +721,6 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
             pr[1],
             (4 + 18 * kq) * pr[2],
             Math.pow(kq, 1.5) * 0.26 * Math.sin(Math.PI * bo) * fog(pr[3]),
-            PULSE,
           );
         }
       }
@@ -798,51 +733,72 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     const cf = fog(cp[3]);
     let beat;
     let coreGain;
+
     if (waking) {
-      const bt = frac(T / BEAT);
-      const nth = Math.floor(T / BEAT);
-      beat = (Math.exp(-bt * 7) + Math.exp(-Math.max(0, bt - 0.17) * 10) * 0.45) * (0.4 + nth * 0.3);
+      const beatTime = frac(T / BEAT);
+      const beatIndex = Math.floor(T / BEAT);
+      beat = (
+        Math.exp(-beatTime * 7)
+        + Math.exp(-Math.max(0, beatTime - 0.17) * 10) * 0.45
+      ) * (0.4 + beatIndex * 0.3);
       coreGain = 0.55;
     } else {
       const burst = revealing ? Math.exp(-(T - WAKE) * 3.2) * 2.4 : 0;
-      const bt = T < TOUR ? 1 : agent ? tt / VISIT : tt / BREATH;
-      beat = Math.exp(-bt * 9) + Math.exp(-Math.max(0, bt - 0.14) * 12) * 0.5 + burst;
+      const beatTime = T < TOUR ? 1 : agent ? tt / VISIT : tt / BREATH;
+      beat = Math.max(
+        Math.exp(-beatTime * 9) + Math.exp(-Math.max(0, beatTime - 0.14) * 12) * 0.5,
+        hbAt(0) * 0.7,
+      ) + burst;
       coreGain = 1;
     }
-    glow(cp[0], cp[1], 220 * CORE_BLOOM * cp[2] * (1 + beat * 0.08), (0.15 + beat * 0.09) * cf * coreGain, GLOW);
-    glow(cp[0], cp[1], 68 * CORE_BLOOM * cp[2] * (1 + beat * 0.12), (0.58 + beat * 0.32) * cf * coreGain, PULSE);
-    glow(cp[0], cp[1], (28 + cdf * 34) * CORE_BLOOM * cp[2], (0.74 + beat * 0.26) * cf * coreGain, PULSE);
+
+    glow(
+      cp[0],
+      cp[1],
+      200 * cp[2] * (1 + beat * 0.08),
+      (0.12 + beat * 0.08) * cf * coreGain,
+    );
+    glow(
+      cp[0],
+      cp[1],
+      56 * cp[2] * (1 + beat * 0.12),
+      (0.44 + beat * 0.26) * cf * coreGain,
+    );
+    glow(
+      cp[0],
+      cp[1],
+      (22 + cdf * 30) * cp[2],
+      (0.50 + beat * 0.20) * cf * coreGain,
+    );
+
     if (!waking) {
       for (let k = 0; k < 2; k++) {
-        const q = frac(T / 3.6 + k * 0.5);
+        const ringProgress = frac(T / 3.6 + k * 0.5);
         ctx.beginPath();
-        ctx.arc(cp[0], cp[1], (30 + q * 110) * CORE_BLOOM * cp[2], 0, 6.2832);
+        ctx.arc(cp[0], cp[1], (30 + ringProgress * 110) * cp[2], 0, 6.2832);
         ctx.lineWidth = 1.0 * cp[2];
-        ctx.strokeStyle = rgba(PULSE, (1 - q) * 0.09 * cf);
+        ctx.strokeStyle = rgba(G, (1 - ringProgress) * 0.09 * cf);
         ctx.stroke();
       }
     }
+
     if (cdf < 0.85) {
-      ctx.beginPath();
-      ctx.arc(cp[0], cp[1], 14 * cp[2] * (1 - cdf * 0.42), 0, 6.2832);
-      ctx.lineWidth = Math.max(0.7, 1.15 * cp[2]);
-      ctx.strokeStyle = rgba(
-        PULSE,
-        (0.32 + beat * 0.08) * Math.pow(1 - cdf, 1.4) * cf * coreGain,
-      );
-      ctx.stroke();
       ctx.fillStyle = rgba(
-        HEAD,
-        (0.55 + beat * 0.15) * Math.pow(1 - cdf, 2) * cf * coreGain,
+        PALE,
+        (0.85 + beat * 0.15) * Math.pow(1 - cdf, 2) * cf * coreGain,
       );
       ctx.beginPath();
-      ctx.arc(cp[0], cp[1], 9 * cp[2] * (1 + beat * 0.16) * (1 - cdf * 0.7), 0, 6.2832);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cp[0], cp[1], Math.max(1, 3.1 * cp[2] * (1 - cdf * 0.5)), 0, 6.2832);
-      ctx.fillStyle = rgba(PIN, Math.min(0.94, (0.72 + beat * 0.12) * (1 - cdf) * cf * coreGain));
+      ctx.arc(
+        cp[0],
+        cp[1],
+        9 * cp[2] * (1 + beat * 0.16) * (1 - cdf * 0.7),
+        0,
+        6.2832,
+      );
       ctx.fill();
     }
+
+    ctx.globalCompositeOperation = "source-over";
 
     // Match the dark handoff transition: the currently lit node overloads
     // first, then its light expands until it becomes the next section's ground.
@@ -856,8 +812,8 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
       const white = whiteProgress * whiteProgress * (3 - 2 * whiteProgress);
 
       ctx.globalCompositeOperation = "lighter";
-      glow(fx, fy, diagonal * (0.08 + 0.55 * flare), 0.95 * flare, PULSE);
-      glow(fx, fy, diagonal * (0.03 + 0.16 * flare), flare, PIN);
+      glow(fx, fy, diagonal * (0.08 + 0.55 * flare), 0.95 * flare);
+      glow(fx, fy, diagonal * (0.03 + 0.16 * flare), flare);
       const core = ctx.createRadialGradient(
         fx,
         fy,

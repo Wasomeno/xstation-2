@@ -268,6 +268,10 @@ html.lenis body {
   object-fit: cover;
 }
 
+#cofinance .space-stage .hero {
+  object-fit: contain;
+}
+
 .space.is-app .space-stage {
   display: flex;
   align-items: center;

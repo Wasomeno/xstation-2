@@ -275,6 +275,124 @@ function bindHeroScroll() {
   });
 }
 
+function bindHeroSystemSnap() {
+  if (reduce || shot || !gsap || !ScrollTrigger) return () => {};
+
+  const pinSlot = document.getElementById("pin-slot");
+  const system = document.getElementById("system");
+  if (!pinSlot || !system) return () => {};
+
+  let activeTarget = null;
+  let transitionToken = 0;
+  let nativeTween = null;
+  let touchStartY = null;
+  let touchLastY = null;
+
+  const targetY = (target) => window.scrollY + target.getBoundingClientRect().top;
+
+  const commitTo = (target, targetIndex) => {
+    if (activeTarget === targetIndex) return;
+    activeTarget = targetIndex;
+    const token = ++transitionToken;
+
+    if (targetIndex === 1) cluster.setActive(true);
+
+    if (smoothInstance) {
+      smoothInstance.scrollTo(target, {
+        duration: 1,
+        easing: (t) => t * t * (3 - 2 * t),
+        lerp: 0,
+        lock: true,
+        force: true,
+        onComplete: () => {
+          if (token === transitionToken) activeTarget = null;
+        },
+      });
+      return;
+    }
+
+    nativeTween?.kill();
+    const scrollState = { y: window.scrollY };
+    nativeTween = gsap.to(scrollState, {
+      y: targetY(target),
+      duration: 1,
+      ease: "power1.inOut",
+      overwrite: true,
+      onUpdate: () => window.scrollTo(0, scrollState.y),
+      onComplete: () => {
+        if (token === transitionToken) activeTarget = null;
+        nativeTween = null;
+      },
+    });
+  };
+
+  const handleIntent = (direction, event) => {
+    const y = window.scrollY;
+    const systemTop = targetY(system);
+    const goingToSystem = direction > 0 && y < systemTop - 2;
+    const goingToHero = direction < 0 && y > 2 && y <= systemTop + 2;
+    if (!goingToSystem && !goingToHero) return false;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    commitTo(goingToSystem ? system : pinSlot, goingToSystem ? 1 : 0);
+    return true;
+  };
+
+  const onWheel = (event) => {
+    if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    handleIntent(Math.sign(event.deltaY), event);
+  };
+
+  const onTouchStart = (event) => {
+    if (event.touches.length !== 1) return;
+    touchStartY = event.touches[0].clientY;
+    touchLastY = touchStartY;
+  };
+
+  const onTouchMove = (event) => {
+    if (event.touches.length !== 1 || touchStartY === null || touchLastY === null) return;
+    const currentY = event.touches[0].clientY;
+    const travel = touchStartY - currentY;
+    const delta = touchLastY - currentY;
+    touchLastY = currentY;
+    if (Math.abs(travel) < 8 || Math.abs(delta) < 1) return;
+    handleIntent(Math.sign(delta), event);
+  };
+
+  const resetTouch = () => {
+    touchStartY = null;
+    touchLastY = null;
+  };
+
+  const onKeyDown = (event) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.target instanceof Element && event.target.closest("input, textarea, select, button, [contenteditable]")) return;
+
+    const down = event.key === "ArrowDown" || event.key === "PageDown" || (event.key === " " && !event.shiftKey);
+    const up = event.key === "ArrowUp" || event.key === "PageUp" || (event.key === " " && event.shiftKey);
+    if (down || up) handleIntent(down ? 1 : -1, event);
+  };
+
+  window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+  window.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
+  window.addEventListener("touchmove", onTouchMove, { passive: false, capture: true });
+  window.addEventListener("touchend", resetTouch, { passive: true, capture: true });
+  window.addEventListener("touchcancel", resetTouch, { passive: true, capture: true });
+  window.addEventListener("keydown", onKeyDown, { capture: true });
+
+  return () => {
+    transitionToken += 1;
+    nativeTween?.kill();
+    window.removeEventListener("wheel", onWheel, { capture: true });
+    window.removeEventListener("touchstart", onTouchStart, { capture: true });
+    window.removeEventListener("touchmove", onTouchMove, { capture: true });
+    window.removeEventListener("touchend", resetTouch, { capture: true });
+    window.removeEventListener("touchcancel", resetTouch, { capture: true });
+    window.removeEventListener("keydown", onKeyDown, { capture: true });
+  };
+}
+
 function bindProductsTitle() {
   if (!gsap || !ScrollTrigger) return;
 
@@ -358,14 +476,16 @@ function bindHeaderState() {
 }
 
 function bindBrandVisibility() {
-  if (shot || !gsap || !ScrollTrigger || !smoothScrollMedia.matches) return;
+  if (shot || !gsap) return () => {};
 
   const brand = document.getElementById("brand");
   const brandLabel = brand?.querySelector("em");
-  const products = document.getElementById("work");
-  if (!brand || !brandLabel || !products) return;
+  const brandMask = brand?.querySelector(".brand-mask");
+  if (!brand || !brandLabel || !brandMask) return () => {};
 
   let visible = true;
+  let lastY = window.scrollY;
+  let ticking = false;
 
   function setVisible(nextVisible) {
     if (nextVisible === visible) return;
@@ -373,39 +493,42 @@ function bindBrandVisibility() {
     brand.style.pointerEvents = nextVisible ? "auto" : "none";
 
     if (reduce) {
-      gsap.set(brandLabel, {
+      gsap.set([brandMask, brandLabel], {
         autoAlpha: nextVisible ? 1 : 0,
         yPercent: 0,
       });
       return;
     }
 
-    gsap.to(brandLabel, {
+    gsap.to([brandMask, brandLabel], {
       autoAlpha: nextVisible ? 1 : 0,
       yPercent: nextVisible ? 0 : -115,
       duration: nextVisible ? 0.46 : 0.34,
       ease: nextVisible ? "power3.out" : "power2.in",
+      stagger: nextVisible ? 0.055 : 0.035,
       overwrite: true,
     });
   }
 
-  ScrollTrigger.create({
-    id: "brand-directional-visibility",
-    trigger: products,
-    start: "top bottom",
-    end: "max",
-    onEnter: (self) => {
-      if (self.direction > 0) setVisible(false);
-    },
-    onUpdate: (self) => {
-      if (self.direction < 0) {
-        setVisible(true);
-      } else if (self.isActive) {
-        setVisible(false);
-      }
-    },
-    onLeaveBack: () => setVisible(true),
-  });
+  const update = () => {
+    ticking = false;
+    const y = window.scrollY;
+    const delta = y - lastY;
+
+    if (delta < -2) setVisible(true);
+    else if (delta > 2 && document.body.classList.contains("glare-passed-brand")) setVisible(false);
+
+    lastY = y;
+  };
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  return () => window.removeEventListener("scroll", onScroll);
 }
 
 function bindInquiryEntry() {
@@ -660,13 +783,16 @@ if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
 if (gsap && !isShot) {
   gsap.set("#site-nav, #hero-copy", { autoAlpha: 0 });
   let cleanupHeroEntry = () => {};
+  let cleanupHeroSystemSnap = () => {};
+  let cleanupBrandVisibility = () => {};
   let responsiveMotion = null;
   const cleanupSmoothStart = bindSmoothStart();
   const ctx = gsap.context(() => {
     cleanupHeroEntry = bindHeroEntry();
     bindHeroScroll();
+    cleanupHeroSystemSnap = bindHeroSystemSnap();
     bindProductsTitle();
-    bindBrandVisibility();
+    cleanupBrandVisibility = bindBrandVisibility();
     bindInquiryEntry();
     bindEnter();
     responsiveMotion = gsap.matchMedia();
@@ -679,6 +805,8 @@ if (gsap && !isShot) {
   window.addEventListener("pagehide", () => {
     cleanupSmoothStart();
     cleanupHeroEntry();
+    cleanupHeroSystemSnap();
+    cleanupBrandVisibility();
     responsiveMotion?.revert();
     cluster.dispose();
     ctx.revert();

@@ -17,6 +17,26 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
   filter: brightness(0) invert(1);
 }
 
+#brand .brand-tag {
+  display: none;
+  margin-left: 4px;
+  color: #5a8e78;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.18em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+body:not(.system-reached) #brand .brand-tag {
+  color: #8ed2b4;
+}
+
+@media (min-width: 720px) {
+  #brand .brand-tag { display: block; }
+}
+
 #hero .station-cta {
   --cta-fill: #5fe3a8;
   isolation: auto;
@@ -290,11 +310,18 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
   letter-spacing: 0.16em;
 }
 
+.bp .dot-operator .dot-label {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
 .bp .core-label {
   font-size: 12px;
   letter-spacing: 0.24em;
   fill: var(--deep-forest);
 }
+
+.bp .core-logo { filter: none; }
 
 .bp .state {
   opacity: 0;
@@ -343,6 +370,27 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
   animation: system-spin 14s linear infinite;
 }
 
+.bp .managed-link { stroke-dashoffset: 80; }
+
+.bp[data-state="managed"] .managed-link {
+  animation: managed-flow 2.4s linear infinite;
+}
+
+.bp .dot-operator :is(.dot-halo, .dot-body) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.bp[data-state="managed"] .dot-halo {
+  animation: managed-breathe 2.8s ease-in-out infinite;
+}
+
+.bp .managed-services-label { fill: var(--signal); }
+
+.bp[data-state="managed"] .managed-services-label {
+  animation: managed-label-in 0.65s 0.18s both;
+}
+
 .sys-cap {
   width: 100%;
   max-width: 34rem;
@@ -372,6 +420,19 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
 
 @keyframes system-spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes managed-flow {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes managed-breathe {
+  50% { transform: scale(1.06); }
+}
+
+@keyframes managed-label-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (min-width: 901px) {
@@ -428,6 +489,9 @@ body:not(.system-reached):not(.glare-passed-brand) #site-nav .brand-logo {
   }
 
   .bp .managed-ring,
+  .bp .managed-link,
+  .bp .dot-halo,
+  .bp .managed-services-label,
   .bp .next-branch {
     animation: none;
   }
