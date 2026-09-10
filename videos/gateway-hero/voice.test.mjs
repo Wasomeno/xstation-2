@@ -179,7 +179,17 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
     });
     for (let i = 1; i <= frameCount && nextFrame; i++) {
       nextFrame(1000 + i * 34);
-      if (variant === "3") nodSamples.push(translates[0][1] - 44);
+      if (variant === "3") {
+        assert.equal(translates[0][1], 44, "Nodding never moves the head");
+        assert.equal(squash, undefined, "Nodding never squashes the head");
+        if (state === "listening" && i >= 180) {
+          const layers = faceLayers();
+          const eyes = translates[layers[0] + 1][1] + 0.208187 * radius;
+          const mouth = translates[layers[2] + 1][1] - 0.678436 * radius;
+          nodSamples.push(eyes);
+          if (eyes > 0.1) assert.ok(mouth > 0 && mouth < eyes * 0.5, "Mouth follows less than the eyes");
+        }
+      }
       if (variant === "3" && i >= 180) eyeSamples.push(faceLayers().slice(0, 2).map(layer => ({
         width: paths[layer * 82 + 1][0], height: paths[layer * 82 + 21][1],
         position: translates[layer + 1].slice(),
@@ -306,15 +316,21 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
     });
   }
   const nods = render("listening", false, true, "3", 900, true).nodSamples;
-  let count = 0;
-  nods.forEach((value, i) => { if (value > 0.1 && !(nods[i - 1] > 0.1)) count++; });
+  let count = 0, activeFrames = 0;
+  nods.forEach((value, i) => {
+    if (value > 0.1) {
+      if (!(nods[i - 1] > 0.1)) count++;
+      activeFrames++;
+      assert.ok(activeFrames <= 12, "Cartoon nod finishes within 400ms");
+    } else activeFrames = 0;
+  });
   assert.ok(count >= 2 && count <= 5, "Sustained speech receives occasional nods, not constant bobbing");
-  assert.ok(Math.max(...nods) <= 2.5, "Nods stay small");
+  assert.ok(Math.max(...nods) > 2 && Math.max(...nods) <= 3.5, "Eyes make a small but readable nod");
   for (const [state, reduced, loud, speaking] of [
     ["listening", false, true, false], ["listening", false, false, true],
     ["thinking", false, true, true], ["idle", false, true, true], ["listening", true, true, true],
   ]) {
-    assert.ok(render(state, reduced, loud, "3", 240, speaking).nodSamples.every(value => value === 0),
+    assert.ok(render(state, reduced, loud, "3", 240, speaking).nodSamples.every(value => Math.abs(value) < 0.001),
       "Only audible, recognized speech while listening can trigger nods; reduced motion stays still");
   }
 });

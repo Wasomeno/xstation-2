@@ -121,7 +121,7 @@ function createWaveform(canvas) {
   let phase = 0;
   let expressionTime = 0;
   let speechTime = 0;
-  let nodTime = 0.72;
+  let nodTime = 0.38;
   let nodCooldown = 0;
   let visualRadius = 24;
   let visualFace = 0;
@@ -181,12 +181,16 @@ function createWaveform(canvas) {
         nodCooldown = 6.5;
         speechTime = 0;
       }
-      nodTime = Math.min(0.72, nodTime + seconds);
+      nodTime = Math.min(0.38, nodTime + seconds);
     } else {
       speechTime = 0;
-      nodTime = alive ? Math.min(0.72, nodTime + seconds) : 0.72;
+      nodTime = alive ? Math.min(0.38, nodTime + seconds) : 0.38;
     }
-    const nod = nodTime < 0.72 ? Math.sin(Math.PI * nodTime / 0.72) ** 2 * morph : 0;
+    // Cartoon timing: a quick 100ms dip, then a crisp ease-out return.
+    const nodProgress = nodTime / 0.38;
+    const nod = nodProgress < 1
+      ? (nodProgress < 0.28 ? (nodProgress / 0.28) ** 2 : ((1 - nodProgress) / 0.72) ** 3) * morph
+      : 0;
     // A brief blink every 10.5 seconds, independent of microphone intensity.
     const blinkPhase = expressionTime % 10.5;
     const blink = alive ? 1 - 0.88 * Math.exp(-(((blinkPhase - 8.5) / 0.1) ** 2)) : 1;
@@ -205,8 +209,7 @@ function createWaveform(canvas) {
     const amplitude = 0.025 * (1 - morph);
     ctx.clearRect(0, 0, size, size);
     ctx.save();
-    ctx.translate(size / 2, size / 2 + nod * 2.5 * size / 88);
-    if (nod > 0) ctx.scale(1, 1 - nod * 0.035);
+    ctx.translate(size / 2, size / 2);
     ctx.beginPath();
     ctx.roundRect(-radius, -radius, radius * 2, radius * 2, radius);
     ctx.clip();
@@ -231,7 +234,7 @@ function createWaveform(canvas) {
       let delta = ((to.spin - from.spin) % turn + turn) % turn;
       if (layer === 1 && delta !== 0) delta -= turn;
       feature.x = from.x + (to.x - from.x) * morph;
-      feature.y = from.y + (to.y - from.y) * morph;
+      feature.y = from.y + (to.y - from.y) * morph + nod * (role < 2 ? 0.10 : 0.03);
       feature.rx = from.rx + (to.rx - from.rx) * morph;
       feature.ry = from.ry + (to.ry - from.ry) * morph;
       feature.spin = from.spin + delta * morph;
