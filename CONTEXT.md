@@ -37,7 +37,7 @@ Scrolling a Section into view along the site's existing smooth scroll, then a sh
 _Avoid_: jump, open, navigate, hash
 
 **Page Action**:
-A Show, back/next through the in-memory action log at its active index, exploration of the next Section, or focus on a Contact CTA. New actions replace forward history after going back. Contact requests focus the named/current product's CTA or the general Contact Section; opening WhatsApp requires an explicit request and never sends a message. Video demo commands are excluded. All actions use the page's catalog and existing elements.
+A Show, back through the in-memory action log at its active index, next Section in full page order from the visible Section, exploration of the next Section, or focus on a Contact CTA. Next proceeds from Hero to System, Products, each product, Clients, and Contact, where it stops. Next records a Show; new actions replace forward history after going back. Contact requests focus the named/current product's CTA or the general Contact Section; opening WhatsApp requires an explicit request and never sends a message. Video demo commands are excluded. All actions use the page's catalog and existing elements.
 _Avoid_: tool call, generic browser control, fill, mailto, answer
 
 **Clarification**:

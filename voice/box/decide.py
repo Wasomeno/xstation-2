@@ -42,7 +42,8 @@ Menyimpan, mengatur, dan mengakses pengetahuan perusahaan dari satu tempat adala
 Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
 Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
 
-"back"/"go back" mundur satu entri action log; "next"/"go next"/"go forward" maju satu entri action log. Browser menyimpan indeksnya, jangan menebak section.
+"back"/"go back" mundur satu entri action log.
+"next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
 "explore"/"What else can I explore?" mengeksplorasi section berikutnya sesuai posisi halaman, bukan maju dalam riwayat.
 Pemutaran demo/video tidak tersedia. Permintaan menonton/memutar demo adalah noop, jangan arahkan ke contact.
 Permintaan menjadwalkan/book demo adalah contact, bukan memutar video.

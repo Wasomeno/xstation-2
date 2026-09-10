@@ -169,6 +169,9 @@ function recordVoiceAction(entry) {
 }
 
 function currentVoiceSection() {
+  // A short, top-aligned section can leave the viewport center inside the next one.
+  const entry = voiceActionLog.entries[voiceActionLog.index];
+  const atActionPosition = entry?.section && Math.abs(window.scrollY - entry.top) < 2;
   let current = null;
   let distance = Infinity;
   for (const id of VOICE_SECTIONS) {
@@ -177,6 +180,7 @@ function currentVoiceSection() {
     if (!el) continue;
     const bounds = el.getBoundingClientRect();
     if (!bounds.height || bounds.top >= window.innerHeight || bounds.top + bounds.height <= 0) continue;
+    if (atActionPosition && id === entry.section) return id;
     const centerDistance = Math.max(bounds.top - window.innerHeight / 2, window.innerHeight / 2 - bounds.top - bounds.height, 0);
     if (centerDistance < distance) { current = id; distance = centerDistance; }
   }
@@ -212,8 +216,8 @@ function showSection(id, focusContact = false, record = true) {
 }
 
 function runPageAction(decision) {
-  if (decision.action === "back" || decision.action === "next") {
-    const index = voiceActionLog.index + (decision.action === "back" ? -1 : 1);
+  if (decision.action === "back") {
+    const index = voiceActionLog.index - 1;
     const entry = voiceActionLog.entries[index];
     if (!entry) return false;
     showSection._focus = null;
@@ -226,6 +230,13 @@ function runPageAction(decision) {
     }
     voiceActionLog.index = index;
     return true;
+  }
+  if (decision.action === "next") {
+    const order = [...VOICE_SECTIONS].filter(id => id !== "root");
+    const current = currentVoiceSection();
+    const index = order.indexOf(current);
+    if (index < 0 || index >= order.length - 1) return false;
+    return showSection(order[index + 1]);
   }
   if (decision.action === "explore") {
     const order = [...VOICE_SECTIONS].filter(id => !["root", "system", "contact"].includes(id));

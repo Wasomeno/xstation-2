@@ -908,7 +908,8 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
   const h = browser();
   let focused, opened;
-  const ids = ['hero', 'work', 'bikinkonten', 'lubna', 'crm-ai-agent', 'hireassess', 'arkiv', 'codev', 'coframe', 'cofinance', 'clients', 'contact'];
+  const ids = ['hero', 'system', 'work', 'bikinkonten', 'lubna', 'crm-ai-agent', 'hireassess', 'arkiv', 'codev', 'coframe', 'cofinance', 'clients', 'contact'];
+  const position = id => ids.indexOf(id) * 800;
   const elements = Object.fromEntries(ids.map((id, index) => [id, {
     id, classList: { add() {}, remove() {} },
     getBoundingClientRect: () => ({ top: index * 800 - h.sandbox.window.scrollY, bottom: (index + 1) * 800 - h.sandbox.window.scrollY, height: 800 }),
@@ -933,25 +934,57 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   socket.message({ type: 'ready' });
   const action = payload => socket.message({ type: 'decision', ...payload });
   action({ action: 'back' });
+  assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), -1, 'Empty history cannot go back');
   action({ action: 'next' });
-  assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), -1, 'Empty history cannot be traversed');
+  assert.equal(h.sandbox.window.scrollY, position('system'), 'Next from Hero visits System without needing history');
+  action({ action: 'back' });
   action({ action: 'show', section: 'crm-ai-agent' });
-  assert.equal(h.sandbox.window.scrollY, 3200);
+  assert.equal(h.sandbox.window.scrollY, position('crm-ai-agent'));
   action({ action: 'back' });
   assert.equal(h.sandbox.window.scrollY, 0);
   action({ action: 'back' });
   assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), 0, 'Back cannot leave the start of history');
   action({ action: 'next' });
-  assert.equal(h.sandbox.window.scrollY, 3200, 'Next replays the action after going back');
+  assert.equal(h.sandbox.window.scrollY, position('system'), 'Next follows page order instead of replaying CRM from history');
   assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), 1);
-  assert.equal(vm.runInContext('voiceActionLog.entries.length', h.sandbox), 2, 'Traversing history does not append actions');
-  action({ action: 'back' });
-  action({ action: 'explore' });
-  assert.equal(h.sandbox.window.scrollY, 784);
-  assert.equal(vm.runInContext('voiceActionLog.entries[1].section', h.sandbox), 'work', 'A new action replaces forward history');
+  assert.equal(vm.runInContext('voiceActionLog.entries.length', h.sandbox), 2, 'Next replaces forward history with a new Show');
+  assert.equal(vm.runInContext('voiceActionLog.entries[1].section', h.sandbox), 'system');
   action({ action: 'next' });
-  assert.equal(h.sandbox.window.scrollY, 784, 'Next at the end leaves the page in place');
-  h.sandbox.window.scrollY = 1600; // A manual scroll changes the contextual product.
+  assert.equal(h.sandbox.window.scrollY, position('work') - 16);
+  assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), 2, 'Each next section is recorded as a new action');
+  action({ action: 'back' });
+  assert.equal(h.sandbox.window.scrollY, position('system'), 'Back restores the section before next');
+  action({ action: 'show', section: 'hero' });
+  action({ action: 'explore' });
+  assert.equal(h.sandbox.window.scrollY, position('work') - 16, 'Explore still visits the catalog section');
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('bikinkonten'), 'Next from the catalog opens its first service');
+  action({ action: 'show', section: 'system' });
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('work') - 16, 'Next from System opens the product catalog');
+  h.sandbox.window.scrollY = 0;
+  for (const id of ids.slice(1)) {
+    action({ action: 'next' });
+    assert.equal(h.sandbox.window.scrollY, position(id) - (id === 'work' ? 16 : 0), `Next reaches ${id} in page order`);
+    assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).section', h.sandbox), id);
+  }
+  h.sandbox.window.scrollY = position('codev');
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('coframe'), 'Next uses the manually scrolled service, not the last logged destination');
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('cofinance'));
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('clients'), 'Next continues beyond the last product to Trusted by');
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('contact'), 'Next continues from Trusted by to Contact');
+  const indexAtEnd = vm.runInContext('voiceActionLog.index', h.sandbox);
+  const lengthAtEnd = vm.runInContext('voiceActionLog.entries.length', h.sandbox);
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('contact'), 'Next stops at the last page section without wrapping');
+  assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), indexAtEnd);
+  assert.equal(vm.runInContext('voiceActionLog.entries.length', h.sandbox), lengthAtEnd);
+  assert.equal(opened, undefined, 'Navigating to Contact never opens WhatsApp');
+  h.sandbox.window.scrollY = position('bikinkonten'); // A manual scroll changes the contextual product.
   action({ action: 'contact', section: 'current' });
   assert.equal(focused, 'bikinkonten');
   assert.equal(opened, undefined, 'Conversion focuses the CTA without opening WhatsApp');
@@ -960,10 +993,7 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   action({ action: 'back' });
   assert.equal(focused, 'bikinkonten', 'Back restores the previous contact CTA');
   action({ action: 'next' });
-  assert.equal(focused, 'contact');
-  const before = h.sandbox.window.scrollY;
-  action({ action: 'next' });
-  assert.equal(h.sandbox.window.scrollY, before, 'Exploration must not wrap around from the footer');
+  assert.equal(h.sandbox.window.scrollY, position('lubna'), 'Next from a product CTA goes to the next service instead of replaying contact');
   assert.equal(vm.runInContext('runPageAction({action:"demo",section:"bikinkonten"})', h.sandbox), false);
   action({ action: 'whatsapp', section: 'bikinkonten' });
   assert.equal(opened, 'https://wa.me/123?text=bikinkonten');
@@ -971,6 +1001,17 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   assert.equal(vm.runInContext('runPageAction({action:"show",section:"unknown"})', h.sandbox), false);
   assert.equal(vm.runInContext('voiceActionLog.entries.length', h.sandbox), logLength, 'Rejected actions do not enter history');
   assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).action', h.sandbox), 'whatsapp');
+  elements.work.getBoundingClientRect = () => ({ top: position('work') - h.sandbox.window.scrollY, height: 200 });
+  elements.bikinkonten.getBoundingClientRect = () => ({ top: position('work') + 200 - h.sandbox.window.scrollY, height: 800 });
+  action({ action: 'show', section: 'work' });
+  assert.equal(vm.runInContext('currentVoiceSection()', h.sandbox), 'work', 'A short catalog remains active after being top-aligned');
+  action({ action: 'next' });
+  assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).section', h.sandbox), 'bikinkonten', 'Next must not skip the first product below a short catalog');
+  action({ action: 'show', section: 'work' });
+  h.sandbox.window.scrollY = position('work') + 300;
+  assert.equal(vm.runInContext('currentVoiceSection()', h.sandbox), 'bikinkonten', 'Manual scrolling away from the catalog updates the active section');
+  action({ action: 'next' });
+  assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).section', h.sandbox), 'lubna');
   elements.bikinkonten.getBoundingClientRect = () => ({ top: -1100, height: 1600 });
   elements.lubna.getBoundingClientRect = () => ({ top: 500, height: 400 });
   h.sandbox.window.scrollY = 2700;

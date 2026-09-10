@@ -43,7 +43,7 @@ Reconciled CSV targets:
 
 Knowledge storage and organization also select Arkiv. Prototypes select CoFrame; client references and track record select Trusted by (`clients`); agent architecture and operations select System. Product conversion requests focus that product's existing CTA, including CoFinance.
 
-"Go back" and "go next" traverse action history, and "what else can I explore?" advances through the page. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing `voice/box/sections.py` or `voice/box/decide.py`.
+"Go back" returns to the previous action. "Next", "go next", and "go forward" open the section after the currently visible one in full page order, including after manual scrolling: Hero → The System Behind Every Agent → product catalog → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → Trusted by → Contact. Next stops at Contact without wrapping or opening WhatsApp. "What else can I explore?" keeps its existing route through the catalog, products, and Trusted by. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing `voice/box/sections.py` or `voice/box/decide.py`.
 
 Run offline checks separately from the live intent evaluation:
 
@@ -58,7 +58,7 @@ voice/box/.venv/bin/python voice/box/eval_intents.py --group cake
 
 The live evaluation checks the 38 reconciled showcase commands, held-out Indonesian/English business needs for every product, client references, and System service, and commands that must not navigate. It uses the live stream's 12-second interpretation deadline and exits nonzero on any mismatch or API error. It is not part of the offline test command.
 
-`window.voiceActionLog` holds `{ entries, index }` in memory: entry 0 is the initial position, followed by successful actions and their destinations/scroll positions. Back/next move the index without appending entries; a new action after going back replaces the forward history. Replaying a WhatsApp entry restores its page position without reopening the external link. Reloading the page clears the log.
+`window.voiceActionLog` holds `{ entries, index }` in memory: entry 0 is the initial position, followed by successful actions and their destinations/scroll positions. Back moves the index without appending entries. Next records a new Show; a new action after going back replaces the forward history. Replaying a WhatsApp entry restores its page position without reopening the external link. Reloading the page clears the log.
 
 ## Deploy on one domain
 
