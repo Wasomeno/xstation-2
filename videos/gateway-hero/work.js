@@ -303,6 +303,7 @@ function bindSmoothStart() {
 function bindHeroScroll() {
   if (!gsap || !ScrollTrigger) return;
 
+  const mobileViewport = window.matchMedia("(max-width: 47.999rem)");
   const heroCopy = document.getElementById("hero-copy");
   const brandLogo = document.querySelector("#site-nav .brand-logo");
   const chapters = [...document.querySelectorAll(".chapter-panel")];
@@ -325,7 +326,7 @@ function bindHeroScroll() {
       },
       onUpdate: () => {
         cluster.setProgress(depth.progress);
-        cluster.setFlashProgress(flash.progress);
+        cluster.setFlashProgress(mobileViewport.matches ? 0 : flash.progress);
         if (brandLogo) {
           const bounds = brandLogo.getBoundingClientRect();
           document.body.classList.toggle(
@@ -369,15 +370,19 @@ function bindHeroScroll() {
       // A fast scroll can reach it before the scrubbed glare finishes, so the
       // glare is completed and painted before the loop stops; otherwise the
       // frozen frame is the dark hero sky sitting behind a light section.
-      cluster.setFlashProgress(1);
+      cluster.setFlashProgress(mobileViewport.matches ? 0 : 1);
       requestAnimationFrame(() => requestAnimationFrame(() => cluster.setActive(false)));
     },
-    onLeaveBack: () => cluster.setActive(true),
+    onLeaveBack: () => {
+      if (mobileViewport.matches) cluster.setFlashProgress(0);
+      cluster.setActive(true);
+    },
   });
 }
 
 function bindHeroSystemSnap() {
-  if (reduce || shot || !gsap || !ScrollTrigger) return () => {};
+  const mobileViewport = window.matchMedia("(max-width: 47.999rem)");
+  if (reduce || shot || mobileViewport.matches || !gsap || !ScrollTrigger) return () => {};
 
   const pinSlot = document.getElementById("pin-slot");
   const system = document.getElementById("system");
@@ -428,6 +433,8 @@ function bindHeroSystemSnap() {
   };
 
   const handleIntent = (direction, event) => {
+    if (mobileViewport.matches) return false;
+
     const y = window.scrollY;
     const systemTop = targetY(system);
     const goingToSystem = direction > 0 && y < systemTop - 2;

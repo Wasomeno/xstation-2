@@ -1192,6 +1192,7 @@ html.is-shot .site-footer {
   .ns-root {
     min-height: 0;
     padding-block: clamp(3.25rem, 8vh, 4.75rem);
+    background: var(--page);
   }
 
   .sys-grid {
