@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NADI">
+  <rect width="64" height="64" fill="#fff" />
+  <svg x="4" y="22" width="56" height="19" viewBox="-360 -1080 4206 1440" preserveAspectRatio="xMidYMid meet">
+    <g transform="scale(1,-1)" fill="#111C18">
+      <path transform="translate(0,0)" d="M50 0V720H249L569 84L520 72V720H670V0H471L151 636L200 648V0Z" />
+      <path transform="translate(1060,0)" d="M24 0L282 720H414L177 0ZM552 0L316 720H454L712 0Z" />
+      <path transform="translate(2136,0)" d="M144 0V120H326Q404 120 458.5 151.5Q513 183 541.5 238Q570 293 570 364Q570 434 542 487Q514 540 459.5 570Q405 600 326 600H147V720H326Q447 720 537 676.5Q627 633 676.5 552.5Q726 472 676 170.5Q626 89 536.5 44.5Q447 0 327 0ZM50 0V720H204V0Z" />
+      <path transform="translate(3232,0)" d="M50 0V720H204V0Z" />
+    </g>
+    <circle cx="1422" cy="-219" r="52" fill="#1B6B47" />
+  </svg>
+</svg>
