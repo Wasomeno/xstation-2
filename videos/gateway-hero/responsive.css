@@ -1202,6 +1202,10 @@ html.is-shot .site-footer {
     display: none !important;
   }
 
+  .inquiry {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem);
+  }
+
   .clients {
     padding-block: clamp(2.75rem, 10vw, 3.5rem);
   }
