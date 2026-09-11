@@ -14,7 +14,7 @@ test("responsive cascade stays last and desktop content inventory is preserved",
   // One CTA per product, the two hero buttons, and the contact button, which now
   // uses the same control as the products instead of a bare text link.
   assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 11);
-  assert.equal((html.match(/media\/clients\//g) || []).length, 7);
+  assert.equal((html.match(/media\/clients\//g) || []).length, 8);
   // Primary and footer navigation are part of the page again.
   assert.match(html, /id="site-links"/);
   assert.match(html, /class="site-footer-links"/);
