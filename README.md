@@ -16,8 +16,9 @@ The hero illustration is a canvas animation that repaints screen-sized radial
 gradients every frame, which is the work a phone GPU handles worst. Below 768px
 the canvas and its agent callouts are hidden and `videos/gateway-hero/media/hero/`
 carries a recorded portrait clip of the same canopy instead: `hero-mobile.mp4`
-(H.264, 540x1200, 30fps, 14s, ~1.4 MB) with `hero-mobile-poster.jpg` as a frame
-from it.
+(H.264, 540x1200, 30fps, 18s, ~2.2 MB) with `hero-mobile-poster.jpg` as a frame
+from it. The clip carries the agent callouts, which are DOM elements rather than
+canvas pixels and so have to be drawn into the frame by hand during the render.
 
 The clip is framed so the canopy sits in the upper half and fades out over the
 lower half, leaving the hero copy on dark ground. The `<video>` element ships
