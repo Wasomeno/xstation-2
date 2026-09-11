@@ -890,8 +890,8 @@ test("voice navigation starts at the project list and centers individual content
       });
       const show = vm.runInContext(`${navigation}\nshowSection`, sandbox);
       assert.equal(show('codev'), true);
-      if (smooth) { assert.equal(target, element); assert.equal(options.offset, (height - 800) / 2); }
-      else { assert.equal(options.top, 1500 + (height - 800) / 2); assert.equal(options.behavior, 'auto'); }
+ if (smooth) { assert.equal(target, element); assert.equal(options.offset, -(72 + Math.max(0, (800 - 72 - height) / 2))); }
+ else { assert.equal(options.top, 1500 - (72 + Math.max(0, (800 - 72 - height) / 2))); assert.equal(options.behavior, 'auto'); }
       assert.equal(show('work'), true);
       if (smooth) { assert.equal(target, element); assert.equal(options.offset, -88); }
       else { assert.equal(options.top, 1412); assert.equal(options.behavior, 'auto'); }

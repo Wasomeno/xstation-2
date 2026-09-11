@@ -9,7 +9,7 @@
   const blueprint = document.getElementById("system-blueprint");
   if (!root || !list || !blueprint) return;
 
-  const items = [...list.querySelectorAll("li")];
+  const items = [...list.querySelectorAll("button[data-system-state]")];
   const caption = document.getElementById("sys-cap");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const pointer = window.matchMedia("(hover: hover) and (min-width: 901px)");
@@ -28,30 +28,28 @@
     if (!key || key === current) return;
     current = key;
     blueprint.dataset.state = key;
-    items.forEach((item) => item.classList.toggle("is-on", item.dataset.systemState === key));
+    items.forEach((item) => {
+      const selected = item.dataset.systemState === key;
+      item.classList.toggle("is-on", selected);
+      item.setAttribute("aria-pressed", String(selected));
+    });
 
     const item = items.find((candidate) => candidate.dataset.systemState === key);
     if (!caption || !item) return;
-    const title = item.querySelector("h3");
-    const description = item.querySelector("p");
+    const title = item.querySelector(".sys-item-title");
+    const description = item.querySelector(".sys-item-description");
     caption.querySelector(".ck").textContent =
       `${item.querySelector(".n").textContent} · ${title.childNodes[0].textContent.trim().toUpperCase()}`;
     caption.querySelector("p").textContent = description.textContent;
   }
 
   items.forEach((item) => {
-    item.tabIndex = 0;
     item.addEventListener("mouseenter", () => {
       hoverLock = performance.now();
       select(item.dataset.systemState);
     });
     item.addEventListener("click", () => select(item.dataset.systemState));
     item.addEventListener("focus", () => select(item.dataset.systemState));
-    item.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      select(item.dataset.systemState);
-    });
   });
 
   const activeItemObserver = new IntersectionObserver((entries) => {

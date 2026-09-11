@@ -297,7 +297,7 @@ body {
   }
 
   .inquiry-code {
-    justify-self: start;
+    justify-self: center;
     width: min(16rem, 78vw);
   }
 
@@ -358,17 +358,8 @@ body {
   }
 
   .site-footer {
-    grid-template-columns: 1fr;
-  }
-
-  .site-footer-links,
-  .site-footer-meta {
-    grid-column: 1;
-    justify-self: start;
-  }
-
-  .site-footer-links {
-    grid-row: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
   }
 }
 
@@ -448,5 +439,288 @@ html.is-shot .site-footer {
   #site-nav,
   #site-nav * {
     transition: none !important;
+  }
+}
+
+/* Authoritative compact layout. Keep this block last so the desktop system
+   remains untouched while tablet and phone behavior has one clear owner. */
+@media (max-width: 63.999rem) {
+  :root {
+    --voice-clearance: calc(7rem + env(safe-area-inset-bottom));
+  }
+
+  html {
+    scroll-padding-bottom: var(--voice-clearance);
+  }
+
+  #work,
+  #clients,
+  #contact,
+  .space {
+    scroll-margin-bottom: var(--voice-clearance);
+  }
+
+  #brand,
+  #site-links a {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #brand .brand-tag {
+    display: none;
+  }
+
+  #site-links a {
+    padding: 0.65rem 0.15rem;
+  }
+
+  .hero-scope {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.55rem;
+    color: #8ed2b4;
+  }
+
+  .hero-scope i {
+    width: 3px;
+    height: 3px;
+  }
+
+  .nadi-lbl {
+    max-width: min(13rem, 38vw);
+    font-size: clamp(1.15rem, 3.5vw, 1.75rem);
+    white-space: normal;
+  }
+
+  .nadi-lbl small {
+    font-size: clamp(0.58rem, 1.5vw, 0.76rem);
+  }
+
+  .ns-root {
+    min-height: 0;
+    padding: clamp(5.5rem, 10vh, 7rem) var(--page-gutter) clamp(4rem, 8vh, 6rem);
+  }
+
+  .sys-col {
+    display: contents;
+  }
+
+  .sys-grid {
+    align-items: start;
+  }
+
+  .sys-head {
+    margin-bottom: 0;
+  }
+
+  .sys-stage {
+    order: initial;
+  }
+
+  .sys-list button {
+    min-height: 44px;
+    opacity: 0.72;
+  }
+
+  .sys-item-description {
+    display: block;
+  }
+
+  #voice-surface {
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    width: min(24rem, calc(100vw - 2 * var(--page-gutter)));
+  }
+
+  .voice-transcript {
+    max-height: min(8rem, 22dvh);
+  }
+}
+
+/* Tablet: preserve the desktop's text/visual dialogue without squeezing the
+   hero or dropping the blueprint above its heading. */
+@media (min-width: 48rem) and (max-width: 63.999rem) {
+  #hero-copy {
+    inset: 0 auto 0 0;
+    width: min(55vw, 34rem);
+    align-items: center;
+    padding: calc(var(--nav-height) + 2rem) 0 4rem var(--page-gutter);
+  }
+
+  #hero-copy .doctrine-block {
+    width: 100%;
+    max-width: 32rem;
+  }
+
+  #hero-copy h1 {
+    font-size: clamp(2.5rem, 5.1vw, 3.25rem);
+  }
+
+  .sys-grid {
+    grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
+    grid-template-rows: auto 1fr;
+    gap: 1.75rem clamp(2rem, 5vw, 4rem);
+  }
+
+  .sys-head {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sys-list {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .sys-stage {
+    position: sticky;
+    top: calc(var(--nav-height) + 1rem);
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    padding: 0;
+  }
+
+  body.system-reached #system .sys-stage {
+    background: transparent;
+  }
+
+  .bp {
+    max-width: min(38vw, 27rem);
+  }
+
+  .space-panel {
+    padding: clamp(2.5rem, 6vw, 4rem);
+  }
+}
+
+/* Phone: heading, bounded visual, then the full interactive explanation. */
+@media (max-width: 47.999rem) {
+  #hero-copy h1 {
+    font-size: clamp(2.15rem, 10vw, 3.15rem);
+  }
+
+  #doctrine-lead {
+    max-width: 35ch;
+    font-size: clamp(0.92rem, 3.8vw, 1.05rem);
+  }
+
+  .hero-scope {
+    font-size: clamp(0.7rem, 3.15vw, 0.82rem);
+  }
+
+  .nadi-lbl {
+    max-width: 10rem;
+    font-size: clamp(1rem, 5vw, 1.35rem);
+  }
+
+  .nadi-lbl small {
+    font-size: clamp(0.52rem, 2.5vw, 0.66rem);
+  }
+
+  .sys-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .sys-head {
+    grid-row: 1;
+  }
+
+  .sys-stage {
+    position: sticky;
+    top: var(--nav-height);
+    z-index: 2;
+    grid-row: 2;
+    max-height: 42dvh;
+    padding: 0.25rem 0;
+    overflow: hidden;
+  }
+
+  body.system-reached #system .sys-stage {
+    background: linear-gradient(var(--page) 82%, rgb(247 248 245 / 0));
+  }
+
+  .bp {
+    width: min(82vw, 22rem);
+    max-width: 100%;
+    max-height: 40dvh;
+  }
+
+  .sys-list {
+    grid-row: 3;
+  }
+
+  .sys-list button {
+    grid-template-columns: 2rem minmax(0, 1fr);
+    padding-block: 0.85rem;
+  }
+
+  .sys-item-title {
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
+  }
+
+  .sys-item-description {
+    font-size: 0.94rem;
+  }
+}
+
+@media (max-width: 63.999rem) and (max-height: 31rem) and (orientation: landscape) {
+  .station-cta,
+  #site-links a,
+  #brand,
+  .sys-list button {
+    min-height: 44px;
+  }
+
+  .sys-stage {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reconciliation with the compact-layout pass.
+ *
+ * The compact pass and the page-frame pass landed on the same selectors from
+ * two directions. Everything below restates the frame-side decisions so they
+ * survive the cascade, and it is deliberately last in the file.
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 63.999rem) {
+  /* The section frame owns the gutter; the section itself adds none. */
+  .ns-root {
+    padding-inline: 0;
+  }
+
+  .space-panel {
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 47.999rem) {
+  /* The Voice Surface is hidden on phones, so nothing has to be scrolled clear
+     of it. */
+  :root {
+    --voice-clearance: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  /* The hero lead reads at the same size as a product lead. */
+  #doctrine-lead {
+    max-width: 35ch;
+    font-size: 1rem;
+  }
+
+  /* The agent callouts stay at label weight behind the copy. */
+  .nadi-lbl {
+    max-width: 10rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .nadi-lbl small {
+    font-size: 0.62rem;
   }
 }
