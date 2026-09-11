@@ -427,7 +427,7 @@ html.is-shot .site-footer {
    remains untouched while tablet and phone behavior has one clear owner. */
 @media (max-width: 63.999rem) {
   :root {
-    --voice-clearance: calc(7rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   html {
@@ -695,7 +695,7 @@ html.is-shot .site-footer {
 @media (max-width: 47.999rem) {
   /* Reserve room for the compact Voice Surface at anchored destinations. */
   :root {
-    --voice-clearance: calc(6rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   /* The hero lead reads at the same size as a product lead. */
@@ -738,7 +738,7 @@ html.is-shot .site-footer {
 
 @media (max-width: 63.999rem) {
   :root {
-    --voice-clearance: calc(6rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   #brand {

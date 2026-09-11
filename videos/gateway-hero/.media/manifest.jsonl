@@ -1,1 +1,3 @@
 {"id":"video_001","type":"video","path":".media/video/video_001.mp4","source":"ingested","description":"NEW - CODEV.mp4","provenance":{"provider":"local","from":"/Users/kevinananda/Downloads/NEW - CODEV.mp4"}}
+{"id":"image_001","type":"image","path":".media/images/image_001.png","source":"ingested","description":"2083830-middle.png","provenance":{"provider":"local","from":"https://image.pngaaa.com/830/2083830-middle.png"}}
+{"id":"image_002","type":"image","path":".media/images/image_002.jpg","source":"ingested","description":"frame.jpg","provenance":{"provider":"local","from":"/tmp/xstation-codev-poster.IPkJ7o/frame.jpg"}}
