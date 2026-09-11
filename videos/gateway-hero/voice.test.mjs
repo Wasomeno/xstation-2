@@ -796,6 +796,34 @@ test("softer speech after a loud opening keeps streaming beyond twelve seconds",
   h.escape();
 });
 
+test("laptop speech below the old energy floor stays listening until a real pause", async () => {
+  const h = browser();
+  const { socket, context } = await h.connect();
+  socket.message({ type: "ready" });
+  let now = 1000;
+  const feed = level => {
+    h.sandbox.performance.now = () => now;
+    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
+    now += 4096 / 48000 * 1000;
+  };
+  // Rounded RMS levels from the laptop trace that submitted mid-sentence.
+  const speech = [0.01281, 0.00994, 0.01315, 0.01335, 0.01249, 0.01233,
+    0.01027, 0.01394, 0.01265, 0.01216, 0.01144, 0.00869, 0.00531,
+    0.01269, 0.0111, 0.01154, 0.01109, 0.00875, 0.00991, 0.00901, 0.00638, 0.00526];
+  for (let i = 0; i < 10; i++) feed(0.0005);
+  feed(0.01471);
+  for (let i = 0; i < 8; i++) feed(0.01);
+  feed(0.01577);
+  for (let i = 0; i < 150; i++) {
+    feed(speech[i % speech.length]);
+    assert.equal(h.ui.root.dataset.state, "listening", `Speech cut off at frame ${i}`);
+  }
+  for (let i = 0; i < 24; i++) feed(0.0005);
+  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  h.escape();
+});
+
 test("a breathing pause in background noise keeps the sentence open until speech resumes", () => {
   const create = vm.runInContext("createPauseDetector", browser().sandbox);
   const pause = create();

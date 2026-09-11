@@ -79,7 +79,8 @@ function createPauseDetector() {
       lastUpdate = now;
       peak = Math.max(rms, peak * Math.exp(-seconds / 2));
       // Require a stronger onset, then tolerate softer syllables in the same sentence.
-      const threshold = Math.max(0.012, noise * (heardVoice ? 1.5 : 2.5), peak * 0.35);
+      // Laptop speech can fall below 0.012 RMS even at a steady speaking volume.
+      const threshold = Math.max(0.003, noise * (heardVoice ? 1.5 : 2.5), peak * 0.35);
       if (rms < threshold) {
         // Learn the quieter room level even while a command is active.
         noise += (rms - noise) * (1 - Math.exp(-seconds / 0.3));
