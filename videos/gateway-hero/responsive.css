@@ -303,8 +303,8 @@ body {
 
   .site-footer {
     grid-template-columns: minmax(0, 1fr);
-    gap: 1.25rem;
-    padding-block: 2rem max(2.25rem, calc(1.25rem + env(safe-area-inset-bottom)));
+    gap: 1.4rem;
+    padding-block: 2.25rem max(2.25rem, calc(1.25rem + env(safe-area-inset-bottom)));
   }
 
   .site-footer-brand,
@@ -314,8 +314,36 @@ body {
     justify-self: start;
   }
 
+  /* On one column the wordmark and its tagline stack, so the tagline sits under
+     the mark instead of running off the side of it. */
+  .site-footer-brand {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: start;
+  }
+
+  .site-footer-brand img {
+    width: 5.75rem;
+  }
+
+  .site-footer-tag {
+    margin-top: 0;
+    font-size: 0.58rem;
+  }
+
   .site-footer-links {
     gap: 1.5rem;
+    padding-top: 1.15rem;
+    border-top: 1px solid var(--line);
+    width: 100%;
+  }
+
+  .site-footer-links a {
+    min-height: 0;
+  }
+
+  .site-footer-meta {
+    font-size: 0.72rem;
   }
 }
 
