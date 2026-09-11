@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js?v=surface-36";
+import { createCluster } from "./cluster.js?v=surface-37";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -932,32 +932,68 @@ function bindHeroMotion() {
   let attached = false;
 
   let gestureBound = false;
+  let lastRefusal = "";
+
+  // `?heromotion=debug` prints why the clip is or is not playing. A phone that
+  // shows the poster gives no other clue, and the reasons are all device state:
+  // reduced motion, Save-Data, a refused autoplay, a decode error.
+  const debug = new URLSearchParams(window.location.search).get("heromotion") === "debug";
+  let readout = null;
+  if (debug) {
+    readout = document.createElement("pre");
+    readout.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:2147483647;margin:0;padding:8px;background:rgb(0 0 0 / 0.82);color:#8ef0be;font:11px/1.45 ui-monospace,monospace;white-space:pre-wrap";
+    document.body.appendChild(readout);
+  }
+  const report = (note) => {
+    if (!readout) return;
+    readout.textContent = [
+      `phone=${phone.matches}`,
+      `reduced=${reducedMotionMedia.matches}`,
+      `saveData=${String(connection?.saveData)}`,
+      `attached=${attached}`,
+      `src=${video.currentSrc ? "yes" : "no"}`,
+      `readyState=${video.readyState}`,
+      `paused=${video.paused}`,
+      `time=${video.currentTime.toFixed(1)}`,
+      `error=${video.error ? video.error.code : "none"}`,
+      `refusal=${lastRefusal || "none"}`,
+      `note=${note}`,
+    ].join("  ");
+  };
 
   // iOS only allows an unprompted play on a video that is muted inline, and it
   // checks the property, not just the attribute. In Low Power Mode it refuses
   // regardless, so a blocked play waits for the first touch, which counts as a
   // gesture.
   const attempt = () => {
-    video.play()?.catch(() => {
+    const played = video.play();
+    report("play called");
+    played?.then(() => report("playing")).catch((error) => {
+      lastRefusal = `${error.name}: ${error.message}`.slice(0, 90);
+      report("play refused");
       if (gestureBound) return;
       gestureBound = true;
-      const retry = () => video.play()?.catch(() => {});
+      const retry = () => {
+        video.play()?.then(() => report("playing after gesture")).catch(() => report("refused after gesture"));
+      };
       window.addEventListener("touchstart", retry, { once: true, passive: true });
       window.addEventListener("pointerdown", retry, { once: true });
     });
   };
 
   const start = () => {
-    if (!phone.matches) return;
+    if (!phone.matches) return report("not a phone width");
     // The canvas is hidden here, so its loop is pure battery cost.
     cluster.setActive(false);
-    if (reducedMotionMedia.matches || connection?.saveData) return;
+    if (reducedMotionMedia.matches) return report("skipped: reduced motion");
+    if (connection?.saveData) return report("skipped: save-data");
     if (!attached) {
       attached = true;
       video.muted = true;
       video.defaultMuted = true;
       video.setAttribute("autoplay", "");
       video.addEventListener("canplay", attempt, { once: true });
+      video.addEventListener("error", () => report("decode or fetch failed"), { once: true });
       video.src = source;
       video.load();
     }
@@ -973,9 +1009,20 @@ function bindHeroMotion() {
   const onChange = () => (phone.matches ? start() : stop());
 
   // Never on the critical path: the clip waits for an idle moment after load.
-  const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 400));
-  const cancelIdle = window.cancelIdleCallback || window.clearTimeout;
-  const handle = idle(start);
+  // The window methods are bound, since calling one detached throws in WebKit.
+  const idle = window.requestIdleCallback
+    ? window.requestIdleCallback.bind(window)
+    : (fn) => window.setTimeout(fn, 400);
+  const cancelIdle = window.cancelIdleCallback
+    ? window.cancelIdleCallback.bind(window)
+    : window.clearTimeout.bind(window);
+  let handle = 0;
+  try {
+    handle = idle(start);
+  } catch {
+    // A throw here used to lose the clip entirely.
+    handle = window.setTimeout(start, 400);
+  }
 
   phone.addEventListener("change", onChange);
 
