@@ -103,6 +103,72 @@ function createPauseDetector() {
   };
 }
 
+// Time, yaw, pitch, tilt, curiosity: remembering, weighing, and curious.
+const THINKING_GESTURES = [
+  [[0, .12, -.06, 0, 0], [.5, .12, -.06, 0, 0], [1.1, -.35, -.34, -.035, 0], [3, -.35, -.34, -.035, 0], [3.55, .32, -.27, .025, 0], [5.5, .32, -.27, .025, 0], [6.15, .12, -.06, 0, 0], [7.4, .12, -.06, 0, 0]],
+  [[0, .12, -.06, 0, 0], [.4, .12, -.06, 0, 0], [.8, -.5, -.055, -.025, 0], [2, -.5, -.055, -.025, 0], [2.45, .5, -.055, .025, 0], [3.8, .5, -.055, .025, 0], [4.15, -.27, -.08, -.015, 0], [4.95, -.27, -.08, -.015, 0], [5.45, .12, -.06, 0, 0], [6.5, .12, -.06, 0, 0]],
+  [[0, .12, -.06, 0, 0], [.6, .12, -.06, 0, 0], [1.15, .4, -.11, .16, 1], [3, .4, -.11, .16, 1], [3.55, .08, -.05, 0, 0], [4.2, .08, -.05, 0, 0], [4.85, -.4, -.14, -.14, 1], [6.4, -.4, -.14, -.14, 1], [7.1, .12, -.06, 0, 0], [8, .12, -.06, 0, 0]],
+];
+
+function thinkingEyePose(emotion, time) {
+  const frames = THINKING_GESTURES[emotion];
+  const t = time % frames.at(-1)[0];
+  const next = frames.findIndex(frame => frame[0] > t);
+  const a = frames[next - 1], b = frames[next];
+  const p = (t - a[0]) / (b[0] - a[0]);
+  const ease = 1 + 1.8 * (p - 1) ** 3 + 0.8 * (p - 1) ** 2;
+  const [yaw, pitch, tilt, curious] = a.slice(1).map((value, axis) => value + (b[axis + 1] - value) * ease);
+  const blinkTime = (time + emotion * 0.7) % 7.9;
+  const blink = 1 - 0.9 * Math.exp(-(((blinkTime - 6.4) / 0.085) ** 2));
+  return projectFaceEyes(yaw, pitch, tilt).map((pose, eye) => ({
+    ...pose,
+    ry: pose.ry * blink * (1 + curious * (eye === (yaw > 0 ? 0 : 1) ? 0.07 : -0.37)),
+  }));
+}
+
+function projectFaceEyes(yaw, pitch, tilt = 0) {
+  return [-0.44, 0.44].map(offset => {
+    const longitude = offset + yaw;
+    const depth = Math.cos(longitude) * Math.cos(pitch);
+    const perspective = 2.4 / (3.4 - depth);
+    const scale = (depth * perspective) ** 0.65;
+    const x = 0.83 * Math.sin(longitude) * Math.cos(pitch) * perspective;
+    const y = 0.83 * Math.sin(pitch) * perspective;
+    return {
+      x: x * Math.cos(tilt) - y * Math.sin(tilt),
+      y: x * Math.sin(tilt) + y * Math.cos(tilt),
+      rx: 0.26 * scale * Math.cos(longitude),
+      ry: 0.43 * scale,
+      spin: tilt - longitude * 0.08,
+    };
+  });
+}
+
+// One 500 ms shake: time, yaw, pitch, eye-pair roll, eye height.
+const FALLBACK_GESTURE = [
+  [0, 24 * Math.PI / 180, -18 * Math.PI / 180, 0, 1], [.05, .28, -.20, -.025, .80],
+  [.14, -.68, -.09, .10, 1.10], [.18, -.54, -.09, .045, .92],
+  [.28, .68, -.09, -.10, 1.10], [.34, .47, -.15, -.025, .97],
+  [.42, .35, -.27, .012, 1], [.50, 24 * Math.PI / 180, -18 * Math.PI / 180, 0, 1],
+];
+
+function fallbackEyePose(time) {
+  let next = FALLBACK_GESTURE.findIndex(frame => frame[0] > time);
+  if (next < 0) next = FALLBACK_GESTURE.length - 1;
+  const a = FALLBACK_GESTURE[next - 1], b = FALLBACK_GESTURE[next];
+  const p = Math.min(1, (time - a[0]) / (b[0] - a[0]));
+  const ease = p * p * (3 - 2 * p);
+  const [yaw, pitch, roll, height] = a.slice(1).map((value, axis) => value + (b[axis + 1] - value) * ease);
+  const velocity = (b[1] - a[1]) / (b[0] - a[0]) * 6 * p * (1 - p);
+  const sweep = Math.min(1, Math.abs(velocity) / 12);
+  return projectFaceEyes(yaw, pitch, roll).map(pose => ({
+    ...pose,
+    rx: pose.rx * (1 + .42 * sweep),
+    ry: pose.ry * height * (1 - .27 * sweep),
+    spin: pose.spin + Math.sign(velocity) * .12 * sweep,
+  }));
+}
+
 // Variant 3: layered idle circles unfold into an attentive, expressive face.
 function createWaveform(canvas) {
   const ctx = canvas.getContext("2d");
@@ -117,31 +183,39 @@ function createWaveform(canvas) {
   let energy = 0;
   let phase = 0;
   let expressionTime = 0;
+  let thinkingTime = 0;
+  let thinkingEmotion = 0;
+  let previousState = "";
+  let fallbackEvent = "";
+  let fallbackStarted = 0;
+  let fallbackTime = FALLBACK_GESTURE.at(-1)[0];
+  let fallbackBlend = 0;
   let speechTime = 0;
+  let speechWeight = 0;
   let nodTime = 0.76;
   let nodCooldown = 0;
   let visualRadius = 24;
   let visualFace = 0;
   let curiosity = 0;
-  // Circle.svg's top and bottom faces, normalized to their circle radius.
-  const listeningPose = [
-    { x: -0.178061, y: -0.208187, rx: 0.373516, ry: 0.526891, spin: -0.286689 },
-    { x: 0.619170, y: -0.206809, rx: 0.234552, ry: 0.397226, spin: 0.080890 },
-    { x: -0.094579, y: 0.678436, rx: 0.161412, ry: 0.107188, spin: 0 },
-  ];
-  const thinkingPose = [
-    { x: -0.384411, y: -0.037947, rx: 0.412864, ry: 0.670817, spin: -0.117271 },
-    { x: 0.439721, y: -0.234707, rx: 0.366162, ry: 0.490939, spin: 0.098916 },
-    { x: 0.372745, y: 0.605300, rx: 0.112107, ry: 0.059774, spin: -0.596200 },
-  ];
   let lastTime = 0;
   let raf = 0;
   let size = 88;
 
   const draw = (now = performance.now()) => {
     raf = 0;
-    if (document.hidden || (root.dataset.shaking === "true" && !motion.matches)) return;
+    if (document.hidden) return;
     const state = root.dataset.state;
+    if (state === "thinking" && previousState !== state) {
+      thinkingEmotion = Math.floor(Math.random() * THINKING_GESTURES.length);
+      thinkingTime = 0;
+    }
+    previousState = state;
+    const feedback = root.dataset.fallback || "";
+    if (feedback && feedback !== fallbackEvent) {
+      fallbackTime = 0;
+      fallbackStarted = now;
+    }
+    fallbackEvent = feedback;
     const failed = state === "deaf" || state === "blocked";
     const listening = state === "listening";
     const processing = state === "thinking" || state === "connecting";
@@ -169,13 +243,28 @@ function createWaveform(canvas) {
     visualRadius = motion.matches || failed ? targetRadius
       : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.12));
     const radius = size * (visualRadius / 88);
+    root.style.setProperty("--voice-shadow-scale", radius / 24);
     const alive = !motion.matches && !failed;
+    if (alive && state === "thinking") thinkingTime += seconds;
+    const reacting = Boolean(feedback) && listening && root.dataset.speaking !== "true"
+      && (motion.matches || fallbackTime < FALLBACK_GESTURE.at(-1)[0]);
+    // Use elapsed time so dropped frames cannot prolong the 500 ms reaction.
+    if (alive && reacting) fallbackTime = Math.min(FALLBACK_GESTURE.at(-1)[0], (now - fallbackStarted) / 1000);
+    const entry = Math.min(1, fallbackTime / .05);
+    // Entry is included in the gesture; only interruptions need an outgoing blend.
+    fallbackBlend = motion.matches || failed ? Number(reacting)
+      : fallbackTime >= FALLBACK_GESTURE.at(-1)[0] ? 0
+      : reacting ? entry * entry * (3 - 2 * entry)
+      : fallbackBlend * Math.exp(-seconds / .09);
+    const fallback = fallbackBlend > .001 ? fallbackEyePose(motion.matches ? .18 : fallbackTime) : null;
+    const hearingSpeech = alive && listening && root.dataset.speaking === "true" && energy > 0.12;
+    speechWeight = alive ? speechWeight + (Number(hearingSpeech) - speechWeight) * (1 - Math.exp(-seconds / 0.16)) : 0;
     nodCooldown = Math.max(0, nodCooldown - seconds);
     if (alive && listening) {
-      speechTime = root.dataset.speaking === "true" && energy > 0.12 ? speechTime + seconds : 0;
-      if (speechTime >= 0.32 && nodCooldown === 0) {
+      speechTime = hearingSpeech ? speechTime + seconds : 0;
+      if (speechTime >= 0.75 && nodCooldown === 0) {
         nodTime = 0;
-        nodCooldown = 2.4;
+        nodCooldown = 3.4;
         speechTime = 0;
       }
       nodTime = Math.min(0.76, nodTime + seconds);
@@ -186,11 +275,21 @@ function createWaveform(canvas) {
     // Two quick cartoon dips, each with a crisp ease-out return.
     const nodProgress = (nodTime % 0.38) / 0.38;
     const nod = nodTime < 0.76
-      ? (nodProgress < 0.28 ? (nodProgress / 0.28) ** 2 : ((1 - nodProgress) / 0.72) ** 3) * morph
+      ? (nodProgress < 0.28 ? (nodProgress / 0.28) ** 2 : ((1 - nodProgress) / 0.72) ** 3) * morph * speechWeight
       : 0;
-    // A brief blink every 10.5 seconds, independent of microphone intensity.
-    const blinkPhase = expressionTime % 10.5;
-    const blink = alive ? 1 - 0.88 * Math.exp(-(((blinkPhase - 8.5) / 0.1) ** 2)) : 1;
+    // B · Memahami: look screen-right and up; nod along the same sphere as thinking.
+    const listeningPose = [
+      ...projectFaceEyes(24 * Math.PI / 180, -18 * Math.PI / 180 + nod * 0.11),
+      { x: -0.094579, y: 0.678436, rx: 0.161412, ry: 0.107188, spin: 0 },
+    ];
+    // Freeze the outgoing pose while it blends back into the other states.
+    const thinkingPose = curiosity > 0.001 ? [
+      ...thinkingEyePose(thinkingEmotion, motion.matches ? [1.8, 2.9, 2][thinkingEmotion] : thinkingTime),
+      { x: 0.372745, y: 0.605300, rx: 0.112107, ry: 0.059774, spin: -0.596200 },
+    ] : listeningPose;
+    // Quiet listening stays still apart from a brief natural blink.
+    const blinkPhase = (expressionTime + 0.65) % 8.8;
+    const blink = alive ? 1 - 0.9 * Math.exp(-(((blinkPhase - 7.6) / 0.09) ** 2)) : 1;
     // Match the original rotate-then-translate orbit, even while a face is visible.
     const idlePose = [0, 1, 2].map(layer => {
       const spin = t * (layer === 1 ? -0.7 : 1) + layer * 2.1;
@@ -222,16 +321,19 @@ function createWaveform(canvas) {
         to[key] = listeningPose[role][key] + (thinkingPose[role][key] - listeningPose[role][key]) * curiosity;
       }
       if (role < 2) {
-        // Listening focuses together; thinking gives a soft, curious eye gesture.
-        const squintPhase = expressionTime % (6 - curiosity);
-        const squint = alive ? Math.exp(-(((squintPhase - 2 - curiosity * role * 1.7) / 0.75) ** 2)) : 0;
-        to.ry *= blink * (1 - squint * (0.18 - curiosity * (role === 0 ? 0.08 : 0.12)));
+        // Each thinking emotion keeps its own blink.
+        to.ry *= 1 + (blink - 1) * (1 - curiosity);
       } else to.ry *= 1 + energy * 0.16;
+      if (role < 2 && fallback) {
+        for (const key of ["x", "y", "rx", "ry", "spin"]) {
+          to[key] += (fallback[role][key] - to[key]) * fallbackBlend;
+        }
+      }
       const turn = Math.PI * 2;
       let delta = ((to.spin - from.spin) % turn + turn) % turn;
       if (layer === 1 && delta !== 0) delta -= turn;
       feature.x = from.x + (to.x - from.x) * morph;
-      feature.y = from.y + (to.y - from.y) * morph + nod * (role < 2 ? 0.10 : 0.03);
+      feature.y = from.y + (to.y - from.y) * morph + (role === 2 ? nod * 0.03 : 0);
       feature.rx = from.rx + (to.rx - from.rx) * morph;
       feature.ry = from.ry + (to.ry - from.ry) * morph;
       feature.spin = from.spin + delta * morph;
@@ -329,17 +431,15 @@ function bindVoice() {
   let socket = null;
   let audioContext = null;
   let processor = null;
-  let feedbackAnimation = null;
-  const cancelFeedback = () => {
-    feedbackAnimation?.cancel();
-    feedbackAnimation = null;
-    ui.root.dataset.shaking = "false";
-  };
+  let fallbackTurn = 0;
   const setCopy = (status, transcript = "", state = "idle") => {
     ui.status.textContent = status || "";
     ui.transcript.textContent = state === "listening" && typeof transcript === "string" ? transcript.trim() : "";
     ui.root.dataset.state = state;
-    if (state !== "listening") ui.root.dataset.speaking = "false";
+    if (state !== "listening") {
+      ui.root.dataset.speaking = "false";
+      ui.root.dataset.fallback = "";
+    }
     ui.button.setAttribute("aria-pressed", session ? "true" : "false");
     ui.button.setAttribute("aria-label", session
       ? (state === "connecting" ? COPY.cancel : COPY.stop)
@@ -348,26 +448,13 @@ function bindVoice() {
   };
 
   const showHearing = (transcript = "") => {
+    ui.root.dataset.fallback = "";
     setCopy(COPY.listening, transcript, "listening");
   };
 
   const showNoAction = () => {
-    cancelFeedback();
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    ui.root.dataset.shaking = String(!reduced);
+    ui.root.dataset.fallback = String(++fallbackTurn);
     setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening");
-    if (reduced) return;
-    feedbackAnimation = ui.button.animate(
-      [0, -5, 5, -3, 3, 0].map(x => ({ transform: `translateX(${x}px)` })),
-      { duration: 360, easing: "ease-in-out" },
-    );
-    const animation = feedbackAnimation;
-    animation.onfinish = () => {
-      if (feedbackAnimation !== animation) return;
-      feedbackAnimation = null;
-      ui.root.dataset.shaking = "false";
-      ui.wave.refresh();
-    };
   };
 
   const teardownAudio = () => {
@@ -401,7 +488,6 @@ function bindVoice() {
   };
 
   const endSession = (state = "idle", status = COPY[state]) => {
-    cancelFeedback();
     session = false;
     generation += 1;
     teardownAudio();
@@ -414,7 +500,6 @@ function bindVoice() {
       navigated = window.xstationShowSection?.(decision.section) === true;
     }
     if (navigated) {
-      cancelFeedback();
       showHearing();
     } else showNoAction();
   };
@@ -596,7 +681,6 @@ function bindVoice() {
           return;
         }
         if (payload.type === "speech_started") {
-          cancelFeedback();
           currentItem = payload.item_id || null;
           submittedItem = null;
           clearTurn();

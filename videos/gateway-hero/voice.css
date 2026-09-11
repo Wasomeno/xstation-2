@@ -79,6 +79,19 @@
   touch-action: manipulation;
 }
 
+.voice-orb::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  width: 72px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--deep-forest) 42%, transparent), transparent 70%);
+  filter: blur(3px);
+  transform: scaleX(var(--voice-shadow-scale, 1));
+  pointer-events: none;
+}
+
 .voice-orb:focus-visible {
   outline: 2px solid var(--deep-forest);
   outline-offset: 0;

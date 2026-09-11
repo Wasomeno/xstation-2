@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = (await readFile(new URL("./voice.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "")
-  .replace(/bindVoice\(\);\s*$/, "");
+  .replace(/^bindVoice\(\);[\s\S]*$/m, "");
 const flush = () => new Promise(setImmediate);
 test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
   const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
@@ -79,7 +79,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   const window = Object.assign(new EventTarget(), {
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
-    matchMedia: () => ({ matches: reducedMotion }),
+    matchMedia: (query) => ({ matches: query.includes("prefers-reduced-motion") ? reducedMotion : true }),
   });
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
   const sandbox = vm.createContext({
@@ -142,15 +142,18 @@ test("energy smoothing attacks faster than release and is frame-rate independent
 });
 
 test("voice orb preserves face visuals, reacts to audio, and respects reduced motion", () => {
-  const render = (state, reduced = false, loud = false, variant = "3", frameCount = 30, speaking = false, returnToIdle = false) => {
+  let restingEyeY = 0;
+  const render = (state, reduced = false, loud = false, variant = "3", frameCount = 30, speaking = false, returnToIdle = false, emotion = 0, repeatProcessing = false, silenceAt = Infinity) => {
     let pixels, nextFrame, radius, squash;
+    let randomCalls = 0;
     const eyeSamples = [];
     const nodSamples = [];
     const paths = [], fills = [], opacities = [], arcs = [], rectangles = [], translates = [];
-    const surface = { dataset: { state, variant, speaking: String(speaking) } };
+    let shadowScale;
+    const surface = { dataset: { state, variant, speaking: String(speaking) }, style: { setProperty(name, value) { if (name === "--voice-shadow-scale") shadowScale = Number(value); } } };
     const ctx = {
       save() {}, restore() {}, translate(x, y) { translates.push([x, y]); }, scale(x, y) { squash = y; }, beginPath() {}, clip() {}, arc(x, y, value) { radius = value; arcs.push([x, y, value]); },
-      roundRect(x, y, width, height, corner) { radius = width / 2; rectangles.push({ width, height, corner }); },
+      roundRect(x, y, width, height, corner) { radius = width / 2; assert.equal(shadowScale, radius / 24, "Shadow follows the rendered radius in every state and transition"); rectangles.push({ width, height, corner }); },
       fillRect() {}, clearRect() { paths.length = 0; fills.length = 0; opacities.length = 0; arcs.length = 0; rectangles.length = 0; translates.length = 0; },
       moveTo(...point) { paths.push(point); }, lineTo(...point) { paths.push(point); },
       closePath() {}, fill() { fills.push(this.fillStyle); opacities.push(this.globalAlpha); },
@@ -168,6 +171,7 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
     const faceLayers = () => ["--mist", "--sage", "--deep-forest"].map(name => fills.indexOf(colors[name]));
     const sandbox = vm.createContext({
       window, document, canvas,
+      Math: Object.assign(Object.create(Math), { random() { randomCalls++; return (emotion + 0.5) / 3; } }),
       getComputedStyle: () => ({ getPropertyValue: (name) => colors[name] }),
       performance: { now: () => 1000 }, cancelAnimationFrame() {},
       requestAnimationFrame(callback) { assert.equal(reduced, false); nextFrame = callback; return 1; },
@@ -179,13 +183,17 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       getByteFrequencyData(data) { data.fill(loud ? 180 : 0); },
     });
     for (let i = 1; i <= frameCount && nextFrame; i++) {
+      if (i === silenceAt) {
+        surface.dataset.speaking = "false";
+        loud = false;
+      }
       nextFrame(1000 + i * 34);
       if (variant === "3") {
         assert.equal(translates[0][1], 44, "Nodding never moves the head");
         assert.equal(squash, undefined, "Nodding never squashes the head");
         if (state === "listening" && i >= 180) {
           const layers = faceLayers();
-          const eyes = translates[layers[0] + 1][1] + 0.208187 * radius;
+          const eyes = translates[layers[0] + 1][1] - restingEyeY * radius;
           const mouth = translates[layers[2] + 1][1] - 0.678436 * radius;
           nodSamples.push(eyes);
           if (eyes > 0.1) assert.ok(mouth > 0 && mouth < eyes * 0.5, "Mouth follows less than the eyes");
@@ -193,24 +201,21 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       }
       if (variant === "3" && i >= 180) eyeSamples.push(faceLayers().slice(0, 2).map(layer => ({
         width: paths[layer * 82 + 1][0], height: paths[layer * 82 + 21][1],
+        spin: paths[layer * 82][1],
         position: translates[layer + 1].slice(),
       })));
     }
+    assert.equal(randomCalls, state === "thinking" ? 1 : 0, "Choose an emotion once per processing turn, never per frame or refresh");
     if (variant === "3") {
       const layers = state === "idle" ? [0, 1, 2] : faceLayers();
       const blobs = layers.map(layer => translates[layer + 1]);
-      const eyes = blobs.filter(([, y]) => y < 0);
-      const mouths = blobs.filter(([, y]) => y > 0);
-      if (reduced && ["listening", "thinking"].includes(state)) {
-        const reference = state === "listening"
-          ? [[-0.178061, -0.208187, 0.373516, 0.526891], [0.619170, -0.206809, 0.234552, 0.397226], [-0.094579, 0.678436]]
-          : [[-0.384411, -0.037947, 0.412864, 0.670817], [0.439721, -0.234707, 0.366162, 0.490939], [0.372745, 0.605300]];
-        reference.forEach(([x, y, rx, ry], layer) => {
-          assert.ok(Math.abs(blobs[layer][0] / radius - x) < 0.001, "Match SVG horizontal placement");
-          assert.ok(Math.abs(blobs[layer][1] / radius - y) < 0.001, "Match SVG vertical placement");
-          if (layer === 2) return;
-          for (const [px, py] of paths.slice(layers[layer] * 82 + 1, layers[layer] * 82 + 82)) {
-            assert.ok(Math.abs((px / (radius * rx)) ** 2 + (py / (radius * ry)) ** 2 - 1) < 0.001,
+      const eyes = blobs.slice(0, 2);
+      const mouths = blobs.slice(2);
+      if (reduced && state === "listening") {
+        layers.slice(0, 2).forEach(layer => {
+          const rx = paths[layer * 82 + 1][0], ry = paths[layer * 82 + 21][1];
+          for (const [px, py] of paths.slice(layer * 82 + 1, layer * 82 + 82)) {
+            assert.ok(Math.abs((px / rx) ** 2 + (py / ry) ** 2 - 1) < 0.001,
               "Eyes remain clean ellipses without water-like deformation");
           }
         });
@@ -219,14 +224,15 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
         assert.equal(eyes.length, 2, "Listening is two eye circles");
         assert.equal(mouths.length, 1, "Keep the idle layer geometry while its mouth appearance fades out");
         assert.ok(eyes[0][0] * eyes[1][0] < 0, "Eyes sit on opposite sides");
+        assert.ok(eyes[0][0] + eyes[1][0] > 12 && eyes.every(eye => eye[1] < -4), "Listening faces the upper right of the screen");
+        assert.ok(Math.hypot(...eyes[0]) < Math.hypot(...eyes[1]), "The left eye is nearer the face center");
+        assert.ok(paths[layers[0] * 82 + 1][0] > paths[layers[1] * 82 + 1][0], "The near eye is larger than the far eye");
       }
       if (state === "thinking") {
         assert.equal(arcs.length, 0, "The face keeps the existing contour renderer");
         assert.equal(rectangles.length, 1);
         assert.ok(Math.abs(rectangles[0].width - rectangles[0].height) < 0.01, "Thinking stays a round face");
-        assert.equal(eyes.length, 2, "Thinking keeps two eyes");
-        assert.ok(eyes[0][0] * eyes[1][0] < 0, "Thinking eyes stay on opposite sides");
-        assert.ok(eyes[0][1] - eyes[1][1] > 3, "Thinking raises one eye in a curious expression");
+        assert.equal(opacities.filter(value => value > 0.99).length, 2, "Thinking keeps two visible eyes");
       } else assert.ok(paths.length > 0, "Variant 3 restores the earlier layered contours");
       assert.equal(fills.length, 3);
       if (state === "idle") assert.deepEqual(fills, [colors["--deep-forest"], colors["--sage"], colors["--mist"]], "Idle colors stay unchanged");
@@ -246,10 +252,20 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
         }
         return exitFrames;
       }
+      if (repeatProcessing) {
+        wave.refresh();
+        assert.equal(randomCalls, 1, "A resize or refresh cannot replace the current emotion");
+        surface.dataset.state = "listening";
+        wave.refresh();
+        surface.dataset.state = "thinking";
+        wave.refresh();
+        assert.equal(randomCalls, 2, "The next processing turn chooses again");
+      }
       return { paths: paths.slice(), opacities: opacities.slice(), radius, squash, arcs: arcs.slice(), blobs, eyeSamples, nodSamples };
     }
     return pixels;
   };
+  restingEyeY = render("listening", true).blobs[0][1] / 34;
   const idle = render("idle");
   const hearing = render("listening");
   assert.notDeepEqual(idle, hearing);
@@ -298,7 +314,8 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
         "Return rejoins the moving idle orbit at its current angle");
     });
   }
-  for (const state of ["listening", "thinking"]) {
+  {
+    const state = "listening";
     const quick = render(state, false, false, "3", 13);
     const reference = render(state, true, false, "3");
     assert.ok(Math.abs(quick.radius - reference.radius) < 0.3, "State size settles within about 450ms");
@@ -306,7 +323,7 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       assert.ok(Math.abs(value - reference.blobs[i][axis]) < 0.5, "Face pose settles within about 450ms");
     }));
     const { eyeSamples } = render(state, false, false, "3", 900);
-    const fullHeights = state === "listening" ? [0.526891 * 34, 0.397226 * 34] : [0.670817 * 32, 0.490939 * 32];
+    const fullHeights = [0, 1].map(eye => Math.max(...eyeSamples.map(eyes => eyes[eye].height)));
     const ratios = eyeSamples.map(eyes => eyes.map((eye, i) => eye.height / fullHeights[i]));
     let blinks = 0, closed = false;
     for (const [left, right] of ratios) {
@@ -315,19 +332,43 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       closed = nextClosed;
     }
     assert.ok(blinks >= 1 && blinks <= 3, "Blink rarely over 24 seconds");
-    assert.ok(ratios.some(([left, right]) => left > 0.4 && left < 0.85 && right > 0.4), "Eyes squint between blinks");
-    if (state === "thinking") {
-      assert.ok(ratios.some(([left, right]) => Math.abs(left - right) > 0.06), "Thinking shows subtle curiosity");
-      for (const [left, right] of ratios) {
-        if (Math.max(left, right) > 0.95) assert.ok(Math.min(left, right) > 0.87, "Curious eyes never squint harshly outside a blink");
-      }
-    }
+    assert.ok(ratios.filter(([left, right]) => left > 0.999 && right > 0.999).length > ratios.length * 0.94,
+      "Quiet listening keeps eyes open and stable between brief natural blinks");
     for (const eyes of eyeSamples) eyes.forEach((eye, i) => {
       assert.ok(Math.abs(eye.width - eyeSamples[0][i].width) < 0.001, "Expression changes eye height only");
       eye.position.forEach((value, axis) => assert.ok(Math.abs(value - eyeSamples[0][i].position[axis]) < 0.001, "Eyes stay in their reference positions"));
     });
   }
-  const nods = render("listening", false, true, "3", 900, true).nodSamples;
+  const emotions = [0, 1, 2].map(emotion => render("thinking", false, false, "3", 900, false, false, emotion, true));
+  assert.notDeepEqual(emotions[0].eyeSamples, emotions[1].eyeSamples, "Remembering and weighing have distinct choreography");
+  assert.notDeepEqual(emotions[1].eyeSamples, emotions[2].eyeSamples, "Curiosity has its own choreography");
+  for (const [emotion, { eyeSamples }] of emotions.entries()) {
+    const widths = eyeSamples.map(eyes => eyes[0].width);
+    assert.ok(Math.max(...widths) - Math.min(...widths) > 2, "Perspective changes eye size as the face turns");
+    for (const eyes of eyeSamples) {
+      const [near, far] = eyes.slice().sort((a, b) => Math.hypot(...a.position) - Math.hypot(...b.position));
+      assert.ok(near.width > far.width && near.height > far.height, "The eye closer to the center is larger");
+      for (const eye of eyes) for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 40) {
+        const x = Math.cos(angle) * eye.width, y = Math.sin(angle) * eye.height;
+        const px = eye.position[0] + x * Math.cos(eye.spin) - y * Math.sin(eye.spin);
+        const py = eye.position[1] + x * Math.sin(eye.spin) + y * Math.cos(eye.spin);
+        assert.ok(Math.hypot(px, py) < 32, "Every emotion keeps the eyes inside the circular face");
+      }
+    }
+    assert.deepEqual(render("thinking", true, false, "3", 900, false, false, emotion).paths,
+      render("thinking", true, true, "3", 30, false, false, emotion).paths, "Reduced motion stays static regardless of time or noise");
+    render("thinking", false, false, "3", 240, false, true, emotion);
+  }
+  const speaking = render("listening", false, true, "3", 900, true);
+  const nods = speaking.nodSamples;
+  const nodWidths = speaking.eyeSamples.map(eyes => eyes[0].width);
+  assert.ok(Math.max(...nodWidths) - Math.min(...nodWidths) > 0.005, "Nodding updates eye perspective instead of sliding a flat face");
+  for (const [left, right] of speaking.eyeSamples) {
+    assert.ok(left.position[0] + right.position[0] > 12 && left.position[1] < -4 && right.position[1] < -4, "Nodding keeps the upper-right gaze");
+    assert.ok(left.width > right.width && left.height > right.height, "Nods and blinks preserve the near/far perspective");
+    assert.ok(Math.abs(left.height / left.width * Math.cos(0.44 - 24 * Math.PI / 180)
+      - right.height / right.width * Math.cos(0.44 + 24 * Math.PI / 180)) < 0.001, "Both eyes blink together during speech");
+  }
   const nodStarts = [];
   let activeFrames = 0;
   nods.forEach((value, i) => {
@@ -337,13 +378,17 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
       assert.ok(activeFrames <= 12, "Cartoon nod finishes within 400ms");
     } else activeFrames = 0;
   });
-  assert.ok(nodStarts.length >= 18 && nodStarts.length <= 22, "Sustained speech receives frequent double nods");
+  assert.ok(nodStarts.length >= 12 && nodStarts.length <= 16, "Sustained speech receives occasional double nods");
   nodStarts.slice(1).forEach((start, i) => {
     const gap = start - nodStarts[i];
-    assert.ok(i % 2 === 0 ? gap >= 9 && gap <= 13 : gap >= 55 && gap <= 65,
-      "Nods arrive in quick pairs with a 2.4-second trigger cooldown");
+    assert.ok(i % 2 === 0 ? gap >= 9 && gap <= 13 : gap >= 85 && gap <= 95,
+      "Nods arrive in quick pairs at the approved 1× pace, about every 3.4 seconds");
   });
   assert.ok(Math.max(...nods) > 2 && Math.max(...nods) <= 3.5, "Eyes make a small but readable nod");
+  const interrupted = render("listening", false, true, "3", 450, true, false, 0, false, 236);
+  assert.ok(interrupted.nodSamples.some(value => value > 0.1), "Speech triggers a response before falling silent");
+  assert.ok(interrupted.nodSamples.slice(236 - 180 + 20).every(value => Math.abs(value) < 0.001),
+    "An interrupted response settles and does not restart while quiet");
   for (const [state, reduced, loud, speaking] of [
     ["listening", false, true, false], ["listening", false, false, true],
     ["thinking", false, true, true], ["idle", false, true, true], ["listening", true, true, true],
@@ -866,31 +911,36 @@ test("late captions cannot reopen a turn that was already submitted", async () =
   h.escape();
 });
 
-test("unmatched commands shake once, successful navigation and idle silence do not", async () => {
+test("unmatched commands trigger eye feedback without moving the button", async () => {
   const h = browser();
   const { socket, track } = await h.connect();
   socket.message({ type: "ready" });
   socket.message({ type: "noop" });
   assert.equal(h.animations.length, 0);
+  assert.ok(!h.ui.root.dataset.fallback);
   socket.message({ type: "decision", action: "clarify", hypotheses: [] });
-  assert.equal(h.animations.length, 1);
-  assert.equal(h.ui.root.dataset.shaking, "true");
-  h.animations[0].onfinish();
-  assert.equal(h.ui.root.dataset.shaking, "false", "Listening resumes after the shake finishes");
+  const first = h.ui.root.dataset.fallback;
+  assert.ok(first, "An unmatched decision starts fallback feedback");
+  assert.equal(h.animations.length, 0, "The button never animates");
   assert.equal(h.ui.root.dataset.state, "listening");
   assert.equal(track.stopped, false);
   socket.message({ type: "decision", action: "noop" });
-  assert.equal(h.animations.length, 2);
-  assert.equal(h.ui.root.dataset.shaking, "true");
+  assert.ok(h.ui.root.dataset.fallback && h.ui.root.dataset.fallback !== first, "Each failed command gets one new reaction");
   socket.message({ type: "decision", action: "show", section: "codev" });
-  assert.equal(h.animations.length, 2);
-  h.animations[1].onfinish();
-  assert.equal(h.ui.root.dataset.shaking, "false", "Cancelled feedback cannot pause listening again");
+  assert.ok(!h.ui.root.dataset.fallback, "Successful navigation cancels fallback");
   socket.message({ type: "final" });
   socket.message({ type: "noop" });
-  assert.equal(h.animations.length, 2, "Empty silence must not shake as a failed command");
+  assert.ok(!h.ui.root.dataset.fallback, "Empty silence is not a failed command");
+  socket.message({ type: "decision", action: "noop" });
+  socket.message({ type: "speech_started" });
+  assert.ok(!h.ui.root.dataset.fallback, "New speech interrupts feedback");
+  socket.message({ type: "decision", action: "noop" });
+  socket.message({ type: "delta", text: "Buka CoDev" });
+  assert.ok(!h.ui.root.dataset.fallback, "A caption also interrupts feedback without a speech-start event");
+  socket.message({ type: "decision", action: "noop" });
   h.escape();
-  assert.equal(h.animations.at(-1).cancelled, true);
+  assert.ok(!h.ui.root.dataset.fallback, "Stopping clears feedback");
+  assert.equal(h.animations.length, 0);
   const reduced = browser({ reducedMotion: true });
   const r = await reduced.connect();
   r.socket.message({ type: "ready" });
@@ -898,6 +948,83 @@ test("unmatched commands shake once, successful navigation and idle silence do n
   assert.equal(reduced.animations.length, 0);
   assert.match(reduced.ui.status.textContent, /belum ditemukan/i);
   reduced.escape();
+});
+
+test("fallback shakes its eyes once and returns within 500 ms with a stationary orb", () => {
+  const setup = (reduced = false) => {
+    let frame, next, now = 1000;
+    const root = { dataset: { state: "listening", speaking: "false" }, style: { setProperty() {} } };
+    const ctx = {
+      clearRect() { frame = { layers: [] }; },
+      translate(x, y) { if (!frame.center) frame.center = [x, y]; else frame.layers.push({ position: [x, y], path: [] }); },
+      rotate(angle) { frame.layers.at(-1).spin = angle; },
+      moveTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
+      lineTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
+      roundRect(x, y, w) { frame.radius = w / 2; },
+      fill() { frame.layers.at(-1).color = this.fillStyle; },
+      save() {}, restore() {}, beginPath() {}, closePath() {}, clip() {}, fillRect() {}, setTransform() {},
+    };
+    const canvas = { clientWidth: 88, closest: () => root, getContext: () => ctx };
+    const window = Object.assign(new EventTarget(), {
+      matchMedia: () => Object.assign(new EventTarget(), { matches: reduced }),
+    });
+    const sandbox = vm.createContext({
+      canvas, window, document: new EventTarget(), performance: { now: () => now },
+      getComputedStyle: () => ({ getPropertyValue: name => name }),
+      requestAnimationFrame(fn) { assert.ok(!reduced); next = fn; return 1; }, cancelAnimationFrame() {},
+    });
+    const wave = vm.runInContext(`${source}\ncreateWaveform(canvas)`, sandbox);
+    const run = (count, step = 1000 / 60) => Array.from({ length: count }, () => { now += step; next(now); return frame; });
+    if (!reduced) run(120);
+    return { root, wave, run, get frame() { return frame; } };
+  };
+  const h = setup(), baseline = h.frame;
+  h.root.dataset.fallback = "1";
+  h.wave.refresh();
+  const frames = h.run(30);
+  const center = frame => (frame.layers[1].position[0] + frame.layers[2].position[0]) / 2;
+  const centers = frames.map(center);
+  assert.equal(centers.filter((value, i) => value < -10 && (i === 0 || centers[i - 1] >= -10)).length, 1,
+    "Eyes make one decisive sweep left");
+  assert.ok(centers.slice(centers.indexOf(Math.min(...centers))).some(value => value > 10),
+    "The sweep returns decisively right before settling");
+  const atHome = frame => frame.layers.slice(1).every((layer, i) =>
+    layer.position.every((value, axis) => Math.abs(value - baseline.layers[i + 1].position[axis]) < 0.03)
+      && layer.path.every((point, j) => point.every((value, axis) => Math.abs(value - baseline.layers[i + 1].path[j][axis]) < 0.03)));
+  assert.ok(atHome(frames.at(-1)), "Entry, shake, and return all finish within 500 ms");
+  assert.ok(frames.some(frame => frame.layers[1].path[0][0] > frame.layers[2].path[0][0] * 2),
+    "The eye nearest the center becomes larger when looking left");
+  assert.ok(frames.some(frame => frame.layers[2].path[0][0] > 9), "Fast sweeps stretch the eyes cartoonishly");
+  for (const frame of frames) {
+    assert.deepEqual(frame.center, [44, 44]);
+    assert.ok(Math.abs(frame.radius - 34) < 0.001, "Orb size stays fixed");
+    assert.deepEqual(frame.layers.map(layer => layer.color), baseline.layers.map(layer => layer.color));
+    for (const layer of frame.layers.slice(1)) for (const [x, y] of layer.path) {
+      const px = layer.position[0] + x * Math.cos(layer.spin) - y * Math.sin(layer.spin);
+      const py = layer.position[1] + x * Math.sin(layer.spin) + y * Math.cos(layer.spin);
+      assert.ok(Math.hypot(px, py) < 34, "Cartoon eyes remain inside the orb");
+    }
+  }
+  assert.ok(h.run(120).every(atHome), "The same fallback event cannot loop or restart");
+  h.root.dataset.fallback = "2"; h.wave.refresh(); h.run(8);
+  assert.ok(!atHome(h.frame), "A new fallback can play again");
+  const outgoing = h.frame;
+  h.root.dataset.fallback = ""; h.root.dataset.speaking = "true"; h.wave.refresh();
+  assert.ok(Math.abs(center(h.frame) - center(outgoing)) < 5, "Interrupting blends out instead of snapping");
+  assert.ok(atHome(h.run(45).at(-1)), "New speech recovers the listening pose");
+  h.root.dataset.speaking = "false"; h.root.dataset.fallback = "3"; h.wave.refresh();
+  assert.ok(atHome(h.run(5, 100).at(-1)), "Dropped frames cannot stretch the reaction beyond 500 ms");
+  h.root.dataset.fallback = "4"; h.wave.refresh(); h.run(8);
+  const beforeStop = center(h.frame);
+  h.root.dataset.fallback = ""; h.root.dataset.state = "idle"; h.wave.refresh();
+  assert.ok(Math.abs(center(h.frame) - beforeStop) < 5, "Stopping the session also blends out");
+  const reduced = setup(true), still = reduced.frame;
+  reduced.root.dataset.fallback = "1"; reduced.wave.refresh();
+  const reaction = reduced.frame;
+  assert.notDeepEqual(reaction.layers, still.layers, "Reduced motion uses a static listening reaction");
+  reduced.wave.refresh(); assert.deepEqual(reduced.frame, reaction);
+  reduced.root.dataset.fallback = ""; reduced.wave.refresh();
+  assert.deepEqual(reduced.frame, still);
 });
 
 test("voice navigation starts at the project list and centers individual content in smooth and native scrolling", async () => {
