@@ -22,32 +22,24 @@ body {
 }
 
 .inquiry-email {
-  display: inline-flex;
-  align-items: center;
+  align-self: start;
   min-height: 44px;
-  margin-top: 0.5rem;
-  color: var(--deep-forest);
-  font-weight: 500;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.22em;
-}
-
-.inquiry-email:hover,
-.inquiry-email:focus-visible {
-  color: var(--signal);
 }
 
 @media (min-width: 64rem) {
-  #site-links,
-  .site-footer-links {
-    display: none;
-  }
 
   #site-nav,
   #site-nav.is-scrolled {
     min-height: 0;
-    padding: 28px clamp(20px, 4vw, 56px);
+    padding: 28px var(--shell-edge);
+  }
+
+  #site-nav.is-scrolled {
+    padding-block: 20px;
+  }
+
+  body.nav-on-dark #site-nav,
+  body.nav-on-dark #site-nav.is-scrolled {
     border-bottom-color: transparent;
     background: transparent;
     -webkit-backdrop-filter: none;
@@ -55,7 +47,11 @@ body {
   }
 
   .site-footer {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .site-footer-links {
+    justify-self: end;
   }
 }
 
@@ -64,13 +60,12 @@ body {
     --page-gutter: clamp(1rem, 4vw, 2.5rem);
   }
 
-  #work-root {
-    --pad: var(--page-gutter);
+  :root {
+    --shell-pad: var(--page-gutter);
   }
 
   .chapter,
-  .clients,
-  .inquiry {
+  .clients {
     width: 100%;
     margin-inline: auto;
   }
@@ -84,12 +79,10 @@ body {
   .space.is-flip {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    width: calc(100% - 2 * var(--page-gutter));
+    width: var(--shell);
     min-height: 0;
     margin-inline: auto;
     padding: 0;
-    border-radius: var(--radius-panel);
-    overflow: clip;
   }
 
   .space.is-flip .space-stage {
@@ -103,7 +96,9 @@ body {
   .space-stage {
     min-width: 0;
     min-height: 0;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 1;
+    border-radius: var(--radius-panel);
+    overflow: clip;
   }
 
   .space-stage .hero {
@@ -112,7 +107,7 @@ body {
 
   .space-panel {
     min-height: 0;
-    padding: 2.75rem clamp(2rem, 6vw, 4rem) 3.5rem;
+    padding: 2.25rem 0 3rem;
   }
 
   .space-copy {
@@ -164,7 +159,7 @@ body {
     min-height: var(--nav-height);
     padding:
       max(0.75rem, env(safe-area-inset-top))
-      var(--page-gutter)
+      var(--shell-edge)
       0.75rem;
     font-size: 0.7rem;
   }
@@ -186,14 +181,31 @@ body {
     letter-spacing: 0.05em;
   }
 
+  /* The agent callouts are decoration behind the copy on a phone, so they read
+     at label weight instead of headline weight. */
+  .nadi-lbl {
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .nadi-lbl::before {
+    width: 16px;
+  }
+
+  .nadi-lbl small {
+    font-size: 0.62rem;
+    margin-bottom: 1px;
+  }
+
   #hero-copy {
     inset: 0;
     width: 100%;
-    align-items: flex-start;
+    align-items: flex-end;
     padding:
-      calc(var(--nav-height) + max(2rem, 5dvh))
-      var(--page-gutter)
-      0;
+      calc(var(--nav-height) + 1rem)
+      var(--shell-edge)
+      clamp(3.5rem, 11dvh, 6rem);
   }
 
   #hero-copy .doctrine-block {
@@ -221,19 +233,12 @@ body {
   }
 
   .index-mark {
-    margin:
-      clamp(4rem, 12dvh, 6rem)
-      var(--page-gutter)
-      0;
+    margin: clamp(4rem, 12dvh, 6rem) auto 0 var(--shell-edge);
     font-size: clamp(2.15rem, 10vw, 3.15rem);
   }
 
-  .space-stage {
-    aspect-ratio: 4 / 3;
-  }
-
   .space-panel {
-    padding: 1.75rem 1rem 2.5rem;
+    padding: 1.75rem 0 2.5rem;
   }
 
   .field-mark {
@@ -258,22 +263,33 @@ body {
     font-size: 1rem;
   }
 
-  .clients {
-    padding-inline: var(--page-gutter);
-  }
-
-  .client-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .client-list img {
     opacity: 1;
   }
 
   .inquiry {
+    grid-template-columns: minmax(0, 1fr);
     justify-items: start;
-    padding-inline: var(--page-gutter);
     text-align: left;
+  }
+
+  /* On a phone the QR is dead weight: the visitor already holds the device that
+     would scan it, so the button carries the action on its own. */
+  .inquiry-code {
+    display: none;
+  }
+
+  .inquiry-email .cta-wa {
+    display: inline-block;
+  }
+
+  .inquiry-email .project-cta-icon,
+  .support-scan {
+    display: none;
+  }
+
+  .support-tap {
+    display: inline;
   }
 
   .inquiry-copy h2 {
@@ -286,22 +302,48 @@ body {
   }
 
   .site-footer {
-    grid-template-columns: 1fr auto;
-    padding:
-      2rem
-      var(--page-gutter)
-      max(2.25rem, calc(1.25rem + env(safe-area-inset-bottom)));
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.4rem;
+    padding-block: 2.25rem max(2.25rem, calc(1.25rem + env(safe-area-inset-bottom)));
   }
 
-  .site-footer-brand {
+  .site-footer-brand,
+  .site-footer-links,
+  .site-footer-meta {
     grid-column: 1;
-    grid-row: 1;
+    justify-self: start;
+  }
+
+  /* On one column the wordmark and its tagline stack, so the tagline sits under
+     the mark instead of running off the side of it. */
+  .site-footer-brand {
+    display: grid;
+    gap: 0.5rem;
+    justify-items: start;
+  }
+
+  .site-footer-brand img {
+    width: 5.75rem;
+  }
+
+  .site-footer-tag {
+    margin-top: 0;
+    font-size: 0.58rem;
+  }
+
+  .site-footer-links {
+    gap: 1.5rem;
+    padding-top: 1.15rem;
+    border-top: 1px solid var(--line);
+    width: 100%;
+  }
+
+  .site-footer-links a {
+    min-height: 0;
   }
 
   .site-footer-meta {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
+    font-size: 0.72rem;
   }
 }
 
@@ -636,5 +678,49 @@ html.is-shot .site-footer {
     position: relative;
     top: auto;
     max-height: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reconciliation with the compact-layout pass.
+ *
+ * The compact pass and the page-frame pass landed on the same selectors from
+ * two directions. Everything below restates the frame-side decisions so they
+ * survive the cascade, and it is deliberately last in the file.
+ * ------------------------------------------------------------------------- */
+
+@media (max-width: 63.999rem) {
+  /* The section frame owns the gutter; the section itself adds none. */
+  .ns-root {
+    padding-inline: 0;
+  }
+
+  .space-panel {
+    padding-inline: 0;
+  }
+}
+
+@media (max-width: 47.999rem) {
+  /* The Voice Surface is hidden on phones, so nothing has to be scrolled clear
+     of it. */
+  :root {
+    --voice-clearance: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  /* The hero lead reads at the same size as a product lead. */
+  #doctrine-lead {
+    max-width: 35ch;
+    font-size: 1rem;
+  }
+
+  /* The agent callouts stay at label weight behind the copy. */
+  .nadi-lbl {
+    max-width: 10rem;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .nadi-lbl small {
+    font-size: 0.62rem;
   }
 }

@@ -11,9 +11,13 @@ test("responsive cascade stays last and desktop content inventory is preserved",
   const responsiveIndex = html.indexOf("videos/gateway-hero/responsive.css");
   assert.ok(systemIndex > -1 && responsiveIndex > systemIndex);
   assert.equal((html.match(/<section\b/g) || []).length, 13);
-  assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 10);
-  assert.equal((html.match(/media\/clients\//g) || []).length, 2);
-  assert.doesNotMatch(html, /id="site-links"|class="site-footer-links"/);
+  // One CTA per product, the two hero buttons, and the contact button, which now
+  // uses the same control as the products instead of a bare text link.
+  assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 11);
+  assert.equal((html.match(/media\/clients\//g) || []).length, 7);
+  // Primary and footer navigation are part of the page again.
+  assert.match(html, /id="site-links"/);
+  assert.match(html, /class="site-footer-links"/);
 
   const products = ["bikinkonten", "lubna", "crm-ai-agent", "hireassess", "arkiv", "codev", "coframe", "cofinance"];
   let previous = -1;
@@ -49,7 +53,10 @@ test("compact layout has explicit tablet phone voice and touch policies", async 
   assert.match(snapSource, /touchmove/);
   assert.doesNotMatch(snapSource, /min-width:\s*64rem/);
   assert.match(work, /connection\?\.saveData/);
-  assert.match(work, /voiceSurface\.getBoundingClientRect\(\)\.top/);
+  // The surface is measured for clearance, but a phone hides it outright, so the
+  // zero-sized rect a display:none element reports has to be treated as absent.
+  assert.match(work, /voiceSurface[\s\S]{0,160}getBoundingClientRect\(\)/);
+  assert.match(work, /voiceRect\?\.height \? voiceRect\.top/);
   assert.match(cluster, /const phone = W < 768;/);
   assert.match(cluster, /const tablet = W >= 768 && W < 1024;/);
   assert.match(cluster, /const labelY = Math\.min/);

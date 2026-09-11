@@ -31,6 +31,20 @@ html.lenis body {
 
 #site-nav {
   background: transparent;
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Over the light half of the page the header needs its own surface, otherwise
+   the wordmark collides with the section headline underneath it. */
+#site-nav.is-scrolled {
+  border-bottom-color: var(--line);
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
 }
 
 #site-links {
@@ -51,8 +65,17 @@ html.lenis body {
   border-bottom-color: currentColor;
 }
 
+#site-links a[aria-current] {
+  border-bottom-color: currentColor;
+  color: var(--accent-readable);
+}
+
+body.nav-on-dark #site-links a[aria-current] {
+  color: #8ed2b4;
+}
+
 .work-pad {
-  --pad: clamp(1.15rem, 4vw, 2.75rem);
+  --pad: var(--shell-pad);
   --project-gap: clamp(4.5rem, 8vh, 7rem);
 }
 
@@ -195,7 +218,7 @@ html.lenis body {
 }
 
 .index-mark {
-  margin: clamp(5.5rem, 11vh, 8rem) var(--pad) 0;
+  margin: clamp(5.5rem, 11vh, 8rem) auto 0 var(--shell-edge);
   max-width: 11em;
   font-size: clamp(2.15rem, 4.6vw, 3.7rem);
   font-weight: 400;
@@ -233,9 +256,9 @@ html.lenis body {
 .space {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 80dvh;
-  gap: 0;
-  padding: 0 var(--pad);
+  gap: 0 clamp(1.5rem, 4vw, 3.5rem);
+  width: var(--shell);
+  margin-inline: auto;
   background: #ffffff;
 }
 
@@ -256,7 +279,7 @@ html.lenis body {
 
 .space-stage {
   position: relative;
-  min-height: 27.2rem;
+  aspect-ratio: 1;
   overflow: hidden;
 }
 
@@ -302,10 +325,9 @@ html.lenis body {
 }
 
 .space-panel {
-  padding: 1.7rem 1.75rem 1.8rem;
+  padding: 1.7rem 0 1.8rem;
   display: grid;
   align-content: center;
-  min-height: 27.2rem;
 }
 
 .field-mark {
@@ -487,94 +509,186 @@ html.lenis body {
 
 
 
+/* Trusted by is the one dark band inside the light half of the page. It closes
+   the product stream, echoes the hero, and keeps Contact from reading as one
+   more product section. */
 .clients {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 0;
-  background: #ffffff;
-  padding: clamp(3.5rem, 7vh, 4.75rem) var(--pad);
+  margin-top: clamp(3rem, 7vh, 5.5rem);
+  padding-block: clamp(4.25rem, 9vh, 6.5rem);
+  border-top: 1px solid rgb(95 227 168 / 0.22);
+  background: var(--deepest);
+  color: #eaf6ef;
+}
+
+.clients::before {
+  content: "";
+  position: absolute;
+  inset: -40% -5% auto -5%;
+  z-index: -1;
+  height: 180%;
+  background:
+    radial-gradient(52% 62% at 16% 18%, rgb(95 227 168 / 0.18), transparent 70%),
+    radial-gradient(46% 58% at 84% 88%, rgb(28 133 92 / 0.26), transparent 74%);
+  pointer-events: none;
 }
 
 .clients-inner {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  gap: clamp(2rem, 4vw, 3rem);
+  width: var(--shell);
+  margin-inline: auto;
+}
+
+.clients-kicker {
+  display: flex;
   align-items: center;
-  gap: clamp(3rem, 6vw, 6rem);
-  width: min(100%, 76rem);
-  margin: 0 auto;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  color: #8ed2b4;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.clients-kicker::before {
+  content: "";
+  width: 1.75rem;
+  height: 1px;
+  background: currentColor;
 }
 
 .clients-title {
   margin: 0;
-  font-size: clamp(1.25rem, 1.6vw, 1.5rem);
+  max-width: 22ch;
+  font-size: clamp(1.55rem, 2.3vw, 2.15rem);
   font-weight: 400;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
-  white-space: nowrap;
-  color: var(--ink);
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: #f2fbf6;
 }
 
+/* One monochrome treatment keeps a row of very different marks reading as one
+   set: white knockouts on the dark band, lifted on hover. */
 .client-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(2, minmax(8rem, 10rem));
-  gap: clamp(1.25rem, 2.5vw, 2.5rem);
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   align-items: center;
-  align-content: center;
-  justify-content: start;
+  justify-items: center;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  width: 100%;
 }
 
 .client-list li {
   display: grid;
   place-items: center;
   min-width: 0;
+  width: 100%;
   min-height: 3.75rem;
-  padding: 0.15rem;
 }
 
 .client-list img {
   display: block;
-  width: min(100%, 8.5rem);
-  height: 2.35rem;
+  width: auto;
+  max-width: 100%;
+  height: 2.3rem;
   object-fit: contain;
   object-position: center;
-  filter: grayscale(1) contrast(0.9);
+  filter: brightness(0) invert(1);
+  opacity: 0.78;
+}
+
+.client-list [data-client="pama"] img {
+  height: 1.75rem;
+}
+
+/* The university crest is a full-colour seal. Knocked out to white it collapses
+   into a silhouette, so it keeps its own colours on a light plate sized to the
+   same optical weight as the wordmarks beside it. */
+.client-list [data-client="brawijaya"] {
+  width: auto;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.7rem;
+  background: rgb(247 248 245 / 0.94);
+}
+
+.client-list [data-client="brawijaya"] img {
+  height: 2.4rem;
+  filter: none;
+  opacity: 1;
+}
+
+.client-list [data-client="meetandmove"] img {
+  height: 2.5rem;
+}
+
+.client-list [data-client="collins"] img {
+  height: 1.95rem;
+}
+
+.client-list [data-client="hakuhodo"] img {
+  height: 1.5rem;
 }
 
 .client-list [data-client="bina"] img {
-  width: min(100%, 7rem);
-  height: 2.35rem;
-  object-fit: contain;
+  height: 2.15rem;
 }
 
 .client-list [data-client="qasir"] img {
-  width: min(100%, 6.15rem);
-  height: 2.35rem;
-  object-fit: contain;
+  height: 1.9rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .client-list img {
-    opacity: 0.68;
-    transition: opacity 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+    transition:
+      opacity 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
   .client-list:hover img {
-    opacity: 0.28;
+    opacity: 0.42;
   }
 
   .client-list li:hover img {
     opacity: 1;
+    transform: translateY(-2px);
   }
 }
 
 .inquiry {
   display: grid;
-  grid-template-columns: max-content minmax(16rem, 22rem);
-  gap: clamp(1.5rem, 3vw, 3rem);
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
+  gap: clamp(2rem, 5vw, 5rem);
   align-items: center;
-  justify-content: center;
   min-height: 0;
-  padding: clamp(2rem, 4.5vh, 3rem) var(--pad) 3.5rem;
+  width: var(--shell);
+  margin-inline: auto;
+  padding-block: clamp(5rem, 11vh, 8rem) clamp(4.5rem, 9vh, 6.5rem);
   background: #ffffff;
+}
+
+.inquiry-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.1rem;
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.inquiry-kicker::before {
+  content: "";
+  width: 1.75rem;
+  height: 1px;
+  background: currentColor;
 }
 
 .inquiry-copy h2 {
@@ -595,7 +709,7 @@ html.lenis body {
   will-change: transform, opacity;
 }
 
-.inquiry-copy p {
+.inquiry-copy .inquiry-support {
   margin-top: 1.2rem;
   max-width: 34ch;
   font-size: 1rem;
@@ -604,14 +718,33 @@ html.lenis body {
 }
 
 .inquiry-code {
-  justify-self: start;
-  width: min(100%, 22rem);
+  justify-self: end;
+  width: min(100%, 21rem);
   margin: 0;
 }
 
 .inquiry-qr {
+  position: relative;
   display: block;
+  padding: clamp(0.85rem, 1.6vw, 1.25rem);
+  border: 1px solid color-mix(in srgb, var(--signal) 26%, transparent);
+  border-radius: clamp(1rem, 1.6vw, 1.35rem);
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--signal) 7%, #ffffff) 0%, #ffffff 62%);
+  box-shadow: 0 1.35rem 2.75rem color-mix(in srgb, var(--deep-forest) 10%, transparent);
   color: var(--ink);
+  transition:
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .inquiry-qr:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--signal) 52%, transparent);
+    box-shadow: 0 1.85rem 3.25rem color-mix(in srgb, var(--deep-forest) 16%, transparent);
+  }
 }
 
 .qr-slab {
@@ -669,13 +802,63 @@ html.lenis body {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: clamp(1.5rem, 4vw, 4rem);
-  padding: 2rem var(--pad) 2.25rem;
-  border-top: 1px solid var(--line);
+  position: relative;
+  width: var(--shell);
+  margin-inline: auto;
+  padding-block: 2rem 2.25rem;
   background: #ffffff;
 }
 
+.site-footer-links {
+  display: flex;
+  align-items: center;
+  gap: clamp(1.25rem, 3vw, 2.25rem);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--slate);
+}
+
+.site-footer-links a {
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.site-footer-links a:hover {
+  border-bottom-color: currentColor;
+}
+
+/* The divider stays full-bleed while the footer content keeps the page frame. */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  height: 1px;
+  transform: translateX(-50%);
+  background: var(--line);
+}
+
 .site-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   justify-self: start;
+}
+
+/* All-caps mono ink sits in the upper half of its line box, so centring the
+   boxes leaves the tagline reading high against the wordmark. */
+.site-footer-tag {
+  align-self: center;
+  margin-top: 0.15em;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .site-footer-brand img {
@@ -735,10 +918,6 @@ html.lenis body {
     grid-template-columns: 1fr;
   }
 
-  .client-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .clients-inner {
     grid-template-columns: 1fr;
     gap: 1.75rem;
@@ -757,9 +936,8 @@ html.lenis body {
     justify-self: center;
   }
 
-  .space-stage,
   .space-panel {
-    min-height: 20.8rem;
+    min-height: 0;
   }
 
   .index-mark {
@@ -837,22 +1015,27 @@ html.lenis body {
 
   .clients-title {
     margin-bottom: 0;
-    font-size: 1.25rem;
+    font-size: 1.35rem;
     white-space: normal;
   }
 
   .client-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+    justify-items: start;
+    gap: 1.5rem 1.75rem;
   }
 
   .client-list li {
-    min-height: 4rem;
-    padding: 0.15rem;
+    min-height: 3rem;
   }
 
   .client-list img {
-    height: 2.2rem;
+    height: 1.85rem;
+  }
+
+  .client-list [data-client="pama"] img,
+  .client-list [data-client="brawijaya"] img {
+    height: 2.6rem;
   }
 
   .inquiry {
@@ -876,20 +1059,15 @@ html.lenis body {
 /* Project detail treatment: keep the reference hierarchy inside NADI's light green theme. */
 .space,
 .space.is-flip {
-  align-items: stretch;
+  align-items: center;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: clamp(34rem, 70dvh, 46rem);
   background: #ffffff;
 }
 
-.space-stage {
-  min-height: clamp(27.2rem, 66dvh, 42rem);
-}
-
 .space-panel {
-  padding: clamp(2.25rem, 5vw, 4.5rem) clamp(1.75rem, 5vw, 5.5rem);
-  min-height: clamp(27.2rem, 66dvh, 42rem);
-  align-content: start;
+  padding-block: clamp(2.25rem, 5vw, 4.5rem);
+  padding-inline: 0;
+  align-content: center;
 }
 
 .space-copy {
@@ -969,6 +1147,16 @@ html.lenis body {
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* The WhatsApp mark replaces the outbound arrow where tapping opens the app. */
+.cta-wa {
+  display: none;
+  flex-shrink: 0;
+}
+
+.support-tap {
+  display: none;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .project-cta:hover .project-cta-icon {
     transform: translate(0.16rem, -0.16rem);
@@ -977,8 +1165,8 @@ html.lenis body {
 
 @media (max-width: 1024px) {
   .space-panel {
-    min-height: 20.8rem;
-    padding: 2.5rem clamp(1.5rem, 5vw, 3rem) 3rem;
+    min-height: 0;
+    padding: 2.5rem 0 3rem;
   }
 
   .space-panel h2 {
@@ -991,13 +1179,9 @@ html.lenis body {
     min-height: 0;
   }
 
-  .space-stage {
-    min-height: min(76vw, 28rem);
-  }
-
   .space-panel {
     min-height: 0;
-    padding: 2rem 1rem 2.75rem;
+    padding: 2rem 0 2.75rem;
   }
 
   .field-mark {
@@ -1029,7 +1213,6 @@ html.lenis body {
 #work-root,
 .space,
 .stage,
-.clients,
 .inquiry,
 .site-footer {
   background-color: var(--page);
@@ -1065,6 +1248,7 @@ html.lenis body {
 .station-cta:hover,
 .station-cta:focus-visible {
   border-color: var(--button-hover);
+  color: var(--paper);
 }
 
 .station-cta:hover::before,
@@ -1075,12 +1259,11 @@ html.lenis body {
 /* Project sections are intentionally neutral: no green or tinted section
    fills behind the product content. The media artwork remains unchanged. */
 #work-root,
-#work-root > section,
+#work-root > section:not(.clients),
 #work-root .space,
 #work-root .space-stage,
 #work-root .space-panel,
 #work-root .stage,
-#work-root .clients,
 #work-root .inquiry,
 #work-root .site-footer {
   background-color: #ffffff !important;
@@ -1170,10 +1353,8 @@ html.lenis body {
   transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
 }
 
-.inquiry-qr:hover .inquiry-qr-image,
-.inquiry-qr:focus-visible .inquiry-qr-image {
+.inquiry-qr:focus-visible {
   transform: translateY(-3px);
-  filter: drop-shadow(0 14px 24px rgb(8 59 40 / 0.14));
 }
 
 @media (prefers-reduced-motion: reduce) {

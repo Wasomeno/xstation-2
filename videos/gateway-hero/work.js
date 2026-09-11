@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js";
+import { createCluster } from "./cluster.js?v=surface-18";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -199,9 +199,12 @@ function showSection(id, focusContact = false, record = true) {
   const bounds = target.getBoundingClientRect();
   const headerHeight = document.getElementById("site-nav")?.getBoundingClientRect().height || 0;
   const voiceSurface = document.getElementById("voice-surface");
-  const voiceTop = voiceSurface && !voiceSurface.hidden
-    ? voiceSurface.getBoundingClientRect().top - 12
-    : window.innerHeight;
+  // The surface is hidden outright on phones, where a display:none element
+  // still answers getBoundingClientRect with zeroes.
+  const voiceRect = voiceSurface && !voiceSurface.hidden
+    ? voiceSurface.getBoundingClientRect()
+    : null;
+  const voiceTop = voiceRect?.height ? voiceRect.top - 12 : window.innerHeight;
   const availableHeight = Math.max(0, voiceTop - headerHeight);
   const centeredOffset = -(headerHeight + Math.max(0, (availableHeight - bounds.height) / 2));
   const offset = focusContact ? centeredOffset
@@ -361,7 +364,14 @@ function bindHeroScroll() {
     trigger: "#system",
     start: "top top",
     end: "max",
-    onEnter: () => cluster.setActive(false),
+    onEnter: () => {
+      // The system section is transparent and reads the canvas as its ground.
+      // A fast scroll can reach it before the scrubbed glare finishes, so the
+      // glare is completed and painted before the loop stops; otherwise the
+      // frozen frame is the dark hero sky sitting behind a light section.
+      cluster.setFlashProgress(1);
+      requestAnimationFrame(() => requestAnimationFrame(() => cluster.setActive(false)));
+    },
     onLeaveBack: () => cluster.setActive(true),
   });
 }
@@ -517,6 +527,11 @@ function bindProductsTitle() {
   });
 }
 
+function navBandHeight() {
+  const nav = document.getElementById("site-nav");
+  return Math.round(nav?.getBoundingClientRect().height || 72);
+}
+
 function bindHeaderState() {
   const nav = document.getElementById("site-nav");
   const hero = document.getElementById("hero");
@@ -531,18 +546,53 @@ function bindHeaderState() {
   });
   heroObserver.observe(hero);
 
+  // The header only keeps its light-on-dark treatment while the dark hero sits
+  // under it. Every section below the hero is a light surface, so the header has
+  // to switch back to ink there instead of turning invisible.
+  const darkSections = [hero];
+  const overDark = new Set(darkSections);
+
+  const darkObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) overDark.add(entry.target);
+      else overDark.delete(entry.target);
+    });
+    document.body.classList.toggle("nav-on-dark", overDark.size > 0);
+  }, {
+    rootMargin: `0px 0px -${Math.max(window.innerHeight - navBandHeight(), 0)}px 0px`,
+    threshold: 0,
+  });
+  darkSections.forEach((section) => darkObserver.observe(section));
+
+  const sectionObserver = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible?.target === contact) setCurrent("contact");
+    else if (visible?.target === work) setCurrent("work");
+  }, {
+    rootMargin: "-20% 0px -55% 0px",
+    threshold: [0, 0.2, 0.5],
+  });
+
+  if (work) sectionObserver.observe(work);
+  if (contact) sectionObserver.observe(contact);
+
   return () => {
     heroObserver.disconnect();
+    darkObserver.disconnect();
+    sectionObserver.disconnect();
   };
 }
 
 function bindBrandVisibility() {
   if (shot || !gsap) return () => {};
 
+  const nav = document.getElementById("site-nav");
   const brand = document.getElementById("brand");
   const brandLabel = brand?.querySelector("em");
   const brandMask = brand?.querySelector(".brand-mask");
-  if (!brand || !brandLabel || !brandMask) return () => {};
+  if (!nav || !brand || !brandLabel || !brandMask) return () => {};
 
   let visible = true;
   let lastY = window.scrollY;
@@ -551,15 +601,26 @@ function bindBrandVisibility() {
   function setVisible(nextVisible) {
     if (nextVisible === visible) return;
     visible = nextVisible;
+    nav.style.pointerEvents = nextVisible ? "auto" : "none";
     brand.style.pointerEvents = nextVisible ? "auto" : "none";
 
     if (reduce) {
+      gsap.set(nav, { yPercent: 0, autoAlpha: nextVisible ? 1 : 0 });
       gsap.set([brandMask, brandLabel], {
         autoAlpha: nextVisible ? 1 : 0,
         yPercent: 0,
       });
       return;
     }
+
+    // The whole header leaves on the way down and comes back on the first
+    // upward move, with the wordmark keeping its own staggered lift.
+    gsap.to(nav, {
+      yPercent: nextVisible ? 0 : -100,
+      duration: nextVisible ? 0.42 : 0.32,
+      ease: nextVisible ? "power3.out" : "power2.in",
+      overwrite: "auto",
+    });
 
     gsap.to([brandMask, brandLabel], {
       autoAlpha: nextVisible ? 1 : 0,
@@ -575,9 +636,10 @@ function bindBrandVisibility() {
     ticking = false;
     const y = window.scrollY;
     const delta = y - lastY;
+    const band = navBandHeight();
 
-    if (delta < -2) setVisible(true);
-    else if (delta > 2 && document.body.classList.contains("glare-passed-brand")) setVisible(false);
+    if (y <= band || delta < -2) setVisible(true);
+    else if (delta > 2 && y > band * 1.5) setVisible(false);
 
     lastY = y;
   };
