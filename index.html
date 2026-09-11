@@ -167,12 +167,13 @@
         object-position: 50% 0;
         background: transparent;
         pointer-events: none;
-        /* The clip fades to the stage colour on its own, but an encoded dark is
-           never bit-identical to a CSS dark, which leaves a seam where the two
-           meet. Masking the lower half out removes the join entirely: below it
-           the stage's own ground shows through. */
-        -webkit-mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
-        mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
+        /* An encoded dark is never bit-identical to a CSS dark, so wherever the
+           clip's own ground meets the stage's there is a seam. The mask fades
+           the clip out over the copy and reaches full transparency above the
+           point where the clip's ground begins, so the join has nothing left to
+           show. */
+        -webkit-mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 66%);
+        mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 66%);
       }
 
       .nadi-lbl {
@@ -531,10 +532,10 @@
         color: #5b6865;
       }
     </style>
-    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-33" />
-    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-33" />
-    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-33" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-33" />
+    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-34" />
+    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-34" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-34" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-34" />
     <noscript>
       <style>
         #nadi-stage {
@@ -579,7 +580,7 @@
         playsinline
         disablepictureinpicture
         preload="none"
-        poster="videos/gateway-hero/media/hero/hero-mobile-poster.jpg?v=2"
+        poster="videos/gateway-hero/media/hero/hero-mobile-poster.jpg?v=3"
       ></video>
     </div>
     <header id="site-nav">
@@ -1029,8 +1030,8 @@
       </div>
     </dialog>
 
-    <script src="videos/gateway-hero/nadi-system.js?v=surface-33"></script>
-    <script type="module" src="videos/gateway-hero/work.js?v=surface-33"></script>
-    <script type="module" src="videos/gateway-hero/voice.js?v=surface-33"></script>
+    <script src="videos/gateway-hero/nadi-system.js?v=surface-34"></script>
+    <script type="module" src="videos/gateway-hero/work.js?v=surface-34"></script>
+    <script type="module" src="videos/gateway-hero/voice.js?v=surface-34"></script>
   </body>
 </html>
