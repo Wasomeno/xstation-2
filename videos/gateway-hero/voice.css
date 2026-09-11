@@ -133,3 +133,12 @@
     text-align: center;
   }
 }
+
+/* The Voice Surface is a desktop affordance: on a phone it covers the content
+   it is meant to drive, so it stays out of the way there. Re-stated after the
+   compact-layout rules above, which reposition it rather than show it. */
+@media (max-width: 47.999rem) {
+  #voice-surface {
+    display: none;
+  }
+}
