@@ -1173,3 +1173,70 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   assert.equal(vm.runInContext('currentVoiceSection()', h.sandbox), 'bikinkonten', 'The centered CTA still belongs to its tall mobile section');
   h.escape();
 });
+
+test("voice demo controls reuse page triggers and only control an open demo", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
+  const dialog = { open: false, close() { this.open = false; } };
+  let played = 0, paused = 0, selected;
+  const video = { currentTime: 15, play() { played++; return Promise.resolve(); }, pause() { paused++; } };
+  const elements = {
+    'project-demo-dialog': dialog, 'project-demo-video': video,
+    bikinkonten: { querySelector: () => ({ click() { selected = 'bikinkonten'; dialog.open = true; } }) },
+    lubna: { querySelector: () => ({ click() { selected = 'lubna'; dialog.open = true; } }) },
+    codev: { querySelector: () => null },
+  };
+  const sandbox = vm.createContext({ document: { getElementById: id => elements[id] }, window: {} });
+  vm.runInContext(`${navigation}\ncurrentVoiceSection = () => 'lubna'; showSection = () => true;`, sandbox);
+  const action = vm.runInContext('runPageAction', sandbox);
+  assert.equal(action({ action: 'video_pause' }), false);
+  assert.equal(action({ action: 'demo', section: 'codev' }), false);
+  assert.equal(action({ action: 'demo', section: 'https://evil.test' }), false);
+  assert.equal(action({ action: 'demo', section: 'bikinkonten' }), true);
+  assert.equal(selected, 'bikinkonten');
+  assert.equal(action({ action: 'video_pause' }), true);
+  assert.equal(paused, 1);
+  assert.equal(action({ action: 'video_resume' }), true);
+  assert.equal(played, 1);
+  assert.equal(action({ action: 'video_restart' }), true);
+  assert.equal(video.currentTime, 0);
+  assert.equal(played, 2);
+  assert.equal(action({ action: 'video_close' }), true);
+  assert.equal(dialog.open, false);
+  assert.equal(action({ action: 'video_resume' }), false);
+  assert.equal(action({ action: 'demo', section: 'current' }), true);
+  assert.equal(selected, 'lubna');
+});
+
+test("demo modal raises the existing voice surface and restores it on close and cleanup", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const source = work.slice(work.indexOf('function bindProjectDemoModal()'), work.indexOf('function applyShot()'));
+  const node = () => Object.assign(new EventTarget(), { classList: { add() {}, remove() {} } });
+  const body = Object.assign(node(), { append(el) { el.parentElement = this; } });
+  const voice = { hidden: false, parentElement: body, setAttribute() {}, removeAttribute() {}, showPopover() { this.raised = true; }, hidePopover() { this.raised = false; } };
+  const closeButton = node(), title = {};
+  const video = { pause() {}, removeAttribute() {}, load() {}, play: () => Promise.resolve() };
+  const trigger = Object.assign(node(), { dataset: { demoSrc: 'demo.mp4' } });
+  const dialog = Object.assign(node(), {
+    append(el) { el.parentElement = this; }, getBoundingClientRect() {},
+    showModal() { this.open = true; },
+    close() { this.open = false; this.dispatchEvent(new Event('close')); },
+    querySelector(selector) { return selector === '.project-demo-close' ? closeButton : voice.parentElement === this ? voice : null; },
+  });
+  const elements = { 'project-demo-dialog': dialog, 'project-demo-video': video, 'project-demo-title': title, 'voice-surface': voice };
+  const sandbox = vm.createContext({
+    document: { body, getElementById: id => elements[id], querySelectorAll: () => [trigger] },
+    window: { clearTimeout() {} }, reducedMotionMedia: { matches: false },
+  });
+  const cleanup = vm.runInContext(`${source}\nbindProjectDemoModal()`, sandbox);
+  trigger.dispatchEvent(new Event('click'));
+  assert.equal(voice.parentElement, dialog);
+  assert.equal(voice.raised, true);
+  dialog.close();
+  assert.equal(voice.parentElement, body);
+  assert.equal(voice.raised, false);
+  trigger.dispatchEvent(new Event('click'));
+  cleanup();
+  assert.equal(voice.parentElement, body);
+  assert.equal(voice.raised, false);
+});

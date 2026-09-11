@@ -192,7 +192,7 @@ function showSection(id, focusContact = false, record = true) {
   if (!VOICE_SECTIONS.has(sectionId)) return false;
   const el = document.getElementById(sectionId);
   if (!el) return false;
-  const target = focusContact ? el.querySelector('.project-cta, .inquiry-email') : el;
+  const target = focusContact ? el.querySelector('a.project-cta, .inquiry-email') : el;
   if (!target) return false;
   showSection._focus = focusContact ? target : null;
   const duration = reduce ? 0.05 : 1.15;
@@ -225,6 +225,19 @@ function showSection(id, focusContact = false, record = true) {
 }
 
 function runPageAction(decision) {
+  const dialog = document.getElementById("project-demo-dialog");
+  if (["video_pause", "video_resume", "video_restart", "video_close"].includes(decision.action)) {
+    const video = document.getElementById("project-demo-video");
+    if (!dialog?.open || !video) return false;
+    if (decision.action === "video_close") dialog.close();
+    else if (decision.action === "video_pause") video.pause();
+    else {
+      if (decision.action === "video_restart") video.currentTime = 0;
+      video.play().catch(() => {});
+    }
+    return true;
+  }
+  if (dialog?.open && ["show", "back", "next", "explore", "contact", "whatsapp"].includes(decision.action)) dialog.close();
   if (decision.action === "back") {
     const index = voiceActionLog.index - 1;
     const entry = voiceActionLog.entries[index];
@@ -260,8 +273,14 @@ function runPageAction(decision) {
     return showSection(id, decision.action === "contact" || id === "contact");
   }
   const section = document.getElementById(id);
+  if (decision.action === "demo") {
+    const trigger = section?.querySelector(".project-demo-trigger");
+    if (!trigger || !showSection(id)) return false;
+    trigger.click();
+    return dialog?.open === true;
+  }
   if (decision.action === "whatsapp") {
-    const cta = section?.querySelector('.project-cta, .inquiry-email');
+    const cta = section?.querySelector('a.project-cta, .inquiry-email');
     if (!cta || !cta.href.startsWith("https://wa.me/")) return false;
     recordVoiceAction({ action: "whatsapp", section: id, top: window.scrollY, focus: document.activeElement });
     // Same-tab navigation works without a transient click gesture from speech.
@@ -907,6 +926,14 @@ function bindProjectDemoModal() {
   let opener = null;
   let closeTimer = 0;
 
+  const restoreVoice = () => {
+    const voice = dialog.querySelector("#voice-surface");
+    if (!voice) return;
+    voice.hidePopover();
+    voice.removeAttribute("popover");
+    document.body.append(voice);
+  };
+
   const resetVideo = () => {
     video.pause();
     video.removeAttribute("src");
@@ -939,6 +966,12 @@ function bindProjectDemoModal() {
     video.load();
     dialog.classList.remove("is-visible");
     dialog.showModal();
+    const voice = document.getElementById("voice-surface");
+    if (voice && !voice.hidden) {
+      dialog.append(voice);
+      voice.setAttribute("popover", "manual");
+      voice.showPopover();
+    }
     document.body.classList.add("demo-modal-open");
     dialog.getBoundingClientRect();
     dialog.classList.add("is-visible");
@@ -955,6 +988,7 @@ function bindProjectDemoModal() {
   };
 
   const onClose = () => {
+    restoreVoice();
     window.clearTimeout(closeTimer);
     closeTimer = 0;
     dialog.classList.remove("is-visible");
@@ -980,6 +1014,7 @@ function bindProjectDemoModal() {
     closeTimer = 0;
     dialog.classList.remove("is-visible");
     if (dialog.open) dialog.close();
+    restoreVoice();
     document.body.classList.remove("demo-modal-open");
     resetVideo();
   };

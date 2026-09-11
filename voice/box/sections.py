@@ -55,8 +55,8 @@ SECTIONS: tuple[Section, ...] = (
             "Agent keuangan yang menghubungkan milestone proyek, invoice/collection, dan proyeksi cashflow untuk memantau likuiditas, mengantisipasi risiko, dan membantu keputusan finansial. "
             "Cocok untuk melacak data keuangan, pembayaran tertunda, arus kas, dan memperkirakan kecukupan dana. "
             "Pembeda: proses dan analisis keuangan, bukan arsip dokumen atau promosi untuk menaikkan penjualan."),
-    Section("clients", "Trusted by", ("trusted by", "logos", "customers", "klien", "track record", "rekam jejak", "referensi klien"),
-            "Section bukti kepercayaan/rekam jejak berisi logo klien Bina dan Qasir. "
+    Section("clients", "Trusted by", ("trusted by", "logos", "customers", "klien", "track record", "rekam jejak", "referensi klien", "Pamapersada Nusantara", "PAMA", "Hakuhodo Indonesia", "Universitas Brawijaya", "UB", "Collins Property Group", "Meet and Move", "Bina", "Qasir"),
+            "Section bukti kepercayaan/rekam jejak berisi logo Pamapersada Nusantara, Hakuhodo Indonesia, Universitas Brawijaya (UB), Collins Property Group, Meet and Move, Bina, dan Qasir. "
             "Pilih saat pengunjung bertanya siapa klien NADI, perusahaan yang sudah memakai solusi, atau ingin melihat track record. "
             "Pembeda: melihat referensi klien NADI; kebutuhan mengelola pelanggan milik pengunjung adalah CRM AI Agent."),
     Section("contact", "Contact", ("book", "talk", "get in touch", "discuss", "reach out", "schedule a demo", "schedule demo", "qr", "email", "hubungi", "menghubungi", "kontak", "diskusi", "bicara", "berbicara", "jadwalkan demo", "menjadwalkan demo")),

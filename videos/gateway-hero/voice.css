@@ -17,6 +17,16 @@
   display: none;
 }
 
+#voice-surface[popover] {
+  top: auto;
+  right: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+}
+
 .voice-copy {
   position: absolute;
   width: 100%;
