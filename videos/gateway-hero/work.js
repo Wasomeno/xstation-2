@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js?v=surface-27";
+import { createCluster } from "./cluster.js?v=surface-31";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -974,6 +974,8 @@ function bindHeroMotion() {
     cancelIdle(handle);
     visibility?.disconnect();
     phone.removeEventListener("change", onChange);
+  };
+}
 
 function bindProjectDemoModal() {
   const dialog = document.getElementById("project-demo-dialog");
