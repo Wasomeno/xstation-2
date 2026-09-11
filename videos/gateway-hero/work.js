@@ -153,6 +153,7 @@ const VOICE_SECTIONS = new Set([
   "codev",
   "coframe",
   "cofinance",
+  "colegal",
   "clients",
   "contact",
 ]);
