@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js?v=surface-35";
+import { createCluster } from "./cluster.js?v=surface-36";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -931,6 +931,22 @@ function bindHeroMotion() {
   const source = "videos/gateway-hero/media/hero/hero-mobile.mp4";
   let attached = false;
 
+  let gestureBound = false;
+
+  // iOS only allows an unprompted play on a video that is muted inline, and it
+  // checks the property, not just the attribute. In Low Power Mode it refuses
+  // regardless, so a blocked play waits for the first touch, which counts as a
+  // gesture.
+  const attempt = () => {
+    video.play()?.catch(() => {
+      if (gestureBound) return;
+      gestureBound = true;
+      const retry = () => video.play()?.catch(() => {});
+      window.addEventListener("touchstart", retry, { once: true, passive: true });
+      window.addEventListener("pointerdown", retry, { once: true });
+    });
+  };
+
   const start = () => {
     if (!phone.matches) return;
     // The canvas is hidden here, so its loop is pure battery cost.
@@ -938,10 +954,14 @@ function bindHeroMotion() {
     if (reducedMotionMedia.matches || connection?.saveData) return;
     if (!attached) {
       attached = true;
+      video.muted = true;
+      video.defaultMuted = true;
+      video.setAttribute("autoplay", "");
+      video.addEventListener("canplay", attempt, { once: true });
       video.src = source;
       video.load();
     }
-    video.play()?.catch(() => {});
+    attempt();
   };
 
   const stop = () => {
