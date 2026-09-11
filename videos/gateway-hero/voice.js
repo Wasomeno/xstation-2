@@ -664,6 +664,10 @@ function bindVoice() {
     setState("loading");
     try {
       const audio = new Audio(); context = audio;
+      audio.addEventListener("statechange", () => {
+        if (!current() || document.hidden || audio.state === "running" || audio.state === "closed") return;
+        closeCommand(); setState("resume"); resume();
+      });
       const ready = audio.resume();
       worker = new Worker(WAKE_WORKER_URL);
       worker.addEventListener("error", () => { if (current()) stop("deaf", COPY.modelError); });
@@ -686,7 +690,7 @@ function bindVoice() {
       await Promise.all([ready, mic]);
       if (!current()) return;
       capture();
-      if (document.hidden) { stream.getTracks().forEach(track => { track.enabled = false; }); await audio.suspend(); }
+      if (document.hidden) stream.getTracks().forEach(track => { track.enabled = false; });
       if (current() && modelReady) readyToListen();
     } catch { if (current()) stop("blocked"); }
   };
@@ -694,7 +698,7 @@ function bindVoice() {
     const attempt = generation;
     const audio = context;
     try {
-      await audio.resume();
+      if (audio.state !== "running") { setState("resume"); await audio.resume(); }
       if (!enabled || generation !== attempt || document.hidden) return;
       if (audio.state !== "running") { setState("resume"); return; }
       stream.getTracks().forEach(track => { track.enabled = true; });
@@ -715,7 +719,7 @@ function bindVoice() {
     if (document.hidden) {
       closeCommand(); resetWake(); setState("paused");
       stream?.getTracks().forEach(track => { track.enabled = false; });
-      context.suspend().catch(() => {});
+      // Keep the audio graph alive; tracks and uploads are paused above.
     } else if (stream) resume();
   });
   window.addEventListener("pagehide", () => stop());

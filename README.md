@@ -72,12 +72,12 @@ Set these variables in Dokploy's Environment tab:
 OPENAI_API_KEY=your-openai-key
 DEEPSEEK_API_KEY=your-deepseek-key
 DEEPSEEK_MODEL=deepseek-v4-flash
-VOICE_BOX_ALLOWED_ORIGINS=https://nadi.dotploy.my.id
+VOICE_BOX_ALLOWED_ORIGINS=https://nadi.dot.co.id
 ```
 
-In Domains, route `nadi.dotploy.my.id` to service **web**, container port **80**, path `/`, with HTTPS enabled. Replace the old application's domain mapping so only this deployment owns the hostname. Do not add a public domain or host port for `voice`. See [Dokploy's Compose domain setup](https://docs.dokploy.com/docs/core/docker-compose/domains).
+In Domains, route `nadi.dot.co.id` to service **web**, container port **80**, path `/`, with HTTPS enabled. Replace the old application's domain mapping so only this deployment owns the hostname. Do not add a public domain or host port for `voice`. See [Dokploy's Compose domain setup](https://docs.dokploy.com/docs/core/docker-compose/domains).
 
-Deploy, then check `https://nadi.dotploy.my.id/voice/health` returns JSON with `ok: true`. The frontend uses `wss://nadi.dotploy.my.id/voice/v1/stream`. Updated script URLs bypass the old four-hour cached voice configuration; HTML and JavaScript revalidate on subsequent deployments. If a custom Cloudflare rule overrides origin cache headers, purge the old HTML/JavaScript cache and honor the origin headers.
+Deploy, then check `https://nadi.dot.co.id/voice/health` returns JSON with `ok: true`. The frontend uses `wss://nadi.dot.co.id/voice/v1/stream`. Updated script URLs bypass the old four-hour cached voice configuration; HTML and JavaScript revalidate on subsequent deployments. If a custom Cloudflare rule overrides origin cache headers, purge the old HTML/JavaScript cache and honor the origin headers.
 
 ### Existing Nginx server
 
@@ -116,7 +116,7 @@ Click the orb once and grant microphone permission to start listening. Give succ
 
 Say **“thanks”**, **“terimakasih”**, or **“terima kasih”** (recognized in OpenAI live transcription), or click the orb again, to end the conversation and return to the on-device **“Hei Nadi”** listener. Either that wake phrase or another click starts a new session using the same microphone. `nadi:wake` is emitted only for voice-triggered sessions. Escape releases the microphone and worker.
 
-The active session has no eight-second silence cutoff. The client commits after a speech pause or 30 seconds (including silence, to bound upstream audio buffers), pauses upload while processing, and resumes after the result. Backend connection and processing deadlines remain 10 and 30 seconds; failures close the session and return to local listening. Audio from local wake-ready mode is never uploaded. During an active session, listening audio—including room sound—is sent for transcription until the session ends. Hidden pages pause capture and close the connection; returning resumes the previous active conversation silently, or shows a resume control if Chrome needs a gesture. A reload requires enabling again.
+The active session has no eight-second silence cutoff. The client commits after a speech pause or 30 seconds (including silence, to bound upstream audio buffers), pauses upload while processing, and resumes after the result. Backend connection and processing deadlines remain 10 and 30 seconds; failures close the session and return to local listening. Audio from local wake-ready mode is never uploaded. During an active session, listening audio—including room sound—is sent for transcription until the session ends. Hidden pages disable microphone tracks and close the connection while keeping the audio graph alive; returning resumes the previous active conversation silently, or shows a resume control if Chrome needs a gesture. A reload requires enabling again.
 
 Use `npm start` for local preview: the preview server now supplies the same isolation headers as `deploy/nginx-web.conf`. On the VPS, rebuild the existing frontend image to include the prebuilt WASM assets and new Nginx config. HTTPS is required outside localhost. Preserve `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` through any proxy/CDN; Chrome needs them for this shared-memory runtime. No additional VPS service is needed. Plain `python -m http.server` does not supply these headers.
 

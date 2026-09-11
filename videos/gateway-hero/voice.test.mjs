@@ -66,11 +66,11 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     message(data) { emit(this, "message", { data: JSON.stringify(data) }); }
   }
   const node = () => ({ connections: [], connect(target) { this.connections.push(target); }, disconnect() { this.disconnected = true; } });
-  class Audio {
+  class Audio extends EventTarget {
     state = "suspended";
     sampleRate = 24000;
     destination = {};
-    constructor() { contexts.push(this); }
+    constructor() { super(); contexts.push(this); }
     async resume() { if (resume) await resume.promise; this.state = "running"; }
     async suspend() { this.state = "suspended"; }
     async close() { this.state = "closed"; }
@@ -662,6 +662,27 @@ test("cancel during initialization cleans up late microphone and worker results"
   assert.equal(h.ui.root.dataset.state, "idle"); assert.equal(h.sockets.length, 0);
 });
 
+test("tab switches mute capture without suspending the live audio graph", async () => {
+  const h = browser(); const { context, track, socket } = await h.connect();
+  h.hide(true);
+  assert.equal(context.state, "running", "Do not force browser autoplay recovery on every tab switch");
+  assert.equal(track.enabled, false);
+  const sent = socket.messages.length; h.audio(.2); assert.equal(socket.messages.length, sent);
+  h.hide(false); await flush();
+  assert.equal(track.enabled, true); assert.equal(h.microphones.length, 1);
+  h.escape();
+});
+
+test("browser audio interruption cannot leave a nonfunctional listening state", async () => {
+  const h = browser(); const { context } = await h.connect();
+  context.state = "suspended"; context.resume = async () => { throw new Error("gesture required"); };
+  emit(context, "statechange"); await flush();
+  assert.equal(h.ui.root.dataset.state, "resume");
+  context.resume = async () => { context.state = "running"; };
+  h.click(); await flush(); const next = h.sockets.at(-1); next.open(); next.message({ type: "ready" });
+  assert.equal(h.ui.root.dataset.state, "listening"); assert.equal(h.microphones.length, 1); h.escape();
+});
+
 test("hidden pages pause sessions and resume silently without another microphone request", async () => {
   const h = browser(); const { socket } = await h.connect();
   const tones = () => h.stateSounds.filter(state => ["armed", "connecting", "listening"].includes(state)).length;
@@ -967,7 +988,7 @@ test("worker epochs reject stale detections and explicit resume recovers a suspe
   const worker = h.workers[0]; const old = worker.messages.at(-1).epoch;
   h.hide(true); h.hide(false); await flush();
   worker.message({ type: "wake", phrase: "Hei Nadi", epoch: old }); assert.equal(h.sockets.length, 1);
-  context.resume = async () => { throw new Error("gesture required"); };
+  context.state = "suspended"; context.resume = async () => { throw new Error("gesture required"); };
   h.hide(true); h.hide(false); await flush();
   assert.equal(h.ui.root.dataset.state, "resume");
   context.resume = async () => { context.state = "running"; };
