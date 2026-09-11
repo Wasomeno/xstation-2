@@ -4,6 +4,7 @@
   "scripts": {
     "start": "python3 -m http.server 4174 --bind 127.0.0.1",
     "voice": "voice/box/.venv/bin/python voice/box/server.py",
+    "test:web": "node --test videos/gateway-hero/*.test.mjs",
     "test:voice": "voice/box/.venv/bin/python -m unittest discover -s voice/box -p 'test_*.py'"
   }
 }

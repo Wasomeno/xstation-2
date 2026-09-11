@@ -6,7 +6,7 @@ const shot = new URLSearchParams(window.location.search).get("shot");
 const gsap = window.gsap;
 const ScrollTrigger = window.ScrollTrigger;
 const ENHANCED_MOTION_QUERY = "(min-width: 64rem) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)";
-const smoothScrollMedia = window.matchMedia("(min-width: 64rem)");
+const smoothScrollMedia = window.matchMedia("(min-width: 64rem) and (hover: hover) and (pointer: fine)");
 
 const cluster = createCluster({
   canvas: document.getElementById("nadi-cluster"),
@@ -198,9 +198,15 @@ function showSection(id, focusContact = false, record = true) {
   const duration = reduce ? 0.05 : 1.15;
   const bounds = target.getBoundingClientRect();
   const headerHeight = document.getElementById("site-nav")?.getBoundingClientRect().height || 0;
-  const offset = focusContact ? (bounds.height - window.innerHeight) / 2
+  const voiceSurface = document.getElementById("voice-surface");
+  const voiceTop = voiceSurface && !voiceSurface.hidden
+    ? voiceSurface.getBoundingClientRect().top - 12
+    : window.innerHeight;
+  const availableHeight = Math.max(0, voiceTop - headerHeight);
+  const centeredOffset = -(headerHeight + Math.max(0, (availableHeight - bounds.height) / 2));
+  const offset = focusContact ? centeredOffset
     : sectionId === "work" ? -(headerHeight + 16)
-    : sectionId === "hero" ? 0 : (bounds.height - window.innerHeight) / 2;
+    : sectionId === "hero" ? 0 : centeredOffset;
   if (record) recordVoiceAction({ action: focusContact ? "contact" : "show", section: sectionId, top: window.scrollY + bounds.top + offset });
   if (smoothInstance) {
     smoothInstance.scrollTo(target, { offset, duration });
@@ -514,23 +520,8 @@ function bindProductsTitle() {
 function bindHeaderState() {
   const nav = document.getElementById("site-nav");
   const hero = document.getElementById("hero");
-  const work = document.getElementById("work");
-  const contact = document.getElementById("contact");
-  const productsLink = document.querySelector('#site-links a[href="#work"]');
-  const contactLink = document.querySelector('#site-links a[href="#contact"]');
 
   if (!nav || !hero) return () => {};
-
-  const setCurrent = (current) => {
-    [
-      [productsLink, current === "work"],
-      [contactLink, current === "contact"],
-    ].forEach(([link, active]) => {
-      if (!link) return;
-      if (active) link.setAttribute("aria-current", "location");
-      else link.removeAttribute("aria-current");
-    });
-  };
 
   const heroObserver = new IntersectionObserver(([entry]) => {
     nav.classList.toggle("is-scrolled", !entry.isIntersecting);
@@ -540,23 +531,8 @@ function bindHeaderState() {
   });
   heroObserver.observe(hero);
 
-  const sectionObserver = new IntersectionObserver((entries) => {
-    const visible = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-    if (visible?.target === contact) setCurrent("contact");
-    else if (visible?.target === work) setCurrent("work");
-  }, {
-    rootMargin: "-20% 0px -55% 0px",
-    threshold: [0, 0.2, 0.5],
-  });
-
-  if (work) sectionObserver.observe(work);
-  if (contact) sectionObserver.observe(contact);
-
   return () => {
     heroObserver.disconnect();
-    sectionObserver.disconnect();
   };
 }
 
@@ -656,7 +632,7 @@ function bindInquiryEntry() {
     );
 }
 
-function bindEnter() {
+function bindEnter(compact = false) {
   if (!gsap || !ScrollTrigger) return;
   if (reduce) {
     gsap.set(".js-enter, .js-enter-child, .space-stage", { autoAlpha: 1, x: 0, y: 0, scale: 1, filter: "none" });
@@ -669,7 +645,7 @@ function bindEnter() {
     if (!panel) return;
 
     const flip = section.classList.contains("is-flip");
-    const mediaFrom = flip ? 16 : -16;
+    const mediaFrom = compact ? 0 : flip ? 16 : -16;
     const kids = [...panel.querySelectorAll(".js-enter-child")];
     const stack = kids.filter((el) => !el.classList.contains("project-cta"));
     const cta = kids.filter((el) => el.classList.contains("project-cta"));
@@ -697,7 +673,7 @@ function bindEnter() {
     if (stack.length) {
       tl.fromTo(
         stack,
-        { autoAlpha: 0, y: 12 },
+        { autoAlpha: 0, y: compact ? 10 : 12 },
         { autoAlpha: 1, y: 0, duration: 0.55, ease: "power3.out", stagger: 0.07 },
         media ? 0.12 : 0
       );
@@ -755,6 +731,7 @@ function bindProjectVideoPlayback() {
   if (!videos.length) return () => {};
 
   const sources = new Map(videos.map((video) => [video, video.getAttribute("src")]));
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   const sections = videos.map((video) => ({
     video,
     section: video.closest(".space"),
@@ -771,12 +748,8 @@ function bindProjectVideoPlayback() {
 
   const releaseAll = () => videos.forEach(releaseVideo);
 
-  if (reduce) {
-    releaseAll();
-    return () => {};
-  }
-
   const playVideo = (video) => {
+    if (reducedMotionMedia.matches || connection?.saveData) return;
     if (!video.getAttribute("src")) {
       video.setAttribute("src", sources.get(video));
       video.load();
@@ -799,6 +772,11 @@ function bindProjectVideoPlayback() {
   };
 
   const syncActiveVideo = () => {
+    if (reducedMotionMedia.matches || connection?.saveData) {
+      activeVideo = null;
+      releaseAll();
+      return;
+    }
     const next = sections
       .map((entry) => ({ ...entry, score: getVisibleScore(entry.section) }))
       .filter((entry) => entry.score >= 0)
@@ -829,10 +807,14 @@ function bindProjectVideoPlayback() {
   };
 
   document.addEventListener("visibilitychange", onVisibilityChange);
+  reducedMotionMedia.addEventListener?.("change", syncActiveVideo);
+  connection?.addEventListener?.("change", syncActiveVideo);
 
   return () => {
     observer?.disconnect();
     document.removeEventListener("visibilitychange", onVisibilityChange);
+    reducedMotionMedia.removeEventListener?.("change", syncActiveVideo);
+    connection?.removeEventListener?.("change", syncActiveVideo);
     releaseAll();
   };
 }
@@ -881,8 +863,9 @@ if (gsap && !isShot) {
     bindProductsTitle();
     cleanupBrandVisibility = bindBrandVisibility();
     bindInquiryEntry();
-    bindEnter();
     responsiveMotion = gsap.matchMedia();
+    responsiveMotion.add("(max-width: 63.999rem)", () => bindEnter(true));
+    responsiveMotion.add("(min-width: 64rem)", () => bindEnter(false));
     responsiveMotion.add(ENHANCED_MOTION_QUERY, () => bindParallax());
   }, document.body);
 

@@ -507,8 +507,8 @@
     </style>
     <link rel="stylesheet" href="videos/gateway-hero/work.css" />
     <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=hear-stream" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
     <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css" />
     <noscript>
       <style>
         #nadi-stage {
@@ -551,10 +551,6 @@
         <span class="brand-mask"><img class="brand-logo" src="videos/gateway-hero/media/brand/nadi-wordmark.svg" alt="NADI" /></span>
         <em class="brand-tag">the pulse of your operations</em>
       </a>
-      <nav id="site-links" aria-label="Primary navigation">
-        <a href="#work">Products</a>
-        <a href="#contact">Contact</a>
-      </nav>
     </header>
     <main id="main-content">
     <div id="pin-slot">
@@ -633,33 +629,47 @@
             <p class="sys-support">Every product below is an agent on the same network. This is what the network does for your company.</p>
           </div>
           <ol class="sys-list" id="sys-list">
-            <li class="is-on" data-system-state="ecosystem">
-              <span class="n">01</span>
-              <div><h3>Ecosystem <em>One network, many agents.</em></h3><p>Each agent handles one job. Nadi routes conversations and context between them, so they work as one system instead of a stack of tools.</p></div>
+            <li>
+              <button class="is-on" type="button" data-system-state="ecosystem" aria-pressed="true">
+                <span class="n">01</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Ecosystem <em>One network, many agents.</em></span><span class="sys-item-description">Each agent handles one job. Nadi routes conversations and context between them, so they work as one system instead of a stack of tools.</span></span>
+              </button>
             </li>
-            <li data-system-state="build">
-              <span class="n">02</span>
-              <div><h3>Build <em>Designed from your process.</em></h3><p>No templates. Each agent is built around how your company already works, starting with the process you run most often.</p></div>
+            <li>
+              <button type="button" data-system-state="build" aria-pressed="false">
+                <span class="n">02</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Build <em>Designed from your process.</em></span><span class="sys-item-description">No templates. Each agent is built around how your company already works, starting with the process you run most often.</span></span>
+              </button>
             </li>
-            <li data-system-state="scale">
-              <span class="n">03</span>
-              <div><h3>Scale <em>Add agents, not systems.</em></h3><p>The next agent joins the same network and inherits what is already there. More teams and more load on one system.</p></div>
+            <li>
+              <button type="button" data-system-state="scale" aria-pressed="false">
+                <span class="n">03</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Scale <em>Add agents, not systems.</em></span><span class="sys-item-description">The next agent joins the same network and inherits what is already there. More teams and more load on one system.</span></span>
+              </button>
             </li>
-            <li data-system-state="govern">
-              <span class="n">04</span>
-              <div><h3>Govern <em>Your rules, enforced.</em></h3><p>You define what each agent may do and when a person has to approve. Every action is logged and traceable.</p></div>
+            <li>
+              <button type="button" data-system-state="govern" aria-pressed="false">
+                <span class="n">04</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Govern <em>Your rules, enforced.</em></span><span class="sys-item-description">You define what each agent may do and when a person has to approve. Every action is logged and traceable.</span></span>
+              </button>
             </li>
-            <li data-system-state="secure">
-              <span class="n">05</span>
-              <div><h3>Secure <em>Your data stays yours.</em></h3><p>Operational data stays inside your environment. Models can run on-premise, on your own infrastructure, when your policy requires it.</p></div>
+            <li>
+              <button type="button" data-system-state="secure" aria-pressed="false">
+                <span class="n">05</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Secure <em>Your data stays yours.</em></span><span class="sys-item-description">Operational data stays inside your environment. Models can run on-premise, on your own infrastructure, when your policy requires it.</span></span>
+              </button>
             </li>
-            <li data-system-state="optimize">
-              <span class="n">06</span>
-              <div><h3>Optimize <em>Measured, then tuned.</em></h3><p>Every agent is measured on response time, accuracy, and the work it takes off your team. What performs gets expanded; what lags gets fixed.</p></div>
+            <li>
+              <button type="button" data-system-state="optimize" aria-pressed="false">
+                <span class="n">06</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Optimize <em>Measured, then tuned.</em></span><span class="sys-item-description">Every agent is measured on response time, accuracy, and the work it takes off your team. What performs gets expanded; what lags gets fixed.</span></span>
+              </button>
             </li>
-            <li data-system-state="managed">
-              <span class="n">07</span>
-              <div><h3>Managed <em>Operated by DOT.</em></h3><p>The system is not handed over at go-live. DOT runs it: monitoring, incidents, model updates, and changes whenever your process changes.</p></div>
+            <li>
+              <button type="button" data-system-state="managed" aria-pressed="false">
+                <span class="n">07</span>
+                <span class="sys-item-copy"><span class="sys-item-title">Managed <em>Operated by DOT.</em></span><span class="sys-item-description">The system is not handed over at go-live. DOT runs it: monitoring, incidents, model updates, and changes whenever your process changes.</span></span>
+              </button>
             </li>
           </ol>
         </div>
@@ -922,10 +932,6 @@
 
       <footer class="site-footer" aria-label="Site footer">
         <a class="site-footer-brand" href="#main-content" aria-label="NADI home"><img src="videos/gateway-hero/media/brand/nadi-wordmark.svg" alt="NADI" /></a>
-        <nav class="site-footer-links" aria-label="Footer navigation">
-          <a href="#work">Products</a>
-          <a href="#contact">Contact</a>
-        </nav>
         <p class="site-footer-meta">&copy; <span id="current-year">2026</span> NADI</p>
       </footer>
     </div>

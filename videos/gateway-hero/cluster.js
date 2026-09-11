@@ -269,10 +269,11 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     host.width = Math.round(W * DPR);
     host.height = Math.round(Ht * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    const narrow = W < 820;
-    CX = narrow ? W * 0.52 : W * 0.665;
-    CY = narrow ? Ht * 0.40 : Ht * 0.50;
-    SC = (Math.min(W, Ht) / 720) * (narrow ? 0.78 : 1.0);
+    const phone = W < 768;
+    const tablet = W >= 768 && W < 1024;
+    CX = W * (phone ? 0.68 : tablet ? 0.70 : 0.665);
+    CY = Ht * (phone ? 0.66 : 0.50);
+    SC = (Math.min(W, Ht) / 720) * (phone ? 0.72 : tablet ? 0.86 : 1.0);
   }
 
   let tmx = 0;
@@ -699,8 +700,15 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
             labelSide = ep[0] > W * 0.74;
           }
           Lb.classList.toggle("is-left", labelSide);
-          Lb.style.left = ep[0].toFixed(1) + "px";
-          Lb.style.top = ep[1].toFixed(1) + "px";
+          const labelWidth = Lb.offsetWidth;
+          const labelHeight = Lb.offsetHeight;
+          const labelX = labelSide
+            ? Math.max(labelWidth + 30, ep[0])
+            : Math.min(W - labelWidth - 30, ep[0]);
+          const labelTop = W < 768 ? Ht * 0.5 : labelHeight / 2 + 12;
+          const labelY = Math.min(Ht - labelHeight / 2 - 12, Math.max(labelTop, ep[1]));
+          Lb.style.left = labelX.toFixed(1) + "px";
+          Lb.style.top = labelY.toFixed(1) + "px";
         } else {
           labelSide = null;
           labelAgent = -1;
