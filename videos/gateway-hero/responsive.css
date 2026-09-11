@@ -1300,3 +1300,29 @@ html.is-shot .site-footer {
     background: var(--page);
   }
 }
+
+@media (max-width: 63.999rem) {
+  /* No Voice Surface below 64rem, so anchored destinations have nothing to
+     clear at the bottom of the viewport. */
+  :root {
+    --voice-clearance: calc(1rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 47.999rem) {
+  /* On a phone the QR is dead weight: the visitor already holds the device that
+     would scan it, so the button carries the action and says so. */
+  .inquiry-code,
+  .support-scan,
+  .inquiry-email .project-cta-icon {
+    display: none;
+  }
+
+  .support-tap {
+    display: inline;
+  }
+
+  .inquiry-email .cta-wa {
+    display: inline-block;
+  }
+}

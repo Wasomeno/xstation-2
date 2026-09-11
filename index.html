@@ -167,6 +167,12 @@
         object-position: 50% 0;
         background: transparent;
         pointer-events: none;
+        /* The clip fades to the stage colour on its own, but an encoded dark is
+           never bit-identical to a CSS dark, which leaves a seam where the two
+           meet. Masking the lower half out removes the join entirely: below it
+           the stage's own ground shows through. */
+        -webkit-mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
+        mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
       }
 
       .nadi-lbl {
@@ -526,15 +532,15 @@
       }
     </style>
 <<<<<<< HEAD
-    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-26" />
+    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-29" />
 =======
-    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-26" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-26" />
+    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-29" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-29" />
 >>>>>>> fix/batch-perbaikan
     <noscript>
       <style>
@@ -1008,11 +1014,11 @@
     </main>
 
 <<<<<<< HEAD
-    <script src="videos/gateway-hero/nadi-system.js?v=surface-26"></script>
-    <script type="module" src="videos/gateway-hero/work.js?v=surface-26"></script>
+    <script src="videos/gateway-hero/nadi-system.js?v=surface-29"></script>
+    <script type="module" src="videos/gateway-hero/work.js?v=surface-29"></script>
 =======
-    <script src="videos/gateway-hero/nadi-system.js?v=surface-26"></script>
-    <script type="module" src="videos/gateway-hero/work.js?v=surface-26"></script>
+    <script src="videos/gateway-hero/nadi-system.js?v=surface-29"></script>
+    <script type="module" src="videos/gateway-hero/work.js?v=surface-29"></script>
 >>>>>>> fix/batch-perbaikan
     <script type="module" src="videos/gateway-hero/voice.js?v=eyes-only-17"></script>
   </body>
