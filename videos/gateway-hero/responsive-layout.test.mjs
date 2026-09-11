@@ -16,9 +16,10 @@ test("responsive cascade stays last and desktop content inventory is preserved",
   assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 11);
   assert.equal((html.match(/media\/clients\//g) || []).length, 7);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml"[^>]+nadi-favicon\.svg/);
-  // Primary and footer navigation are part of the page again.
-  assert.match(html, /id="site-links"/);
-  assert.match(html, /class="site-footer-links"/);
+  // Products and Contact menus are intentionally omitted while the footer remains.
+  assert.doesNotMatch(html, /id="site-links"/);
+  assert.doesNotMatch(html, /class="site-footer-links"/);
+  assert.match(html, /class="site-footer"/);
 
   const products = ["bikinkonten", "lubna", "crm-ai-agent", "hireassess", "arkiv", "codev", "coframe", "cofinance"];
   let previous = -1;

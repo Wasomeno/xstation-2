@@ -1283,3 +1283,36 @@ html.is-shot .site-footer {
     font-size: 0.72rem;
   }
 }
+
+/* Keep the footer, without the removed Products and Contact menu column. */
+.site-footer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.site-footer-brand {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.site-footer-meta {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+@media (max-width: 47.999rem) {
+  .site-footer {
+    grid-template-rows: auto;
+  }
+
+  .site-footer-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .site-footer-meta {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+}

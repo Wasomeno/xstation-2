@@ -597,7 +597,7 @@ body.nav-on-dark #site-links a[aria-current] {
   display: block;
   width: auto;
   max-width: 100%;
-  height: 2.3rem;
+  height: 2.76rem;
   object-fit: contain;
   object-position: center;
   filter: brightness(0) invert(1);
@@ -605,7 +605,7 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .client-list [data-client="pama"] img {
-  height: 1.75rem;
+  height: 2.1rem;
 }
 
 /* Keep the UB crest on the same transparent surface as the other client marks. */
@@ -617,29 +617,29 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .client-list [data-client="brawijaya"] img {
-  height: 2.4rem;
+  height: 2.76rem;
   filter: none;
   opacity: 1;
 }
 
 .client-list [data-client="meetandmove"] img {
-  height: 2.5rem;
+  height: 3rem;
 }
 
 .client-list [data-client="collins"] img {
-  height: 1.95rem;
+  height: 2.34rem;
 }
 
 .client-list [data-client="hakuhodo"] img {
-  height: 1.5rem;
+  height: 1.8rem;
 }
 
 .client-list [data-client="bina"] img {
-  height: 2.15rem;
+  height: 2.58rem;
 }
 
 .client-list [data-client="qasir"] img {
-  height: 1.9rem;
+  height: 2.28rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1029,12 +1029,11 @@ body.nav-on-dark #site-links a[aria-current] {
   }
 
   .client-list img {
-    height: 1.85rem;
+    height: 2.22rem;
   }
 
-  .client-list [data-client="pama"] img,
-  .client-list [data-client="brawijaya"] img {
-    height: 2.6rem;
+  .client-list [data-client="pama"] img {
+    height: 3.12rem;
   }
 
   .inquiry {
