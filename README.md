@@ -26,7 +26,7 @@ From the repo root (keys in `voice/box/.env`):
 
 ```bash
 npm start          # site on :4174
-npm run voice      # box on :4175
+npm run voice      # box on :4175; reloads when Python files change
 ```
 
 Point the live site at a tunneled box with `?box=https://your-tunnel`.
