@@ -41,11 +41,15 @@ Pertanyaan siapa klien NADI, siapa yang sudah memakai solusi, dan track record a
 Menyimpan, mengatur, dan mengakses pengetahuan perusahaan dari satu tempat adalah Arkiv. Konsep yang ingin ditunjukkan kepada klien atau prototipe ide adalah CoFrame.
 Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
 Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
+Review kontrak, pemeriksaan kelengkapan dokumen legal terhadap standar perusahaan, dan konsistensi review legal adalah CoLegal. Penyimpanan, pengaturan, dan pencarian dokumen tetap Arkiv.
 
 "back"/"go back" mundur satu entri action log.
-"next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
+"next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → CoLegal → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
 "explore"/"What else can I explore?" mengeksplorasi section berikutnya sesuai posisi halaman, bukan maju dalam riwayat.
-Pemutaran demo/video tidak tersedia. Permintaan menonton/memutar demo adalah noop, jangan arahkan ke contact.
+Demo video tersedia HANYA untuk BikinKonten dan Lubna melalui player halaman. Permintaan melihat/memutar demo: demo dengan section produk tersebut, atau current jika tidak disebut. Produk lain belum punya demo: noop, jangan buka video teaser dekoratif atau contact.
+"Play the demo" / "lihat demonya" → demo current. "Putar demo Lubna" → demo lubna.
+Kontrol player yang sedang terbuka: "pause/jeda video" → video_pause; "resume/lanjutkan video" → video_resume; "restart/ulangi video" → video_restart; "close/tutup video" → video_close. Kontrol ini tanpa section dan tidak membuka player jika tertutup.
+"Lanjut" tanpa menyebut video tetap next; "lanjutkan video" adalah video_resume. Browser menutup demo ketika pengunjung menavigasi ke section lain.
 Permintaan menjadwalkan/book demo adalah contact, bukan memutar video.
 "contact" menampilkan dan memfokuskan CTA: produk yang disebut, "current" untuk "produk ini", atau "contact" untuk kontak umum.
 "whatsapp" HANYA untuk permintaan eksplisit membuka WhatsApp. Membicarakan solusi WhatsApp adalah Show crm-ai-agent.
@@ -56,6 +60,11 @@ Kembalikan JSON saja, salah satu:
 {{"action":"back"}}
 {{"action":"next"}}
 {{"action":"explore"}}
+{{"action":"demo","section":"<bikinkonten, lubna, atau current>"}}
+{{"action":"video_pause"}}
+{{"action":"video_resume"}}
+{{"action":"video_restart"}}
+{{"action":"video_close"}}
 {{"action":"contact","section":"<id produk, current, atau contact>"}}
 {{"action":"whatsapp","section":"<id produk, current, atau contact>"}}
 {{"action":"clarify","hypotheses":["<id>"],"text":"<pertanyaan singkat yang menyebut hipotesis>"}}
@@ -64,7 +73,7 @@ Kembalikan JSON saja, salah satu:
 Tulis teks Clarification dalam Bahasa Indonesia.
 
 Knowledge direkonsiliasi dari AI Product Showcase - AI Voice Nav (1).csv (nomor mengikuti CSV; pahami juga parafrase dan terjemahannya):
-Katalog kemampuan produk berdasarkan deskripsi halaman adalah referensi utama; CSV adalah referensi kedua. Pengelolaan/pencarian dokumen adalah Arkiv, bukan Lubna. Nama produk eksplisit menentukan tujuan. Demo video tetap dikecualikan.
+Katalog kemampuan produk berdasarkan deskripsi halaman adalah referensi utama; CSV adalah referensi kedua. Pengelolaan/pencarian dokumen adalah Arkiv, bukan Lubna. Nama produk eksplisit menentukan tujuan. Demo video kini tersedia untuk BikinKonten dan Lubna.
 1. "Show me the solutions." → {{"action":"show","section":"work"}}
 2. "Take me to the contact section." → {{"action":"contact","section":"contact"}}
 3. "Go back." → {{"action":"back"}}
@@ -75,8 +84,8 @@ Katalog kemampuan produk berdasarkan deskripsi halaman adalah referensi utama; C
 8. "Show me what CODEV can do." → {{"action":"show","section":"codev"}}
 9. "Show me what ARKIV can do." → {{"action":"show","section":"arkiv"}}
 10. "Show me your AI products." → {{"action":"show","section":"work"}}
-11. "I want to see the demo." → {{"action":"noop"}} (demo video tetap dikecualikan)
-12. "Play the demo." → {{"action":"noop"}} (demo video tetap dikecualikan)
+11. "I want to see the demo." → {{"action":"demo","section":"current"}}
+12. "Play the demo." → {{"action":"demo","section":"current"}}
 13. "I want to automate my customer operations." → {{"action":"show","section":"crm-ai-agent"}}
 14. "I need something to help manage my customers." → {{"action":"show","section":"crm-ai-agent"}}
 15. "I need help coming up with content ideas." → {{"action":"show","section":"bikinkonten"}}
@@ -198,21 +207,30 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
     section = resolve_section(raw_section) if isinstance(raw_section, str) else None
     text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
 
-    if action in {"back", "next", "explore", "contact", "whatsapp"}:
+    if action in {"back", "next", "explore", "contact", "whatsapp", "demo", "video_pause", "video_resume", "video_restart", "video_close"}:
         blob = " ".join((transcript or "").lower().replace("’", "'").split())
         patterns = {
             "back": r"\b(back|previous|kembali|balik|sebelumnya)\b",
             "next": r"\b(next|forward|maju|lanjut|berikutnya|selanjutnya)\b",
             "explore": r"\b(explore|what else|anything else|jelajah|eksplorasi|lainnya|apa lagi|section berikutnya|bagian berikutnya)\b",
             "whatsapp": r"\b(open|launch|buka|bukakan)\b.*\b(whatsapp|wa)\b",
+            "demo": r"\b(play|watch|see|show|open|putar|putarkan|tonton|lihat|tampilkan|buka)\b.*\b(demo|video)\b",
+            "video_pause": r"\b(pause|jeda|jedakan|hentikan)\b",
+            "video_resume": r"\b(resume|continue|play|lanjutkan|putar)\b",
+            "video_restart": r"\b(restart|replay|ulang|ulangi|awal|beginning)\b",
+            "video_close": r"\b(close|exit|tutup|keluar)\b",
         }
         requested = mentions_contact(blob) if action == "contact" else re.search(patterns[action], blob)
         if not requested or re.search(r"\b(jangan|bukan|tidak|don't|do not|not)\b", blob):
             return _clarify([], UNCLEAR_ASK)
+        if action.startswith("video_"):
+            return _clarify(guessed, None) if guessed or raw_section else {"action": action}
+        if action == "demo" and re.search(r"\b(book|schedule|jadwalkan|menjadwalkan)\b", blob):
+            return _clarify([], UNCLEAR_ASK)
         if action in {"back", "next", "explore"}:
             return _clarify(guessed, None) if guessed or raw_section else {"action": action}
         target = section or ("current" if raw_section == "current" else None)
-        allowed = PRODUCT_IDS | {"current", "contact"}
+        allowed = {"bikinkonten", "lubna", "current"} if action == "demo" else PRODUCT_IDS | {"current", "contact"}
         if target not in allowed or (guessed and guessed != [target]):
             return _clarify(guessed, None)
         return {"action": action, "section": target}

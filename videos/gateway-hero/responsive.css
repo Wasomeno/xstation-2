@@ -138,6 +138,63 @@ body {
   }
 }
 
+/* Large tablets such as iPad Pro 13 use the desktop two-column system story,
+   but the section height should follow its content instead of the viewport. */
+@media (min-width: 64.001rem) and (max-width: 68rem) {
+  .ns-root {
+    min-height: 0;
+    padding-block: clamp(4rem, 7vh, 5rem);
+  }
+
+  .sys-grid {
+    align-items: start;
+  }
+
+  .clients {
+    padding-block: clamp(3.75rem, 7vh, 4.75rem);
+  }
+
+  .clients-inner {
+    gap: clamp(2rem, 4vh, 2.75rem);
+  }
+
+  .clients-title {
+    max-width: none;
+    white-space: nowrap;
+    font-size: clamp(1.35rem, 2.7vw, 1.75rem);
+  }
+
+  .client-list {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-auto-flow: row;
+    gap: clamp(1.25rem, 2.25vh, 1.75rem) clamp(0.75rem, 1.6vw, 1.25rem);
+  }
+
+  .client-list li {
+    grid-column: span 2;
+    min-height: 3.75rem;
+  }
+
+  .client-list li:nth-child(-n + 4) {
+    grid-row: 1;
+  }
+
+  .client-list li:nth-child(5) {
+    grid-column: 2 / span 2;
+    grid-row: 2;
+  }
+
+  .client-list li:nth-child(6) {
+    grid-column: 4 / span 2;
+    grid-row: 2;
+  }
+
+  .client-list li:nth-child(7) {
+    grid-column: 6 / span 2;
+    grid-row: 2;
+  }
+}
+
 @media (max-width: 47.999rem) {
   :root {
     --page-gutter: clamp(1rem, 5vw, 1.5rem);
@@ -427,7 +484,7 @@ html.is-shot .site-footer {
    remains untouched while tablet and phone behavior has one clear owner. */
 @media (max-width: 63.999rem) {
   :root {
-    --voice-clearance: calc(7rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   html {
@@ -695,7 +752,7 @@ html.is-shot .site-footer {
 @media (max-width: 47.999rem) {
   /* Reserve room for the compact Voice Surface at anchored destinations. */
   :root {
-    --voice-clearance: calc(6rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   /* The hero lead reads at the same size as a product lead. */
@@ -738,7 +795,7 @@ html.is-shot .site-footer {
 
 @media (max-width: 63.999rem) {
   :root {
-    --voice-clearance: calc(6rem + env(safe-area-inset-bottom));
+    --voice-clearance: env(safe-area-inset-bottom);
   }
 
   #brand {
@@ -1046,7 +1103,8 @@ html.is-shot .site-footer {
 
   .client-list {
     grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 1.35rem 1rem;
+    grid-auto-flow: row;
+    gap: clamp(1.25rem, 2.25vh, 1.75rem) clamp(0.75rem, 1.6vw, 1.25rem);
   }
 
   .client-list li {
@@ -1134,6 +1192,7 @@ html.is-shot .site-footer {
   .ns-root {
     min-height: 0;
     padding-block: clamp(3.25rem, 8vh, 4.75rem);
+    background: var(--page);
   }
 
   .sys-grid {
@@ -1215,10 +1274,12 @@ html.is-shot .site-footer {
   }
 
   .clients-title {
-    max-width: 26ch;
-    font-size: clamp(1.25rem, 5.6vw, 1.5rem);
+    max-width: none;
+    font-size: clamp(0.95rem, 4.8vw, 1.75rem);
     line-height: 1.12;
-    text-wrap: balance;
+    letter-spacing: -0.045em;
+    white-space: nowrap;
+    text-wrap: nowrap;
   }
 
   .client-list {
@@ -1282,6 +1343,39 @@ html.is-shot .site-footer {
   }
 }
 
+/* Keep the footer, without the removed Products and Contact menu column. */
+.site-footer {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.site-footer-brand {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.site-footer-meta {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+@media (max-width: 47.999rem) {
+  .site-footer {
+    grid-template-rows: auto;
+  }
+
+  .site-footer-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .site-footer-meta {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
 @media (max-width: 47.999rem) {
   /* The live canvas gives way to its recorded portrait clip. The stage keeps its
      own dark ground, so a clip that never loads costs nothing but motion. */
@@ -1301,9 +1395,9 @@ html.is-shot .site-footer {
   }
 }
 
-@media (max-width: 63.999rem) {
-  /* No Voice Surface below 64rem, so anchored destinations have nothing to
-     clear at the bottom of the viewport. */
+@media (max-width: 68rem), (hover: none), (pointer: coarse) {
+  /* No Voice Surface at these sizes, so anchored destinations have nothing to
+     clear at the bottom of the viewport. Matches voice.css's own condition. */
   :root {
     --voice-clearance: calc(1rem + env(safe-area-inset-bottom));
   }

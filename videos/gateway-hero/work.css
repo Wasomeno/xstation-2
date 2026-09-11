@@ -564,11 +564,12 @@ body.nav-on-dark #site-links a[aria-current] {
 
 .clients-title {
   margin: 0;
-  max-width: 22ch;
+  max-width: none;
   font-size: clamp(1.55rem, 2.3vw, 2.15rem);
   font-weight: 400;
   letter-spacing: -0.03em;
   line-height: 1.12;
+  white-space: nowrap;
   color: #f2fbf6;
 }
 
@@ -596,7 +597,7 @@ body.nav-on-dark #site-links a[aria-current] {
   display: block;
   width: auto;
   max-width: 100%;
-  height: 2.3rem;
+  height: 2.76rem;
   object-fit: contain;
   object-position: center;
   filter: brightness(0) invert(1);
@@ -604,21 +605,19 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .client-list [data-client="pama"] img {
-  height: 1.75rem;
+  height: 2.1rem;
 }
 
-/* The university crest is a full-colour seal. Knocked out to white it collapses
-   into a silhouette, so it keeps its own colours on a light plate sized to the
-   same optical weight as the wordmarks beside it. */
+/* Keep the UB crest on the same transparent surface as the other client marks. */
 .client-list [data-client="brawijaya"] {
   width: auto;
-  padding: 0.45rem 0.7rem;
-  border-radius: 0.7rem;
-  background: rgb(247 248 245 / 0.94);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .client-list [data-client="brawijaya"] img {
-  height: 2.4rem;
+  height: 2.76rem;
   filter: none;
   opacity: 1;
 }
@@ -628,23 +627,23 @@ body.nav-on-dark #site-links a[aria-current] {
 }
 
 .client-list [data-client="meetandmove"] img {
-  height: 2.5rem;
+  height: 3rem;
 }
 
 .client-list [data-client="collins"] img {
-  height: 1.95rem;
+  height: 2.34rem;
 }
 
 .client-list [data-client="hakuhodo"] img {
-  height: 1.5rem;
+  height: 1.8rem;
 }
 
 .client-list [data-client="bina"] img {
-  height: 2.15rem;
+  height: 2.58rem;
 }
 
 .client-list [data-client="qasir"] img {
-  height: 1.9rem;
+  height: 2.28rem;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1017,11 +1016,11 @@ body.nav-on-dark #site-links a[aria-current] {
     padding-bottom: 3rem;
   }
 
-  .clients-title {
-    margin-bottom: 0;
-    font-size: 1.35rem;
-    white-space: normal;
-  }
+.clients-title {
+  margin-bottom: 0;
+  font-size: 1.35rem;
+  white-space: nowrap;
+}
 
   .client-list {
     grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
@@ -1034,12 +1033,11 @@ body.nav-on-dark #site-links a[aria-current] {
   }
 
   .client-list img {
-    height: 1.85rem;
+    height: 2.22rem;
   }
 
-  .client-list [data-client="pama"] img,
-  .client-list [data-client="brawijaya"] img {
-    height: 2.6rem;
+  .client-list [data-client="pama"] img {
+    height: 3.12rem;
   }
 
   .inquiry {
@@ -1138,10 +1136,218 @@ body.nav-on-dark #site-links a[aria-current] {
   margin-top: clamp(1.75rem, 3vw, 2.5rem);
 }
 
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: clamp(1.75rem, 3vw, 2.5rem);
+}
+
+.project-actions .project-cta {
+  margin-top: 0;
+}
+
+.project-demo-trigger {
+  --cta-fill: var(--ink);
+}
+
 .project-cta > span {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
+}
+
+body.demo-modal-open {
+  overflow: hidden;
+}
+
+.project-demo-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(72rem, calc(100vw - 3rem));
+  max-width: none;
+  max-height: calc(100dvh - 3rem);
+  margin: 0;
+  padding: 0.45rem;
+  border: 1px solid rgb(207 234 221 / 0.2);
+  border-radius: var(--radius-panel);
+  background: rgb(3 22 14 / 0.94);
+  color: #f2fbf6;
+  box-shadow:
+    0 2rem 6rem rgb(0 12 7 / 0.42),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  overflow: hidden;
+  opacity: 0;
+  transform: translate(-50%, calc(-50% + 1rem)) scale(0.975);
+  transform-origin: center 58%;
+  transition:
+    opacity 0.24s ease-out,
+    transform 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.project-demo-modal.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.project-demo-modal::backdrop {
+  background: rgb(0 12 7 / 0.72);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.project-demo-modal.is-visible::backdrop {
+  opacity: 1;
+}
+
+.project-demo-shell {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border-radius: calc(var(--radius-panel) - 0.25rem);
+  background: var(--deepest);
+}
+
+.project-demo-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgb(0 12 7 / 0.82), transparent);
+  pointer-events: none;
+}
+
+.project-demo-header h2 {
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: #f2fbf6;
+  text-shadow: 0 1px 1rem rgb(0 0 0 / 0.45);
+}
+
+.project-demo-close {
+  min-height: 2.5rem;
+  padding-inline: 0.9rem;
+  border: 1px solid rgb(207 234 221 / 0.26);
+  border-radius: var(--radius-cta);
+  background: rgb(3 22 14 / 0.72);
+  color: #f2fbf6;
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
+  font: 600 0.88rem/1 var(--sans);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.12s ease-out;
+}
+
+.project-demo-close:hover,
+.project-demo-close:focus-visible {
+  border-color: rgb(207 234 221 / 0.7);
+  background: rgb(5 42 27 / 0.9);
+}
+
+.project-demo-close:active {
+  transform: scale(0.97);
+}
+
+.project-demo-close:focus-visible {
+  outline: 1px solid #f2fbf6;
+  outline-offset: 3px;
+}
+
+.project-demo-video {
+  display: block;
+  width: 100%;
+  max-height: calc(100dvh - 6rem);
+  aspect-ratio: 16 / 9;
+  background: var(--deepest);
+  object-fit: contain;
+}
+
+@media (max-width: 47.999rem) {
+  .project-actions {
+    gap: 0.625rem;
+  }
+
+  .project-demo-modal {
+    width: calc(100vw - 1rem);
+    max-height: calc(
+      100dvh - max(0.5rem, env(safe-area-inset-top)) - max(0.5rem, env(safe-area-inset-bottom))
+    );
+    padding: 0.3rem;
+  }
+
+  .project-demo-header {
+    padding: 0.7rem;
+  }
+
+  .project-demo-video {
+    max-height: calc(100dvh - 5rem);
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 68rem) {
+  .project-demo-modal {
+    width: calc(100vw - 3rem);
+    max-height: calc(100dvh - 3rem);
+  }
+}
+
+@media (max-height: 38rem) and (orientation: landscape) {
+  .project-demo-modal {
+    width: min(64rem, calc(100vw - 1rem));
+    max-height: calc(100dvh - 1rem);
+    padding: 0.25rem;
+  }
+
+  .project-demo-header {
+    padding: 0.55rem;
+  }
+
+  .project-demo-video {
+    max-height: calc(100dvh - 1.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-demo-modal {
+    transform: translate(-50%, -50%);
+    transition-duration: 0.14s;
+  }
+
+  .project-demo-modal::backdrop {
+    transition-duration: 0.14s;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .project-demo-modal,
+  .project-demo-close {
+    background: var(--deepest);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .project-demo-modal::backdrop {
+    background: rgb(0 12 7 / 0.9);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .project-cta-icon {

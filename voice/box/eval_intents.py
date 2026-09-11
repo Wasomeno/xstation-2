@@ -7,7 +7,7 @@ import json
 from server import interpret
 
 
-# Product descriptions take precedence over CSV (1) targets; demos stay excluded.
+# Product descriptions take precedence over CSV (1) targets; demo commands use the page player.
 # Expected decisions are independent of the production prompt. None means no section.
 CAKE = "Aku punya bisnis jual beli cake dan ingin meningkatkan penjualan, kira kira saya harus pakai service mana?"
 CASES = {
@@ -23,8 +23,8 @@ CASES = {
         ("Show me what CODEV can do.", "show", "codev"),
         ("Show me what ARKIV can do.", "show", "arkiv"),
         ("Show me your AI products.", "show", "work"),
-        ("I want to see the demo.", "noop", None),
-        ("Play the demo.", "noop", None),
+        ("I want to see the demo.", "demo", "current"),
+        ("Play the demo.", "demo", "current"),
         ("I want to automate my customer operations.", "show", "crm-ai-agent"),
         ("I need something to help manage my customers.", "show", "crm-ai-agent"),
         ("I need help coming up with content ideas.", "show", "bikinkonten"),
@@ -84,6 +84,30 @@ CASES = {
         ("Pengetahuan perusahaan tersebar di banyak tempat, pengen tim gampang mengaksesnya dari satu tempat.", "show", "arkiv"),
         ("Our internal knowledge is hard to locate; I need it organized and accessible to the team.", "show", "arkiv"),
     ],
+    "colegal": [
+        ("Show CoLegal", "show", "colegal"),
+        ("Tampilkan Co Legal", "show", "colegal"),
+        ("Saya ingin memeriksa kelengkapan kontrak sesuai standar legal perusahaan", "show", "colegal"),
+        ("Our contract reviews are slow and inconsistent; help us catch missing clauses against our legal standards", "show", "colegal"),
+        ("Hubungi tim CoLegal", "contact", "colegal"),
+        ("Buka WhatsApp CoLegal", "whatsapp", "colegal"),
+        ("Play CoLegal demo", "noop", None),
+        ("Saya hanya ingin menyimpan dan mencari dokumen kontrak", "show", "arkiv"),
+    ],
+    "video": [
+        ("Putar video demo BikinKonten", "demo", "bikinkonten"),
+        ("Show me the Lubna demo", "demo", "lubna"),
+        ("Play the demo", "demo", "current"),
+        ("See demo", "demo", "current"),
+        ("Pause the video", "video_pause", None),
+        ("Lanjutkan video", "video_resume", None),
+        ("Ulangi videonya dari awal", "video_restart", None),
+        ("Close the demo", "video_close", None),
+        ("Jadwalkan demo Lubna", "contact", "lubna"),
+        ("Play the CoDev demo", "noop", None),
+        ("Jangan putar demo", "noop", None),
+        ("Show me your work with Universitas Brawijaya", "show", "clients"),
+    ],
     "safety": [
         ("Halo, selamat pagi", "noop", None),
         ("Thank you, that's all.", "noop", None),
@@ -93,7 +117,6 @@ CASES = {
         ("Jangan ke beranda", "noop", None),
         ("Don't show BikinKonten", "noop", None),
         ("Saya tidak mau melihat produk apa pun", "noop", None),
-        ("Putar video demo BikinKonten", "noop", None),
         ("Don't open WhatsApp", "noop", None),
         ("Saya bukan butuh konten, masalahnya pesan pembeli WhatsApp tidak terjawab saat malam.", "show", "crm-ai-agent"),
         ("Go next", "next", None),

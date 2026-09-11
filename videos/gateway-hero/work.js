@@ -153,6 +153,7 @@ const VOICE_SECTIONS = new Set([
   "codev",
   "coframe",
   "cofinance",
+  "colegal",
   "clients",
   "contact",
 ]);
@@ -192,7 +193,7 @@ function showSection(id, focusContact = false, record = true) {
   if (!VOICE_SECTIONS.has(sectionId)) return false;
   const el = document.getElementById(sectionId);
   if (!el) return false;
-  const target = focusContact ? el.querySelector('.project-cta, .inquiry-email') : el;
+  const target = focusContact ? el.querySelector('a.project-cta, .inquiry-email') : el;
   if (!target) return false;
   showSection._focus = focusContact ? target : null;
   const duration = reduce ? 0.05 : 1.15;
@@ -225,6 +226,19 @@ function showSection(id, focusContact = false, record = true) {
 }
 
 function runPageAction(decision) {
+  const dialog = document.getElementById("project-demo-dialog");
+  if (["video_pause", "video_resume", "video_restart", "video_close"].includes(decision.action)) {
+    const video = document.getElementById("project-demo-video");
+    if (!dialog?.open || !video) return false;
+    if (decision.action === "video_close") dialog.close();
+    else if (decision.action === "video_pause") video.pause();
+    else {
+      if (decision.action === "video_restart") video.currentTime = 0;
+      video.play().catch(() => {});
+    }
+    return true;
+  }
+  if (dialog?.open && ["show", "back", "next", "explore", "contact", "whatsapp"].includes(decision.action)) dialog.close();
   if (decision.action === "back") {
     const index = voiceActionLog.index - 1;
     const entry = voiceActionLog.entries[index];
@@ -260,8 +274,14 @@ function runPageAction(decision) {
     return showSection(id, decision.action === "contact" || id === "contact");
   }
   const section = document.getElementById(id);
+  if (decision.action === "demo") {
+    const trigger = section?.querySelector(".project-demo-trigger");
+    if (!trigger || !showSection(id)) return false;
+    trigger.click();
+    return dialog?.open === true;
+  }
   if (decision.action === "whatsapp") {
-    const cta = section?.querySelector('.project-cta, .inquiry-email');
+    const cta = section?.querySelector('a.project-cta, .inquiry-email');
     if (!cta || !cta.href.startsWith("https://wa.me/")) return false;
     recordVoiceAction({ action: "whatsapp", section: id, top: window.scrollY, focus: document.activeElement });
     // Same-tab navigation works without a transient click gesture from speech.
@@ -303,6 +323,7 @@ function bindSmoothStart() {
 function bindHeroScroll() {
   if (!gsap || !ScrollTrigger) return;
 
+  const mobileViewport = window.matchMedia("(max-width: 47.999rem)");
   const heroCopy = document.getElementById("hero-copy");
   const brandLogo = document.querySelector("#site-nav .brand-logo");
   const chapters = [...document.querySelectorAll(".chapter-panel")];
@@ -325,7 +346,7 @@ function bindHeroScroll() {
       },
       onUpdate: () => {
         cluster.setProgress(depth.progress);
-        cluster.setFlashProgress(flash.progress);
+        cluster.setFlashProgress(mobileViewport.matches ? 0 : flash.progress);
         if (brandLogo) {
           const bounds = brandLogo.getBoundingClientRect();
           document.body.classList.toggle(
@@ -369,15 +390,19 @@ function bindHeroScroll() {
       // A fast scroll can reach it before the scrubbed glare finishes, so the
       // glare is completed and painted before the loop stops; otherwise the
       // frozen frame is the dark hero sky sitting behind a light section.
-      cluster.setFlashProgress(1);
+      cluster.setFlashProgress(mobileViewport.matches ? 0 : 1);
       requestAnimationFrame(() => requestAnimationFrame(() => cluster.setActive(false)));
     },
-    onLeaveBack: () => cluster.setActive(true),
+    onLeaveBack: () => {
+      if (mobileViewport.matches) cluster.setFlashProgress(0);
+      cluster.setActive(true);
+    },
   });
 }
 
 function bindHeroSystemSnap() {
-  if (reduce || shot || !gsap || !ScrollTrigger) return () => {};
+  const mobileViewport = window.matchMedia("(max-width: 47.999rem)");
+  if (reduce || shot || mobileViewport.matches || !gsap || !ScrollTrigger) return () => {};
 
   const pinSlot = document.getElementById("pin-slot");
   const system = document.getElementById("system");
@@ -428,6 +453,8 @@ function bindHeroSystemSnap() {
   };
 
   const handleIntent = (direction, event) => {
+    if (mobileViewport.matches) return false;
+
     const y = window.scrollY;
     const systemTop = targetY(system);
     const goingToSystem = direction > 0 && y < systemTop - 2;
@@ -947,6 +974,110 @@ function bindHeroMotion() {
     cancelIdle(handle);
     visibility?.disconnect();
     phone.removeEventListener("change", onChange);
+
+function bindProjectDemoModal() {
+  const dialog = document.getElementById("project-demo-dialog");
+  const video = document.getElementById("project-demo-video");
+  const title = document.getElementById("project-demo-title");
+  const closeButton = dialog?.querySelector(".project-demo-close");
+  const triggers = [...document.querySelectorAll(".project-demo-trigger")];
+
+  if (!dialog || !video || !title || !closeButton || !triggers.length) return () => {};
+
+  let opener = null;
+  let closeTimer = 0;
+
+  const restoreVoice = () => {
+    const voice = dialog.querySelector("#voice-surface");
+    if (!voice) return;
+    voice.hidePopover();
+    voice.removeAttribute("popover");
+    document.body.append(voice);
+  };
+
+  const resetVideo = () => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  };
+
+  const finishClose = () => {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    if (dialog.open) dialog.close();
+  };
+
+  const closeDialog = () => {
+    if (!dialog.open || closeTimer) return;
+    dialog.classList.remove("is-visible");
+    closeTimer = window.setTimeout(
+      finishClose,
+      reducedMotionMedia.matches ? 160 : 400,
+    );
+  };
+
+  const openDialog = (event) => {
+    const trigger = event.currentTarget;
+    const source = trigger.dataset.demoSrc;
+    if (!source) return;
+
+    opener = trigger;
+    title.textContent = trigger.dataset.demoTitle || "Project demo";
+    video.src = source;
+    video.load();
+    dialog.classList.remove("is-visible");
+    dialog.showModal();
+    const voice = document.getElementById("voice-surface");
+    if (voice && !voice.hidden) {
+      dialog.append(voice);
+      voice.setAttribute("popover", "manual");
+      voice.showPopover();
+    }
+    document.body.classList.add("demo-modal-open");
+    dialog.getBoundingClientRect();
+    dialog.classList.add("is-visible");
+    video.play().catch(() => {});
+  };
+
+  const onBackdropClick = (event) => {
+    if (event.target === dialog) closeDialog();
+  };
+
+  const onCancel = (event) => {
+    event.preventDefault();
+    closeDialog();
+  };
+
+  const onClose = () => {
+    restoreVoice();
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    dialog.classList.remove("is-visible");
+    document.body.classList.remove("demo-modal-open");
+    resetVideo();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
+  };
+
+  triggers.forEach((trigger) => trigger.addEventListener("click", openDialog));
+  closeButton.addEventListener("click", closeDialog);
+  dialog.addEventListener("click", onBackdropClick);
+  dialog.addEventListener("cancel", onCancel);
+  dialog.addEventListener("close", onClose);
+
+  return () => {
+    triggers.forEach((trigger) => trigger.removeEventListener("click", openDialog));
+    closeButton.removeEventListener("click", closeDialog);
+    dialog.removeEventListener("click", onBackdropClick);
+    dialog.removeEventListener("cancel", onCancel);
+    dialog.removeEventListener("close", onClose);
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    dialog.classList.remove("is-visible");
+    if (dialog.open) dialog.close();
+    restoreVoice();
+    document.body.classList.remove("demo-modal-open");
+    resetVideo();
   };
 }
 
@@ -977,10 +1108,12 @@ if (!isShot) {
   cleanupProjectVideos = bindProjectVideoPlayback();
   cleanupHeroMotion = bindHeroMotion();
 }
+const cleanupProjectDemoModal = bindProjectDemoModal();
 window.addEventListener("pagehide", () => {
   cleanupHeaderState();
   cleanupProjectVideos();
   cleanupHeroMotion();
+  cleanupProjectDemoModal();
 }, { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);

@@ -56,6 +56,15 @@ class DecideTests(unittest.TestCase):
             {"action": "show", "section": "hireassess"},
         )
 
+    def test_colegal_supports_navigation_and_contact_but_has_no_demo(self):
+        for alias in ("CoLegal", "co legal", "legal operations", "review kontrak"):
+            self.assertEqual(decide({"action": "show", "section": alias}),
+                             {"action": "show", "section": "colegal"})
+        for action, transcript in (("contact", "Hubungi tim CoLegal"), ("whatsapp", "Buka WhatsApp CoLegal")):
+            self.assertEqual(decide({"action": action, "section": "colegal"}, transcript),
+                             {"action": action, "section": "colegal"})
+        self.assertEqual(decide({"action": "demo", "section": "colegal"}, "Play CoLegal demo")["action"], "clarify")
+
     def test_unknown_section_clarifies(self):
         result = decide({"action": "show", "section": "pricing"})
         self.assertEqual(result["action"], "clarify")
@@ -160,8 +169,6 @@ class DecideTests(unittest.TestCase):
             ("CRM AI Agent", {"action": "contact", "section": "crm-ai-agent"}),
             ("Play the demo", {"action": "demo", "section": "pricing"}),
             ("Play the demo", {"action": "demo", "section": "hero"}),
-            ("Play the demo", {"action": "demo", "section": "current"}),
-            ("Play the BikinKonten demo", {"action": "demo", "section": "bikinkonten"}),
             ("Play the demo", {"action": "demo", "section": ["bikinkonten"]}),
             ("Talk to us", {"action": "contact", "section": "clients"}),
             ("Don't play the demo", {"action": "demo", "section": "bikinkonten"}),
@@ -176,6 +183,32 @@ class DecideTests(unittest.TestCase):
     def test_default_clarify_is_indonesian(self):
         result = decide({"action": "clarify", "hypotheses": ["HireAssess", "Arkiv"]})
         self.assertEqual(result["text"], "HireAssess, atau Arkiv?")
+
+    def test_demo_actions_require_explicit_commands_and_supported_targets(self):
+        for transcript, payload in (
+            ("Play the BikinKonten demo", {"action": "demo", "section": "bikinkonten"}),
+            ("Putar demo Lubna", {"action": "demo", "section": "lubna"}),
+            ("I want to see the demo", {"action": "demo", "section": "current"}),
+            ("See demo", {"action": "demo", "section": "current"}),
+            ("Pause the video", {"action": "video_pause"}),
+            ("Jeda videonya", {"action": "video_pause"}),
+            ("Resume the video", {"action": "video_resume"}),
+            ("Lanjutkan video", {"action": "video_resume"}),
+            ("Restart the demo", {"action": "video_restart"}),
+            ("Ulangi videonya", {"action": "video_restart"}),
+            ("Close the demo", {"action": "video_close"}),
+            ("Tutup video", {"action": "video_close"}),
+        ):
+            self.assertEqual(decide(payload, transcript), payload)
+        for transcript, payload in (
+            ("Book a demo", {"action": "demo", "section": "current"}),
+            ("Jadwalkan demo", {"action": "demo", "section": "bikinkonten"}),
+            ("Don't pause the video", {"action": "video_pause"}),
+            ("halo", {"action": "video_close"}),
+            ("Play demo CoDev", {"action": "demo", "section": "codev"}),
+            ("Close the video", {"action": "video_close", "section": "https://evil.test"}),
+        ):
+            self.assertEqual(decide(payload, transcript)["action"], "clarify")
 
     def test_decide_from_model_text_round_trip(self):
         result = decide_from_model_text('{"action":"show","section":"bikin konten"}')

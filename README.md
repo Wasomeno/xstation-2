@@ -46,7 +46,7 @@ From the repo root (keys in `voice/box/.env`):
 
 ```bash
 npm start          # site on :4174
-npm run voice      # box on :4175
+npm run voice      # box on :4175; reloads when Python files change
 ```
 
 Point the live site at a tunneled box with `?box=https://your-tunnel`.
@@ -59,11 +59,11 @@ Reconciled CSV targets:
 | --- | --- | --- |
 | 7 | Show BikinKonten | The command explicitly names BikinKonten. |
 | 23–24 | Show Arkiv | Its product description covers document management and information retrieval; Lubna handles marketing. |
-| 11–12 | No action | Video demo actions remain excluded by the prior product decision. |
+| 11–12 | Open current product demo | BikinKonten and Lubna have playable demos. |
 
 Knowledge storage and organization also select Arkiv. Prototypes select CoFrame; client references and track record select Trusted by (`clients`); agent architecture and operations select System. Product conversion requests focus that product's existing CTA, including CoFinance.
 
-"Go back" returns to the previous action. "Next", "go next", and "go forward" open the section after the currently visible one in full page order, including after manual scrolling: Hero → The System Behind Every Agent → product catalog → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → Trusted by → Contact. Next stops at Contact without wrapping or opening WhatsApp. "What else can I explore?" keeps its existing route through the catalog, products, and Trusted by. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. The two video demo commands are excluded and perform no action. Restart/redeploy the voice service after changing `voice/box/sections.py` or `voice/box/decide.py`.
+"Go back" returns to the previous action. "Next", "go next", and "go forward" open the section after the currently visible one in full page order, including after manual scrolling: Hero → The System Behind Every Agent → product catalog → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → CoLegal → Trusted by → Contact. Next stops at Contact without wrapping or opening WhatsApp. "What else can I explore?" keeps its existing route through the catalog, products, and Trusted by. Contact requests focus the general or named product's CTA. Only an explicit request to open WhatsApp follows its existing link; it never sends a message. Voice can open the BikinKonten or Lubna demo: “Play the BikinKonten demo”, “Putar demo Lubna”, or “Play the demo” for the current product. “Pause the video”, “Resume the video”, “Restart the video”, and “Close the video” control the open player; Indonesian equivalents work too. Other products only have decorative previews, so they do not open a demo. Navigating closes the player. Booking a demo still focuses contact. Restart/redeploy the voice service after changing `voice/box/sections.py` or `voice/box/decide.py`.
 
 Run offline checks separately from the live intent evaluation:
 

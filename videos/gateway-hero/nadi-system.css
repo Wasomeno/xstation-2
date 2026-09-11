@@ -118,6 +118,12 @@ body.nav-on-dark #brand .brand-tag {
   scroll-margin-top: 0;
 }
 
+/* Preserve the glare transition on entry, then hold a stable light ground
+   when the system section is revisited from below. */
+body.system-reached #system {
+  background: var(--page);
+}
+
 .sys-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
