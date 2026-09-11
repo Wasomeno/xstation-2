@@ -10,6 +10,26 @@ npm start
 
 Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
+## Hero on phones
+
+The hero illustration is a canvas animation that repaints screen-sized radial
+gradients every frame, which is the work a phone GPU handles worst. Below 768px
+the canvas and its agent callouts are hidden and `videos/gateway-hero/media/hero/`
+carries a recorded portrait clip of the same canopy instead: `hero-mobile.mp4`
+(H.264, 540x1200, ~157 KB) with `hero-mobile-poster.jpg` as its first frame.
+
+The clip is framed so the canopy sits in the upper half and fades out over the
+lower half, leaving the hero copy on dark ground. The `<video>` element ships
+without a source; `bindHeroMotion()` attaches one at the first idle moment after
+load, skips it entirely under `prefers-reduced-motion` or Save-Data, and pauses
+it once the hero scrolls away. If the file never loads, the poster shows; if that
+fails too, the stage's own `#04100b` ground stays and nothing else moves.
+
+To re-record after changing the canvas, capture `#nadi-cluster` at a portrait
+size, composite each frame over `#04100b` first (the canvas keeps a translucent
+trail buffer, so a raw capture blooms), then encode with
+`-crf 31 -profile:v main -movflags +faststart`.
+
 ## Voice (local box)
 
 The floating mic streams audio to an always-on box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash`. Keys stay on the box. Live transcript appears in the popover.

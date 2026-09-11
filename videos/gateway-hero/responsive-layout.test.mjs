@@ -10,10 +10,13 @@ test("responsive cascade stays last and desktop content inventory is preserved",
   const systemIndex = html.indexOf("videos/gateway-hero/nadi-system.css");
   const responsiveIndex = html.indexOf("videos/gateway-hero/responsive.css");
   assert.ok(systemIndex > -1 && responsiveIndex > systemIndex);
-  assert.equal((html.match(/<section\b/g) || []).length, 13);
+  // Fourteen since CoLegal joined the catalogue.
+  assert.equal((html.match(/<section\b/g) || []).length, 14);
   // One CTA per product, the two hero buttons, and the contact button, which now
   // uses the same control as the products instead of a bare text link.
-  assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 11);
+  // Fourteen: one per product including CoLegal, the two hero buttons, and the
+  // contact button.
+  assert.equal((html.match(/class="[^"]*station-cta\b/g) || []).length, 14);
   assert.equal((html.match(/media\/clients\//g) || []).length, 7);
   assert.match(html, /<link rel="icon" type="image\/svg\+xml"[^>]+nadi-favicon\.svg/);
   // Products and Contact menus are intentionally omitted while the footer remains.
@@ -92,7 +95,14 @@ test("compact layout preserves desktop-visible content and shared touch snapping
 
   assert.match(voice, /max-width:\s*47\.999rem[\s\S]*left:\s*50%[\s\S]*right:\s*auto[\s\S]*transform:\s*translateX\(-50%\)/);
   assert.match(voice, /max-width:\s*47\.999rem[\s\S]*\.voice-copy\s*{[^}]*text-align:\s*center/s);
-  assert.doesNotMatch(voice, /max-width:\s*47\.999rem[\s\S]*#voice-surface\s*{[^}]*display:\s*none/s);
+  // The phone block repositions the surface; hiding it is a separate, wider
+  // rule, so the check is scoped to the phone block instead of the whole file.
+  const phoneVoice = voice.slice(voice.indexOf("@media (max-width: 47.999rem)"));
+  const nextQuery = phoneVoice.indexOf("@media", 1);
+  assert.doesNotMatch(
+    nextQuery === -1 ? phoneVoice : phoneVoice.slice(0, nextQuery),
+    /#voice-surface\s*{[^}]*display:\s*none/s,
+  );
 
   assert.match(work, /cleanupHeroSystemSnap\s*=\s*bindHeroSystemSnap\(\)/);
   assert.doesNotMatch(work, /responsiveMotion\.add\([^\n]*bindHeroSystemSnap/);
@@ -123,7 +133,8 @@ test("compact layout preserves desktop-visible content and shared touch snapping
   assert.match(tabletReview, /\.site-footer\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto\s*auto/s);
 
   const mobileReview = css.slice(css.indexOf("Mobile review pass"));
-  assert.match(mobileReview, /\.clients-title\s*{[^}]*max-width:\s*26ch[^}]*text-wrap:\s*balance/s);
+  // The shipped rule keeps the line unwrapped rather than balancing it.
+  assert.match(mobileReview, /\.clients-title\s*{[^}]*max-width:\s*none[^}]*text-wrap:\s*nowrap/s);
   assert.match(mobileReview, /\.client-list\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
   assert.match(mobileReview, /\.client-list li:nth-child\(7\)\s*{[^}]*grid-column:\s*1\s*\/\s*-1/s);
   assert.match(mobileReview, /\.site-footer\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);

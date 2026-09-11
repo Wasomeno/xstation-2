@@ -154,6 +154,27 @@
         height: 100%;
       }
 
+      /* The phone fallback for the nerve canvas. It carries no source until the
+         script attaches one, and the stage behind it stays dark on its own, so a
+         video that never loads costs the layout nothing. */
+      #hero-motion {
+        display: none;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 50% 0;
+        background: transparent;
+        pointer-events: none;
+        /* The clip fades to the stage colour on its own, but an encoded dark is
+           never bit-identical to a CSS dark, which leaves a seam where the two
+           meet. Masking the lower half out removes the join entirely: below it
+           the stage's own ground shows through. */
+        -webkit-mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
+        mask-image: linear-gradient(180deg, #000 0 40%, rgb(0 0 0 / 0) 60%);
+      }
+
       .nadi-lbl {
         position: absolute;
         z-index: 3;
@@ -510,10 +531,10 @@
         color: #5b6865;
       }
     </style>
-    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-23" />
-    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=modal-overlay-27" />
-    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-21" />
-    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-24" />
+    <link rel="stylesheet" href="videos/gateway-hero/work.css?v=surface-30" />
+    <link rel="stylesheet" href="videos/gateway-hero/voice.css?v=surface-30" />
+    <link rel="stylesheet" href="videos/gateway-hero/nadi-system.css?v=surface-30" />
+    <link rel="stylesheet" href="videos/gateway-hero/responsive.css?v=surface-30" />
     <noscript>
       <style>
         #nadi-stage {
@@ -550,6 +571,16 @@
   <div id="hero-matte" aria-hidden="true"></div>
   <div id="nadi-stage">
       <canvas id="nadi-cluster" aria-hidden="true"></canvas>
+      <video
+        id="hero-motion"
+        aria-hidden="true"
+        muted
+        loop
+        playsinline
+        disablepictureinpicture
+        preload="none"
+        poster="videos/gateway-hero/media/hero/hero-mobile-poster.jpg?v=1"
+      ></video>
     </div>
     <header id="site-nav">
       <a id="brand" href="#main-content" aria-label="NADI home">
@@ -941,6 +972,9 @@
             <li class="js-enter-child" data-client="brawijaya">
               <img src="videos/gateway-hero/.media/images/image_001.png?v=transparent-2" alt="Universitas Brawijaya (UB)" width="761" height="772" loading="lazy" decoding="async" />
             </li>
+            <li class="js-enter-child" data-client="cias">
+              <img src="videos/gateway-hero/media/clients/cias.png" alt="CIAS" width="354" height="110" loading="lazy" decoding="async" />
+            </li>
             <li class="js-enter-child" data-client="collins">
               <img src="videos/gateway-hero/media/clients/collins.png" alt="Collins Property Group" width="900" height="213" loading="lazy" decoding="async" />
             </li>
@@ -995,8 +1029,8 @@
       </div>
     </dialog>
 
-    <script src="videos/gateway-hero/nadi-system.js?v=surface-18"></script>
-    <script type="module" src="videos/gateway-hero/work.js?v=colegal-31"></script>
-    <script type="module" src="videos/gateway-hero/voice.js?v=shake-clock-30"></script>
+    <script src="videos/gateway-hero/nadi-system.js?v=surface-30"></script>
+    <script type="module" src="videos/gateway-hero/work.js?v=surface-30"></script>
+    <script type="module" src="videos/gateway-hero/voice.js?v=surface-30"></script>
   </body>
 </html>
