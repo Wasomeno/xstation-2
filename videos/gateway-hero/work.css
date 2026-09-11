@@ -623,6 +623,10 @@ body.nav-on-dark #site-links a[aria-current] {
   opacity: 1;
 }
 
+.client-list [data-client="cias"] img {
+  height: 2.5rem;
+}
+
 .client-list [data-client="meetandmove"] img {
   height: 2.5rem;
 }

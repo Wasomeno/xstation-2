@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js?v=surface-23";
+import { createCluster } from "./cluster.js?v=surface-24";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
