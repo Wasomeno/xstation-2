@@ -628,6 +628,7 @@ test("wake mode keeps idle audio local and reuses the microphone across sessions
   const socket = h.sockets[1]; h.audio(.1); assert.equal(socket.messages.length, 0);
   socket.open(); socket.message({ type: "ready" });
   assert.equal(socket.messages.filter(m => m.type === "audio").length, 1);
+  socket.message({ type: "delta", text: "Buka CoDev" });
   h.tick(2000); h.audio(); assert.equal(h.ui.root.dataset.state, "thinking");
   const sent = socket.messages.length; h.audio(.1); assert.equal(socket.messages.length, sent);
   socket.message({ type: "decision", action: "show", section: "codev" });
@@ -636,6 +637,25 @@ test("wake mode keeps idle audio local and reuses the microphone across sessions
   assert.equal(h.ui.root.dataset.state, "armed"); assert.equal(socket.readyState, 3);
   assert.equal(track.stopped, false); assert.equal(h.microphones.length, 1);
   h.escape(); assert.equal(track.stopped, true); assert.equal(h.workers[0].terminated, true);
+});
+
+test("processing requires a nonempty transcript, including captions arriving after commit", async () => {
+  const h = browser(); const { socket } = await h.connect();
+  h.audio(.2); h.tick(2000); h.audio();
+  assert.equal(socket.messages.at(-1).type, "commit");
+  assert.equal(h.ui.root.dataset.state, "listening", "Microphone energy alone must not start processing");
+  socket.message({ type: "final", item_id: "noise", transcript: "  " });
+  socket.message({ type: "noop", item_id: "noise" });
+  assert.equal(h.ui.root.dataset.state, "listening"); assert.equal(h.ui.root.dataset.fallback, "");
+  h.audio(.2); h.tick(2000); h.audio();
+  socket.message({ type: "final", item_id: "speech", transcript: "Buka Arkiv" });
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  socket.message({ type: "decision", item_id: "speech", action: "show", section: "arkiv" });
+  assert.equal(h.ui.root.dataset.state, "listening");
+  h.audio(.2); h.tick(2000); h.audio();
+  assert.equal(h.ui.root.dataset.state, "listening", "Previous turn's transcript cannot start processing");
+  socket.message({ type: "delta", item_id: "late", text: "Buka CoDev" });
+  assert.equal(h.ui.root.dataset.state, "thinking"); h.escape();
 });
 
 test("session bounds connections, audio buffers and processing without ending on silence", async () => {
@@ -647,6 +667,7 @@ test("session bounds connections, audio buffers and processing without ending on
   h.tick(22000); assert.equal(socket.messages.at(-1).type, "commit");
   socket.message({ type: "noop" }); assert.equal(h.ui.root.dataset.state, "listening");
   assert.equal(h.ui.root.dataset.fallback, "", "Silence flush must not shake");
+  socket.message({ type: "delta", text: "Buka CoDev" });
   h.audio(.1); h.tick(30000); assert.equal(h.ui.root.dataset.state, "thinking");
   h.tick(30000); assert.equal(h.ui.root.dataset.state, "armed");
   socket.message({ type: "decision", action: "show", section: "codev" }); assert.equal(h.sections.length, 0);

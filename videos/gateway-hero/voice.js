@@ -544,7 +544,7 @@ function bindVoice() {
     sessionWanted = true;
     resetWake();
     const socket = new WebSocket(VOICE_BOX_WS);
-    const c = { socket, pending: [], timers: [], ready: false, committed: false, heard: false, pause: createPauseDetector(), item: null, retired: new Set() };
+    const c = { socket, pending: [], timers: [], ready: false, committed: false, transcribed: false, pause: createPauseDetector(), item: null, retired: new Set() };
     command = c;
     const current = () => enabled && command === c;
     const timer = (fn, ms) => { const id = setTimeout(() => { if (current()) fn(); }, ms); c.timers.push(id); return id; };
@@ -558,7 +558,7 @@ function bindVoice() {
       for (const id of c.timers) clearTimeout(id);
       c.timers.length = 0;
       if (c.item) { c.retired.add(c.item); if (c.retired.size > 32) c.retired.delete(c.retired.values().next().value); }
-      c.item = null; c.committed = false; c.heard = false; c.pause = createPauseDetector();
+      c.item = null; c.committed = false; c.transcribed = false; c.pause = createPauseDetector();
       setState("listening", COPY.listening, "", true);
       if (shake) {
         ui.root.dataset.fallback = String(++reaction); ui.wave.refresh(); sound("fallback");
@@ -572,7 +572,7 @@ function bindVoice() {
       c.committed = true;
       clearTimeout(c.captureTimer);
       send({ type: "commit" });
-      if (c.heard) setState("thinking");
+      if (c.transcribed) setState("thinking");
       timer(fail, 30000);
     };
     c.send = send;
@@ -601,6 +601,10 @@ function bindVoice() {
       if (payload.item_id) c.item = payload.item_id;
       const text = payload.type === "delta" ? payload.text : payload.type === "final" ? payload.transcript : null;
       if (typeof text === "string" && /\b(?:thanks|terima\s*kasih)\b/iu.test(text.normalize("NFKC"))) { arm(); return; }
+      if (typeof text === "string" && text.trim()) {
+        c.transcribed = true;
+        if (c.committed) setState("thinking");
+      }
       if (payload.type === "decision" || payload.type === "noop") {
         if (!c.committed) return;
         let moved = false;
@@ -610,12 +614,12 @@ function bindVoice() {
             moved = window.xstationShowSection?.(payload.section) === true;
           }
         }
-        nextTurn(c.heard && !moved);
+        nextTurn(c.transcribed && !moved);
         return;
       }
       if (c.committed) return;
       if (payload.type === "delta" && typeof text === "string" && text.trim()) {
-        c.heard = true; c.pause.transcript(performance.now());
+        c.pause.transcript(performance.now());
         setState("listening", COPY.listening, text.trim());
         ui.root.dataset.speaking = "true";
       }
@@ -651,7 +655,6 @@ function bindVoice() {
       if (!c || c.committed) return;
       c.send({ type: "audio", pcm: floatToPcm16Base64(downsample(input, context.sampleRate, TARGET_RATE)) });
       const action = c.pause.update(input, performance.now());
-      if (action === "start") c.heard = true;
       if (action === "commit") c.commit();
     };
   };
