@@ -37,7 +37,7 @@ const microphone = () => {
 };
 
 function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
-  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [];
+  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [];
   const button = Object.assign(new EventTarget(), {
     attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -83,7 +83,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   });
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
   const sandbox = vm.createContext({
-    window, document, ui, Event, AbortController,
+    window, document, ui, stateSounds, Event, AbortController,
     navigator: { mediaDevices: unsupported ? undefined : { getUserMedia() {
       const request = deferred(); microphones.push(request); return request.promise;
     } } },
@@ -93,9 +93,9 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     performance: { now: () => 1000 },
     btoa: (value) => Buffer.from(value, "binary").toString("base64"),
   });
-  vm.runInContext(`${source}\ncreateSurface = () => ui; bindVoice();`, sandbox);
+  vm.runInContext(`${source}\ncreateSurface = () => ui; createStateSound = () => state => stateSounds.push(state); bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, sandbox,
+    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox,
     copy: vm.runInContext("COPY", sandbox),
     click: () => emit(button, "click"),
     escape: () => emit(document, "keydown", { key: "Escape" }),
@@ -1006,6 +1006,9 @@ test("fallback shakes its eyes once and returns within 500 ms with a stationary 
     }
   }
   assert.ok(h.run(120).every(atHome), "The same fallback event cannot loop or restart");
+  h.root.dataset.fallback = "stale-frame"; h.wave.refresh();
+  assert.doesNotThrow(() => h.run(1, -4), "An already queued RAF can predate a synchronous refresh");
+  assert.ok(atHome(h.run(32).at(-1)), "Shake settles after an older frame timestamp");
   h.root.dataset.fallback = "2"; h.wave.refresh(); h.run(8);
   assert.ok(!atHome(h.frame), "A new fallback can play again");
   const outgoing = h.frame;
@@ -1239,4 +1242,55 @@ test("demo modal raises the existing voice surface and restores it on close and 
   cleanup();
   assert.equal(voice.parentElement, body);
   assert.equal(voice.raised, false);
+});
+
+test("robot sounds follow state changes without repeating for transcripts", async () => {
+  const h = browser();
+  assert.deepEqual(h.stateSounds, []);
+  const { socket } = await h.connect();
+  socket.message({ type: 'ready' });
+  assert.deepEqual(h.stateSounds, ['connecting', 'listening']);
+  socket.message({ type: 'delta', text: 'See demo', item_id: 'demo' });
+  socket.message({ type: 'delta', text: 'See demo please', item_id: 'demo' });
+  assert.equal(h.stateSounds.length, 2);
+  socket.message({ type: 'final', transcript: 'See demo', item_id: 'demo' });
+  assert.equal(h.stateSounds.at(-1), 'thinking');
+  socket.message({ type: 'decision', action: 'noop', item_id: 'demo' });
+  assert.equal(h.stateSounds.at(-1), 'fallback');
+  assert.equal(h.stateSounds.filter(state => state === 'listening').length, 1, 'Shake replaces the listening chime');
+  h.escape();
+  assert.equal(h.stateSounds.at(-1), 'idle');
+});
+
+test("robot tones are short, quiet, reused, and tolerate blocked audio", async () => {
+  let contexts = 0, starts = [], stops = [], volumes = [], frequencies = [], ramps = [], peaks = [];
+  const param = { setValueAtTime() {}, linearRampToValueAtTime(value, time) { volumes.push(value); peaks.push(time); }, exponentialRampToValueAtTime() {} };
+  class Audio {
+    state = 'suspended'; currentTime = 1; destination = {};
+    constructor() { contexts++; }
+    async resume() { this.state = 'running'; }
+    createOscillator() { return { frequency: { ...param, setValueAtTime(value) { frequencies.push(value); }, exponentialRampToValueAtTime(value, time) { ramps.push([value, time]); } }, connect() {}, disconnect() {}, start(time) { starts.push(time); }, stop(time) { stops.push(time); } }; }
+    createGain() { return { gain: param, connect() {}, disconnect() {} }; }
+  }
+  const soundSource = source.slice(source.indexOf('function createStateSound()'), source.indexOf('function bindVoice()'));
+  const gesture = vm.runInContext('FALLBACK_GESTURE', browser().sandbox);
+  const sandbox = vm.createContext({ window: { AudioContext: Audio }, FALLBACK_GESTURE: gesture });
+  const play = vm.runInContext(`${soundSource}\ncreateStateSound()`, sandbox);
+  for (const state of ['connecting', 'listening', 'thinking', 'idle', 'deaf', 'blocked']) await play(state);
+  assert.equal(contexts, 1);
+  assert.equal(starts.length, 12);
+  assert.ok(stops.every((end, i) => Math.abs(end - starts[i] - 0.13) < 1e-8));
+  assert.ok(volumes.every(value => value <= 0.055));
+  assert.ok(frequencies[3] > frequencies[2], 'Listening rises');
+  assert.ok(frequencies[5] < frequencies[4], 'Thinking descends');
+  peaks = [];
+  await play('fallback');
+  assert.equal(starts.length, 13, 'Shake is one continuous prrunk');
+  assert.ok(ramps.at(-1)[0] < frequencies.at(-1) / 4, 'Pitch falls from high to low');
+  assert.ok(Math.abs(stops.at(-1) - starts.at(-1) - 0.51) < 1e-8);
+  for (let i = 1; i < gesture.length; i++) {
+    assert.ok(peaks.includes(1 + (gesture[i - 1][0] + gesture[i][0]) / 2), 'Pulse follows each shake segment');
+  }
+  sandbox.window.AudioContext = class { constructor() { throw new Error('Audio blocked'); } };
+  await assert.doesNotReject(vm.runInContext('createStateSound()', sandbox)('connecting'));
 });

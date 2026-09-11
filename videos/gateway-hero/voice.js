@@ -202,6 +202,8 @@ function createWaveform(canvas) {
   let size = 88;
 
   const draw = (now = performance.now()) => {
+    // RAF timestamps can predate a synchronous refresh within the same frame.
+    now = Math.max(now, lastTime);
     raf = 0;
     if (document.hidden) return;
     const state = root.dataset.state;
@@ -418,6 +420,54 @@ function createSurface() {
   };
 }
 
+function createStateSound() {
+  let context;
+  let latest = 0;
+  const notes = {
+    connecting: [520, 780], listening: [740, 1100], thinking: [620, 440],
+    idle: [440, 280], deaf: [260, 180], blocked: [220, 160], fallback: [900],
+  };
+  return async (state) => {
+    const turn = ++latest;
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio || !notes[state]) return;
+    try {
+      context ||= new Audio();
+      if (context.state === "suspended") await context.resume();
+      if (turn !== latest || context.state !== "running") return;
+      notes[state].forEach((frequency, index) => {
+        const start = context.currentTime + index * 0.085;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const shake = state === "fallback";
+        const duration = shake ? FALLBACK_GESTURE.at(-1)[0] : 0.12;
+        oscillator.type = shake ? "triangle" : "sine";
+        oscillator.frequency.setValueAtTime(frequency, start);
+        oscillator.frequency.exponentialRampToValueAtTime(shake ? 100 : frequency * 0.7, start + duration);
+        gain.gain.setValueAtTime(0, start);
+        if (shake) {
+          FALLBACK_GESTURE.slice(1).forEach((frame, i) => {
+            const previous = FALLBACK_GESTURE[i];
+            const speed = Math.abs(frame[1] - previous[1]) / (frame[0] - previous[0]);
+            gain.gain.linearRampToValueAtTime(0.012 + 0.043 * Math.min(1, speed / 12), start + (previous[0] + frame[0]) / 2);
+            gain.gain.linearRampToValueAtTime(0.001, start + frame[0]);
+          });
+        } else {
+          gain.gain.linearRampToValueAtTime(0.055, start + 0.006);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        }
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+        oscillator.start(start);
+        oscillator.stop(start + duration + 0.01);
+      });
+    } catch {
+      // Sound is optional: audio restrictions must never block voice control.
+    }
+  };
+}
+
 function bindVoice() {
   if (voiceInitialized || !DESKTOP_VOICE.matches) return;
   voiceInitialized = true;
@@ -432,9 +482,11 @@ function bindVoice() {
   let audioContext = null;
   let processor = null;
   let fallbackTurn = 0;
-  const setCopy = (status, transcript = "", state = "idle") => {
+  const playStateSound = createStateSound();
+  const setCopy = (status, transcript = "", state = "idle", sound = state) => {
     ui.status.textContent = status || "";
     ui.transcript.textContent = state === "listening" && typeof transcript === "string" ? transcript.trim() : "";
+    if (ui.root.dataset.state !== state || sound === "fallback") playStateSound(sound);
     ui.root.dataset.state = state;
     if (state !== "listening") {
       ui.root.dataset.speaking = "false";
@@ -454,7 +506,7 @@ function bindVoice() {
 
   const showNoAction = () => {
     ui.root.dataset.fallback = String(++fallbackTurn);
-    setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening");
+    setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening", "fallback");
   };
 
   const teardownAudio = () => {
