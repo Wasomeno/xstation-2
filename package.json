@@ -2,7 +2,7 @@
   "name": "nadi",
   "private": true,
   "scripts": {
-    "start": "python3 -m http.server 4174 --bind 127.0.0.1",
+    "start": "python3 scripts/preview.py",
     "voice": "voice/box/.venv/bin/python -m uvicorn server:app --app-dir voice/box --host 127.0.0.1 --port 4175 --reload --reload-dir voice/box",
     "test:web": "node --test videos/gateway-hero/*.test.mjs",
     "test:voice": "voice/box/.venv/bin/python -m unittest discover -s voice/box -p 'test_*.py'"

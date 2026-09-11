@@ -12,7 +12,7 @@ Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
 ## Voice (local box)
 
-The floating mic streams audio to an always-on box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash`. Keys stay on the box. Live transcript appears in the popover.
+After a click or local wake-word detection, the floating mic opens a conversation session with the voice box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash`. Keys stay on the box. Live transcript appears in the popover.
 
 ```bash
 cd voice/box
@@ -109,3 +109,19 @@ Check `https://your-domain.com/voice/health`, then try the voice control and ver
 ## Live site
 
 [https://wasomeno.github.io/xstation-2/](https://wasomeno.github.io/xstation-2/)
+
+## Local wake words (experimental, desktop Chrome)
+
+Click the orb once and grant microphone permission to start listening. Give successive commands without repeating the wake phrase. After each decision or no-action result, Nadi returns to listening in the same connection; an unmatched command plays the 500 ms head shake. Only live transcription appears above the orb.
+
+Say **“thanks”**, **“terimakasih”**, or **“terima kasih”** (recognized in OpenAI live transcription), or click the orb again, to end the conversation and return to the on-device **“Hei Nadi”** listener. Either that wake phrase or another click starts a new session using the same microphone. `nadi:wake` is emitted only for voice-triggered sessions. Escape releases the microphone and worker.
+
+The active session has no eight-second silence cutoff. The client commits after a speech pause or 30 seconds (including silence, to bound upstream audio buffers), pauses upload while processing, and resumes after the result. Backend connection and processing deadlines remain 10 and 30 seconds; failures close the session and return to local listening. Audio from local wake-ready mode is never uploaded. During an active session, listening audio—including room sound—is sent for transcription until the session ends. Hidden pages pause capture and close the connection; returning resumes the previous active conversation silently, or shows a resume control if Chrome needs a gesture. A reload requires enabling again.
+
+Use `npm start` for local preview: the preview server now supplies the same isolation headers as `deploy/nginx-web.conf`. On the VPS, rebuild the existing frontend image to include the prebuilt WASM assets and new Nginx config. HTTPS is required outside localhost. Preserve `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: credentialless` through any proxy/CDN; Chrome needs them for this shared-memory runtime. No additional VPS service is needed. Plain `python -m http.server` does not supply these headers.
+
+Runtime provenance, rebuild instructions, and licensing are in [wake assets](videos/gateway-hero/assets/wake/sherpa-onnx-1.13.3/README.md). Model-load or performance failures display an error and release the mic; there is no cloud wake-word fallback. The worker queue is capped at two seconds so slow devices fail visibly instead of retaining unbounded audio.
+
+Before relying on it at a booth, test “Hei Nadi” with several speakers and the actual microphone: at least 18/20 detections, plus no false wake in 30 minutes of representative room sound, similar phrases and demo playback. These real-speaker acceptance measurements are still required. Existing cloud transcription/interpretation costs apply only to activated commands.
+
+Browser integration smoke check (with Playwright available in `NODE_PATH`): `node scripts/check-wake-browser.cjs hei.wav similar-phrase.wav`. Set `WAKE_PREVIEW_URL` to the running preview and optionally `CHROME_PATH`. It uses a fake microphone and mock backend, checks the privacy boundary, and reports actual local detector results for the supplied WAVs. It does not send test audio to OpenAI. Test file results must be compared with their expected phrases; a successful process exit alone does not establish recognition accuracy.

@@ -1,5 +1,7 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
 
+const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-id-1", import.meta.url);
+
 const TARGET_RATE = 24000;
 const DESKTOP_VOICE = window.matchMedia(
   "(min-width: 68.0625rem) and (hover: hover) and (pointer: fine)",
@@ -7,6 +9,12 @@ const DESKTOP_VOICE = window.matchMedia(
 let voiceInitialized = false;
 
 const COPY = {
+  idle: "Aktifkan mikrofon untuk memanggil Nadi · Eksperimental",
+  loading: "Menyiapkan pendengar lokal…",
+  armed: 'Ucapkan “Hei Nadi” · Eksperimental',
+  paused: "Mikrofon dijeda saat halaman tidak aktif.",
+  resume: "Ketuk untuk melanjutkan mikrofon.",
+  modelError: "Pendengar lokal gagal dimuat. Ketuk untuk mencoba lagi.",
   deaf: "Koneksi suara terputus. Ketuk untuk mencoba lagi.",
   blocked: "Izinkan mikrofon di browser, lalu ketuk untuk mencoba lagi.",
   unsupported: "Mikrofon tidak tersedia. Coba browser lain.",
@@ -248,7 +256,7 @@ function createWaveform(canvas) {
     root.style.setProperty("--voice-shadow-scale", radius / 24);
     const alive = !motion.matches && !failed;
     if (alive && state === "thinking") thinkingTime += seconds;
-    const reacting = Boolean(feedback) && listening && root.dataset.speaking !== "true"
+    const reacting = Boolean(feedback) && listening
       && (motion.matches || fallbackTime < FALLBACK_GESTURE.at(-1)[0]);
     // Use elapsed time so dropped frames cannot prolong the 500 ms reaction.
     if (alive && reacting) fallbackTime = Math.min(FALLBACK_GESTURE.at(-1)[0], (now - fallbackStarted) / 1000);
@@ -423,12 +431,15 @@ function createSurface() {
 function createStateSound() {
   let context;
   let latest = 0;
+  const active = new Set();
   const notes = {
-    connecting: [520, 780], listening: [740, 1100], thinking: [620, 440],
-    idle: [440, 280], deaf: [260, 180], blocked: [220, 160], fallback: [900],
+    armed: [740, 1100], connecting: [520, 780], listening: [740, 1100], thinking: [620, 440],
+    deaf: [260, 180], blocked: [220, 160], fallback: [900],
   };
   return async (state) => {
     const turn = ++latest;
+    for (const cancel of active) cancel();
+    active.clear();
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio || !notes[state]) return;
     try {
@@ -458,7 +469,9 @@ function createStateSound() {
         }
         oscillator.connect(gain);
         gain.connect(context.destination);
-        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+        const cancel = () => { gain.disconnect(); oscillator.stop(); oscillator.disconnect(); };
+        active.add(cancel);
+        oscillator.onended = () => { active.delete(cancel); oscillator.disconnect(); gain.disconnect(); };
         oscillator.start(start);
         oscillator.stop(start + duration + 0.01);
       });
@@ -471,318 +484,243 @@ function createStateSound() {
 function bindVoice() {
   if (voiceInitialized || !DESKTOP_VOICE.matches) return;
   voiceInitialized = true;
-
   const ui = createSurface();
   ui.root.hidden = false;
-
-  let session = false;
-  let generation = 0;
-  let stream = null;
-  let socket = null;
-  let audioContext = null;
-  let processor = null;
-  let fallbackTurn = 0;
-  const playStateSound = createStateSound();
-  const setCopy = (status, transcript = "", state = "idle", sound = state) => {
-    ui.status.textContent = status || "";
-    ui.transcript.textContent = state === "listening" && typeof transcript === "string" ? transcript.trim() : "";
-    if (ui.root.dataset.state !== state || sound === "fallback") playStateSound(sound);
-    ui.root.dataset.state = state;
-    if (state !== "listening") {
-      ui.root.dataset.speaking = "false";
-      ui.root.dataset.fallback = "";
+  const sound = createStateSound();
+  let enabled = false, sessionWanted = false, generation = 0, epoch = 0, reaction = 0;
+  let stream, context, processor, worker, command;
+  let modelReady = false, queuedSeconds = 0, loadingTimer;
+  const setState = (state, text = COPY[state] || "", transcript = "", silent = false) => {
+    const previous = ui.root.dataset.state;
+    if (previous !== state) {
+      // Resuming local listening after an app switch is silent.
+      sound(silent || (state === "armed" && (previous === "paused" || previous === "resume")) ? "paused" : state);
     }
-    ui.button.setAttribute("aria-pressed", session ? "true" : "false");
-    ui.button.setAttribute("aria-label", session
-      ? (state === "connecting" ? COPY.cancel : COPY.stop)
-      : (state === "deaf" || state === "blocked" ? "Coba lagi" : COPY.start));
+    ui.root.dataset.state = state;
+    ui.status.textContent = text;
+    ui.transcript.textContent = state === "listening" ? transcript : "";
+    ui.root.dataset.speaking = "false";
+    if (state !== "listening" || previous !== "listening") ui.root.dataset.fallback = "";
+    ui.button.setAttribute("aria-pressed", String(enabled));
+    ui.button.setAttribute("aria-label", state === "resume" ? "Lanjutkan mikrofon" : command ? "Akhiri percakapan" : enabled ? "Mulai percakapan" : "Aktifkan panggilan suara");
     ui.wave.refresh();
   };
-
-  const showHearing = (transcript = "") => {
-    ui.root.dataset.fallback = "";
-    setCopy(COPY.listening, transcript, "listening");
+  const closeCommand = () => {
+    const old = command;
+    command = null;
+    if (!old) return;
+    for (const timer of old.timers) clearTimeout(timer);
+    old.pending.length = 0;
+    try { if (old.socket.readyState === 1) old.socket.send(JSON.stringify({ type: "stop" })); } catch { /* Transport already failed. */ }
+    if (old.socket.readyState < 2) old.socket.close();
   };
-
-  const showNoAction = () => {
-    ui.root.dataset.fallback = String(++fallbackTurn);
-    setCopy("Aksi belum ditemukan. Coba sebutkan tujuan lain.", "", "listening", "fallback");
+  const resetWake = () => {
+    epoch += 1;
+    queuedSeconds = 0;
+    worker?.postMessage({ type: "reset", epoch });
   };
-
-  const teardownAudio = () => {
-    if (processor) {
-      processor.onaudioprocess = null;
-      try {
-        processor.disconnect();
-      } catch {
-        /* already closed */
-      }
-      processor = null;
-    }
-    ui.wave.setAnalyser(null);
-    if (audioContext) {
-      audioContext.close().catch(() => {});
-      audioContext = null;
-    }
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      stream = null;
-    }
-    if (socket && socket.readyState === 1) {
-      try {
-        socket.send(JSON.stringify({ type: "stop" }));
-      } catch {
-        /* closing */
-      }
-    }
-    if (socket && socket.readyState < 2) socket.close();
-    socket = null;
+  const arm = (message) => {
+    sessionWanted = false;
+    closeCommand();
+    resetWake();
+    if (!enabled || !modelReady || !stream) return;
+    setState(document.hidden ? "paused" : context.state === "running" ? "armed" : "resume", message);
   };
-
-  const endSession = (state = "idle", status = COPY[state]) => {
-    session = false;
+  const stop = (state = "idle", message) => {
+    enabled = false; sessionWanted = false;
     generation += 1;
-    teardownAudio();
-    setCopy(status, "", state);
+    clearTimeout(loadingTimer);
+    closeCommand();
+    worker?.terminate(); worker = null;
+    if (processor) { processor.onaudioprocess = null; processor.disconnect(); processor = null; }
+    stream?.getTracks().forEach(track => track.stop()); stream = null;
+    context?.close().catch(() => {}); context = null;
+    modelReady = false;
+    ui.wave.setAnalyser(null);
+    setState(state, message);
   };
-
-  const applyDecision = (decision) => {
-    let navigated = window.xstationPageAction?.(decision) === true;
-    if (!window.xstationPageAction && decision?.action === "show" && typeof decision.section === "string" && decision.section) {
-      navigated = window.xstationShowSection?.(decision.section) === true;
-    }
-    if (navigated) {
-      showHearing();
-    } else showNoAction();
-  };
-
-  const startCapture = (isCurrent, isReady, onPause) => {
-    const source = audioContext.createMediaStreamSource(stream);
-    const windFilter = audioContext.createBiquadFilter();
-    windFilter.type = "highpass";
-    // Reduce wind rumble before transcription, pause detection, and the visual meter.
-    windFilter.frequency.value = 150;
-    windFilter.Q.value = Math.SQRT1_2;
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.62;
-    ui.wave.setAnalyser(analyser);
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
-    const mute = audioContext.createGain();
-    mute.gain.value = 0;
-    const pause = createPauseDetector();
-    const pending = [];
-    let bufferedSamples = 0;
-    let pendingCommit = false;
-    const send = (message) => {
-      const data = JSON.stringify(message);
-      if (isReady()) socket.send(data);
-      else pending.push(data);
+  const beginCommand = (phrase, silent = false) => {
+    if (!enabled || document.hidden || !stream || !modelReady || command) return;
+    sessionWanted = true;
+    resetWake();
+    const socket = new WebSocket(VOICE_BOX_WS);
+    const c = { socket, pending: [], timers: [], ready: false, committed: false, heard: false, pause: createPauseDetector(), item: null, retired: new Set() };
+    command = c;
+    const current = () => enabled && command === c;
+    const timer = (fn, ms) => { const id = setTimeout(() => { if (current()) fn(); }, ms); c.timers.push(id); return id; };
+    const fail = () => { if (current()) arm(`Koneksi suara terputus. ${COPY.armed}`); };
+    const send = (payload) => {
+      if (!current()) return;
+      if (c.ready && socket.readyState === 1) socket.send(JSON.stringify(payload));
+      else c.pending.push(payload);
     };
-    const commitTurn = () => {
-      // Manual transcription needs committed audio before it can return captions.
-      send({ type: "commit" });
-      if (isReady()) onPause();
-      else pendingCommit = true;
-    };
-    processor.onaudioprocess = (event) => {
-      if (!isCurrent() || pendingCommit || !["connecting", "listening"].includes(ui.root.dataset.state)) return;
-      const input = event.inputBuffer.getChannelData(0);
-      const pcm = downsample(input, audioContext.sampleRate, TARGET_RATE);
-      if (!pcm.length) return;
-      if (!isReady()) {
-        bufferedSamples += pcm.length;
-        // A stalled connection must fail instead of retaining unlimited microphone audio.
-        if (bufferedSamples > TARGET_RATE * 30) { endSession("deaf"); return; }
+    const nextTurn = (shake = false) => {
+      for (const id of c.timers) clearTimeout(id);
+      c.timers.length = 0;
+      if (c.item) { c.retired.add(c.item); if (c.retired.size > 32) c.retired.delete(c.retired.values().next().value); }
+      c.item = null; c.committed = false; c.heard = false; c.pause = createPauseDetector();
+      setState("listening", COPY.listening, "", true);
+      if (shake) {
+        ui.root.dataset.fallback = String(++reaction); ui.wave.refresh(); sound("fallback");
+        timer(() => { ui.root.dataset.fallback = ""; ui.wave.refresh(); }, 500);
       }
-      send({ type: "audio", pcm: floatToPcm16Base64(pcm) });
-      const action = pause.update(input, performance.now());
-      if (action === "commit") commitTurn();
+      // Flush silence too, so an unattended active session cannot grow one audio buffer forever.
+      c.captureTimer = timer(c.commit, 30000);
     };
-    source.connect(windFilter);
-    windFilter.connect(analyser);
-    windFilter.connect(processor);
-    processor.connect(mute);
-    mute.connect(audioContext.destination);
-    return {
-      ...pause,
-      flush() {
-        for (const data of pending) socket.send(data);
-        pending.length = 0;
-        bufferedSamples = 0;
-        if (pendingCommit) {
-          pendingCommit = false;
-          onPause();
-        }
-      },
+    c.commit = () => {
+      if (!current() || c.committed || !c.ready) return;
+      c.committed = true;
+      clearTimeout(c.captureTimer);
+      send({ type: "commit" });
+      if (c.heard) setState("thinking");
+      timer(fail, 30000);
     };
-  };
-
-  const startSession = async () => {
-    if (session) return;
-    session = true;
-    const attempt = ++generation;
-    const isCurrent = () => session && generation === attempt;
-    setCopy(COPY.connecting, "", "connecting");
-    const Audio = window.AudioContext || window.webkitAudioContext;
-    if (!navigator.mediaDevices?.getUserMedia || !Audio) {
-      endSession("blocked", COPY.unsupported);
-      return;
-    }
-    let backendReady = false;
-    let captureReady = false;
-    let currentItem = null;
-    let submittedItem = null;
-    const ignoredItems = new Set();
-    let pause = null;
-    const turn = { captioned: false };
-    const noteCaption = (value) => {
-      const text = typeof value === "string" ? value.trim() : "";
-      if (text) turn.captioned = true;
-      return text;
-    };
-    const clearTurn = () => {
-      turn.captioned = false;
-    };
-    const isReady = () => isCurrent() && backendReady && captureReady && socket?.readyState === 1;
-    const listenWhenReady = () => {
-      if (isReady()) { showHearing(); pause.flush(); }
-    };
-    const fail = () => {
-      if (isCurrent()) endSession("deaf");
-    };
-    try {
-      // Resume during the click gesture, while permission and networking proceed.
-      const context = new Audio();
-      audioContext = context;
-      const contextReady = (context.state === "suspended" ? context.resume() : Promise.resolve()).catch(fail);
-      const micRequest = navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false },
-      }).then((media) => {
-        if (!isCurrent()) {
-          media.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        stream = media;
-        stream.getAudioTracks().forEach((track) => {
-          track.addEventListener("ended", () => {
-            if (isCurrent()) endSession("deaf");
-          });
-        });
-      }).catch(() => {
-        if (isCurrent()) endSession("blocked");
-      });
-      Promise.all([micRequest, contextReady]).then(() => {
-        if (!isCurrent()) return;
-        pause = startCapture(isCurrent, isReady, () => {
-          submittedItem = currentItem;
-          setCopy(COPY.thinking, "", "thinking");
-        });
-        captureReady = true;
-        listenWhenReady();
-      }).catch(fail);
-      const healthRequest = fetch(`${VOICE_BOX_URL}/health`, { cache: "no-store" })
-        .then((health) => {
-          if (!health.ok && isCurrent()) endSession("deaf");
-        }).catch(() => {
-          if (isCurrent()) endSession("deaf");
-        });
-      await Promise.all([micRequest, healthRequest]);
-      if (!isCurrent()) return;
-
-      const ws = new WebSocket(VOICE_BOX_WS);
-      socket = ws;
-      const finishTurn = () => {
-        ui.root.dataset.speaking = "false";
-        pause?.reset();
-        if (currentItem) ignoredItems.add(currentItem);
-        currentItem = null;
-        submittedItem = null;
-        clearTurn();
-      };
-      ws.addEventListener("message", (event) => {
-        if (!isCurrent()) return;
-        let payload;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        if (!payload || typeof payload !== "object") return;
-        if (payload.type === "error") {
-          if (payload.recoverable && isReady()) {
-            if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
-            finishTurn();
-            showHearing();
-            return;
+    c.send = send;
+    const connectionTimer = timer(fail, 10000);
+    setState("connecting", COPY.connecting, "", silent);
+    if (phrase) window.dispatchEvent(new CustomEvent("nadi:wake", { detail: { phrase } }));
+    socket.addEventListener("error", fail);
+    socket.addEventListener("close", fail);
+    socket.addEventListener("message", event => {
+      if (!current()) return;
+      let payload;
+      try { payload = JSON.parse(event.data); } catch { return; }
+      if (!payload || typeof payload !== "object") return;
+      if (payload.type === "error") { fail(); return; }
+      if (payload.type === "ready") {
+        if (c.ready) return;
+        c.ready = true; clearTimeout(connectionTimer);
+        for (const pending of c.pending) socket.send(JSON.stringify(pending));
+        c.pending.length = 0;
+        c.captureTimer = timer(c.commit, 30000);
+        setState("listening", COPY.listening, "", silent);
+        return;
+      }
+      if (!c.ready || (payload.item_id && c.retired.has(payload.item_id))) return;
+      if (payload.item_id && c.item && payload.item_id !== c.item) return;
+      if (payload.item_id) c.item = payload.item_id;
+      const text = payload.type === "delta" ? payload.text : payload.type === "final" ? payload.transcript : null;
+      if (typeof text === "string" && /\b(?:thanks|terima\s*kasih)\b/iu.test(text.normalize("NFKC"))) { arm(); return; }
+      if (payload.type === "decision" || payload.type === "noop") {
+        if (!c.committed) return;
+        let moved = false;
+        if (payload.type === "decision") {
+          moved = window.xstationPageAction?.(payload) === true;
+          if (!window.xstationPageAction && payload.action === "show" && typeof payload.section === "string") {
+            moved = window.xstationShowSection?.(payload.section) === true;
           }
-          fail();
-          return;
         }
-        if (payload.type === "ready") {
-          if (backendReady) return;
-          backendReady = true;
-          listenWhenReady();
-          return;
-        }
-        if (!isReady()) return;
-        if (payload.item_id && ignoredItems.has(payload.item_id)) return;
-        if (ui.root.dataset.state === "thinking" && (payload.type === "speech_started" || payload.type === "delta")) {
-          if (!currentItem) currentItem = payload.item_id || null;
-          else if (payload.item_id && payload.item_id !== currentItem) ignoredItems.add(payload.item_id);
-          return;
-        }
-        if (payload.type === "speech_started") {
-          currentItem = payload.item_id || null;
-          submittedItem = null;
-          clearTurn();
-          showHearing();
-          ui.root.dataset.speaking = "true";
-          return;
-        }
-        if (payload.item_id && currentItem && payload.item_id !== currentItem) return;
-        if (payload.item_id) currentItem = payload.item_id;
-        if (payload.type === "noop") {
-          finishTurn();
-          if (ui.root.dataset.state === "thinking") showNoAction();
-          else showHearing();
-        }
-        else if (payload.type === "delta") {
-          if (submittedItem && payload.item_id === submittedItem) return;
-          const text = noteCaption(payload.text);
-          if (!text) return;
-          pause?.transcript(performance.now());
-          showHearing(text);
-          ui.root.dataset.speaking = "true";
-        }
-        else if (payload.type === "final" || payload.type === "speech_stopped") {
-          ui.root.dataset.speaking = "false";
-          noteCaption(payload.transcript || payload.text);
-          pause?.reset();
-          if (turn.captioned) setCopy(COPY.thinking, "", "thinking");
-        }
-        else if (payload.type === "decision") {
-          finishTurn();
-          applyDecision(payload);
+        nextTurn(c.heard && !moved);
+        return;
+      }
+      if (c.committed) return;
+      if (payload.type === "delta" && typeof text === "string" && text.trim()) {
+        c.heard = true; c.pause.transcript(performance.now());
+        setState("listening", COPY.listening, text.trim());
+        ui.root.dataset.speaking = "true";
+      }
+    });
+  };
+  const readyToListen = (silent = false) => {
+    if (!enabled || !modelReady || !stream || command) return;
+    if (sessionWanted && !document.hidden && context.state === "running") {
+      try { beginCommand(undefined, silent); } catch { arm(`Koneksi suara terputus. ${COPY.armed}`); }
+    } else if (!sessionWanted) arm();
+    else setState(document.hidden ? "paused" : "resume");
+  };
+  const capture = () => {
+    const source = context.createMediaStreamSource(stream);
+    const filter = context.createBiquadFilter();
+    filter.type = "highpass"; filter.frequency.value = 150; filter.Q.value = Math.SQRT1_2;
+    const analyser = context.createAnalyser(); analyser.fftSize = 256; analyser.smoothingTimeConstant = .62;
+    ui.wave.setAnalyser(analyser);
+    processor = context.createScriptProcessor(4096, 1, 1);
+    const mute = context.createGain(); mute.gain.value = 0;
+    source.connect(filter); filter.connect(analyser); filter.connect(processor); processor.connect(mute); mute.connect(context.destination);
+    processor.onaudioprocess = event => {
+      if (!enabled || document.hidden || context.state !== "running") return;
+      const input = event.inputBuffer.getChannelData(0);
+      if (ui.root.dataset.state === "armed") {
+        // Fail visibly instead of dropping speech or retaining unbounded room audio.
+        queuedSeconds += input.length / context.sampleRate;
+        if (queuedSeconds > 2) { stop("deaf", "Perangkat terlalu lambat untuk pendengar lokal. Ketuk untuk mencoba lagi."); return; }
+        const samples = input.slice();
+        worker.postMessage({ type: "audio", samples, sampleRate: context.sampleRate, epoch }, [samples.buffer]);
+      }
+      const c = command;
+      if (!c || c.committed) return;
+      c.send({ type: "audio", pcm: floatToPcm16Base64(downsample(input, context.sampleRate, TARGET_RATE)) });
+      const action = c.pause.update(input, performance.now());
+      if (action === "start") c.heard = true;
+      if (action === "commit") c.commit();
+    };
+  };
+  const enable = async () => {
+    enabled = true; sessionWanted = true; const attempt = ++generation;
+    const current = () => enabled && generation === attempt;
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio || !navigator.mediaDevices?.getUserMedia || typeof Worker === "undefined") { stop("blocked", COPY.unsupported); return; }
+    if (!window.crossOriginIsolated) { stop("blocked", "Pendengar lokal belum tersedia di halaman ini. Coba muat ulang."); return; }
+    setState("loading");
+    try {
+      const audio = new Audio(); context = audio;
+      const ready = audio.resume();
+      worker = new Worker(WAKE_WORKER_URL);
+      worker.addEventListener("error", () => { if (current()) stop("deaf", COPY.modelError); });
+      worker.addEventListener("message", ({ data }) => {
+        if (!current()) return;
+        if (data.type === "error") { stop("deaf", COPY.modelError); return; }
+        if (data.type === "ready") { modelReady = true; clearTimeout(loadingTimer); readyToListen(); }
+        if (data.epoch !== epoch) return;
+        if (data.type === "processed") queuedSeconds = Math.max(0, queuedSeconds - data.seconds);
+        if (data.type === "wake" && data.phrase === "Hei Nadi" && ui.root.dataset.state === "armed") {
+          try { beginCommand(data.phrase); } catch { arm(`Koneksi suara terputus. ${COPY.armed}`); }
         }
       });
-      ws.addEventListener("close", fail);
-      ws.addEventListener("error", fail);
-    } catch {
-      if (isCurrent()) endSession("deaf");
-    }
+      loadingTimer = setTimeout(() => { if (current()) stop("deaf", COPY.modelError); }, 60000);
+      const mic = navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(media => {
+        if (!current()) { media.getTracks().forEach(track => track.stop()); return; }
+        stream = media;
+        media.getAudioTracks().forEach(track => track.addEventListener("ended", () => { if (current()) stop("blocked"); }));
+      });
+      await Promise.all([ready, mic]);
+      if (!current()) return;
+      capture();
+      if (document.hidden) { stream.getTracks().forEach(track => { track.enabled = false; }); await audio.suspend(); }
+      if (current() && modelReady) readyToListen();
+    } catch { if (current()) stop("blocked"); }
   };
-
+  const resume = async () => {
+    const attempt = generation;
+    const audio = context;
+    try {
+      await audio.resume();
+      if (!enabled || generation !== attempt || document.hidden) return;
+      if (audio.state !== "running") { setState("resume"); return; }
+      stream.getTracks().forEach(track => { track.enabled = true; });
+      if (modelReady) readyToListen(true); else setState("loading");
+    } catch { if (enabled && generation === attempt) setState("resume"); }
+  };
   ui.button.addEventListener("click", () => {
-    if (session) endSession();
-    else startSession();
+    if (enabled && ui.root.dataset.state === "resume") resume();
+    else if (enabled && command) arm();
+    else if (enabled && ui.root.dataset.state === "armed") {
+      try { beginCommand(); } catch { arm(); }
+    } else if (enabled) stop();
+    else enable();
   });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && session) endSession();
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && enabled) stop(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!enabled || !context) return;
+    if (document.hidden) {
+      closeCommand(); resetWake(); setState("paused");
+      stream?.getTracks().forEach(track => { track.enabled = false; });
+      context.suspend().catch(() => {});
+    } else if (stream) resume();
   });
+  window.addEventListener("pagehide", () => stop());
+  setState("idle");
 }
 
 bindVoice();
-DESKTOP_VOICE.addEventListener("change", ({ matches }) => {
-  if (matches) bindVoice();
-});
+DESKTOP_VOICE.addEventListener("change", ({ matches }) => { if (matches) bindVoice(); });

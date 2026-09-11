@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 const source = (await readFile(new URL("./voice.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "")
+  .replace(/^const WAKE_WORKER_URL = .*;\n/gm, "")
   .replace(/^bindVoice\(\);[\s\S]*$/m, "");
 const flush = () => new Promise(setImmediate);
 test("voice endpoints use the production proxy and preserve local preview and tunnel overrides", async () => {
@@ -37,6 +38,8 @@ const microphone = () => {
 };
 
 function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
+  const workers = [], timers = new Map();
+  let clock = 1000, timerId = 0;
   const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [];
   const button = Object.assign(new EventTarget(), {
     attributes: {},
@@ -69,6 +72,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     destination = {};
     constructor() { contexts.push(this); }
     async resume() { if (resume) await resume.promise; this.state = "running"; }
+    async suspend() { this.state = "suspended"; }
     async close() { this.state = "closed"; }
     createMediaStreamSource() { this.source = node(); return this.source; }
     createBiquadFilter() { this.filter = { ...node(), frequency: { value: 350 }, Q: { value: 1 } }; return this.filter; }
@@ -77,6 +81,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     createGain() { return { ...node(), gain: { value: 1 } }; }
   }
   const window = Object.assign(new EventTarget(), {
+    crossOriginIsolated: true,
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
     matchMedia: (query) => ({ matches: query.includes("prefers-reduced-motion") ? reducedMotion : true }),
@@ -84,62 +89,50 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
   const sandbox = vm.createContext({
     window, document, ui, stateSounds, Event, AbortController,
-    navigator: { mediaDevices: unsupported ? undefined : { getUserMedia() {
-      const request = deferred(); microphones.push(request); return request.promise;
+    CustomEvent: class extends Event { constructor(type, init) { super(type); this.detail = init.detail; } },
+    Worker: class extends EventTarget {
+      messages = [];
+      constructor() { super(); workers.push(this); }
+      postMessage(message) { this.messages.push(message); }
+      terminate() { this.terminated = true; }
+      message(data) { emit(this, "message", { data }); }
+    },
+    setTimeout(fn, ms) { const id = ++timerId; timers.set(id, { fn, at: clock + ms }); return id; },
+    clearTimeout(id) { timers.delete(id); },
+    WAKE_WORKER_URL: "wake-worker.js",
+
+    navigator: { mediaDevices: unsupported ? undefined : { getUserMedia(constraints) {
+      const request = deferred(); request.constraints = constraints; microphones.push(request); return request.promise;
     } } },
     fetch() { const request = deferred(); health.push(request); return request.promise; },
     WebSocket: Socket, AudioContext: unsupported ? undefined : Audio,
     VOICE_BOX_URL: "http://voice.test", VOICE_BOX_WS: "ws://voice.test",
-    performance: { now: () => 1000 },
+    performance: { now: () => clock },
     btoa: (value) => Buffer.from(value, "binary").toString("base64"),
   });
   vm.runInContext(`${source}\ncreateSurface = () => ui; createStateSound = () => state => stateSounds.push(state); bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox,
+    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox, workers,
+    tick(ms) { clock += ms; for (const [id, timer] of [...timers]) if (timer.at <= clock && timers.delete(id)) timer.fn(); },
+    hide(hidden) { document.hidden = hidden; emit(document, "visibilitychange"); },
+    audio(value = 0) { contexts.at(-1).processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(value) } }); },
+    wake(phrase = "Hei Nadi") { const worker = workers.at(-1); const reset = worker.messages.filter(m => m.type === "reset").at(-1); worker.message({ type: "wake", phrase, epoch: reset.epoch }); },
+    async enable() {
+      this.click();
+      const mic = microphone(); microphones.at(-1).resolve(mic.media);
+      await flush(); workers.at(-1).message({ type: "ready" }); await flush();
+      return { track: mic.track, context: contexts.at(-1) };
+    },
     copy: vm.runInContext("COPY", sandbox),
     click: () => emit(button, "click"),
     escape: () => emit(document, "keydown", { key: "Escape" }),
     async connect() {
-      this.click();
-      const { track, media } = microphone();
-      microphones.at(-1).resolve(media);
-      health.at(-1).resolve({ ok: true });
-      await flush();
-      const socket = sockets.at(-1);
-      socket.open();
-      await flush();
-      return { socket, track, context: contexts.at(-1) };
+      const result = await this.enable();
+      await flush(); const socket = sockets.at(-1); socket.open(); socket.message({ type: "ready" });
+      return { ...result, socket };
     },
   };
 }
-
-test("voice energy responds to waveform and frequency, with bounded output", () => {
-  const { sandbox } = browser();
-  assert.equal(vm.runInContext("typeof voiceEnergy", sandbox), "function");
-  const energy = vm.runInContext("voiceEnergy", sandbox);
-  const silence = new Uint8Array(256).fill(128);
-  const low = new Uint8Array(256).fill(132);
-  const loud = new Uint8Array(256).fill(200);
-  const quietFreq = new Uint8Array(128);
-  const loudFreq = new Uint8Array(128).fill(220);
-  assert.equal(energy(silence, quietFreq), 0);
-  assert.ok(energy(loud, quietFreq) > energy(low, quietFreq));
-  assert.ok(energy(low, loudFreq) > energy(low, quietFreq));
-  for (const waveform of [silence, low, loud, new Uint8Array(256).fill(255)]) {
-    const value = energy(waveform, loudFreq);
-    assert.ok(value >= 0 && value <= 1);
-  }
-});
-
-test("energy smoothing attacks faster than release and is frame-rate independent", () => {
-  const { sandbox } = browser();
-  assert.equal(vm.runInContext("typeof smoothVoiceEnergy", sandbox), "function");
-  const smooth = vm.runInContext("smoothVoiceEnergy", sandbox);
-  assert.ok(smooth(0, 1, 0.02) > 1 - smooth(1, 0, 0.02));
-  for (const [current, target] of [[0, 1], [1, 0]]) {
-    assert.ok(Math.abs(smooth(current, target, 0.04) - smooth(smooth(current, target, 0.02), target, 0.02)) < 1e-10);
-  }
-});
 
 test("voice orb preserves face visuals, reacts to audio, and respects reduced motion", () => {
   let restingEyeY = 0;
@@ -398,558 +391,6 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
   }
 });
 
-test("a second click cancels a connecting attempt and closes its late microphone", async () => {
-  const h = browser();
-  h.click();
-  assert.equal(h.ui.root.dataset.state, "connecting");
-  assert.equal(h.ui.button.attributes["aria-pressed"], "true");
-  assert.equal(h.ui.button.attributes["aria-label"], h.copy.cancel);
-  h.click();
-  assert.equal(h.microphones.length, 1);
-  assert.equal(h.ui.root.dataset.state, "idle");
-  const { track, media } = microphone();
-  h.microphones[0].resolve(media);
-  h.health[0].resolve({ ok: true });
-  await flush();
-  assert.equal(track.stopped, true);
-  assert.equal(h.sockets.length, 0);
-});
-
-test("listening waits for both backend ready and audio capture readiness", async () => {
-  for (const backendFirst of [false, true]) {
-    const resume = deferred();
-    const h = browser({ resume });
-    const { socket } = await h.connect();
-    assert.equal(h.ui.root.dataset.state, "connecting");
-    if (backendFirst) socket.message({ type: "ready" });
-    else { resume.resolve(); await flush(); }
-    assert.equal(h.ui.root.dataset.state, "connecting");
-    if (backendFirst) { resume.resolve(); await flush(); }
-    else socket.message({ type: "ready" });
-    assert.equal(h.ui.root.dataset.state, "listening");
-    assert.equal(h.ui.status.textContent, h.copy.listening);
-    h.click();
-  }
-});
-
-test("Escape stops capture and stale socket callbacks cannot revive a session", async () => {
-  const h = browser();
-  const first = await h.connect();
-  first.socket.message({ type: "ready" });
-  h.escape();
-  assert.equal(h.ui.root.dataset.state, "idle");
-  assert.equal(first.track.stopped, true);
-  assert.equal(first.context.state, "closed");
-  assert.equal(first.context.processor.disconnected, true);
-  assert.equal(first.socket.readyState, 3);
-  assert.equal(h.ui.wave.analyser, null);
-  h.click();
-  first.socket.message({ type: "ready" });
-  first.socket.message({ type: "error" });
-  first.socket.message({ type: "decision", action: "show", section: "stale" });
-  emit(first.socket, "error");
-  assert.equal(h.ui.root.dataset.state, "connecting");
-  assert.deepEqual(h.sections, []);
-  h.click();
-});
-
-test("wind filtering feeds both pause detection and visualization without a raw microphone bypass", async () => {
-  const h = browser();
-  const { context } = await h.connect();
-  assert.deepEqual(context.source.connections, [context.filter]);
-  assert.deepEqual(context.filter.connections, [h.ui.wave.analyser, context.processor]);
-  assert.equal(context.filter.type, "highpass");
-  assert.equal(context.filter.frequency.value, 150);
-  assert.equal(context.filter.Q.value, Math.SQRT1_2);
-  h.escape();
-  assert.equal(context.state, "closed");
-});
-
-test("startup captures the first words before health and transcription are ready", async () => {
-  const h = browser();
-  h.click();
-  const { media } = microphone();
-  h.microphones[0].resolve(media);
-  await flush();
-  const context = h.contexts[0];
-  assert.ok(context?.processor, "Capture must start as soon as the microphone is available");
-  const input = new Float32Array([0, 0.5, -0.5]);
-  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => input } });
-  h.health[0].resolve({ ok: true });
-  await flush();
-  const socket = h.sockets[0];
-  socket.open();
-  await flush();
-  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => input } });
-  assert.equal(socket.messages.length, 0, "Wait for transcription readiness before sending");
-  socket.message({ type: "ready" });
-  assert.deepEqual(socket.messages, [
-    { type: "audio", pcm: "AAD/PwDA" }, { type: "audio", pcm: "AAD/PwDA" },
-  ]);
-  socket.message({ type: "ready" });
-  assert.equal(socket.messages.length, 2, "Startup audio is sent exactly once");
-  h.escape();
-});
-
-test("a command finished during startup is submitted once and processing stays protected", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  const feed = (level, now) => {
-    h.sandbox.performance.now = () => now;
-    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
-  };
-  feed(0.1, 1000);
-  feed(0, 3000);
-  feed(0.1, 3100);
-  socket.message({ type: "ready" });
-  assert.equal(socket.messages.at(-1).type, "commit");
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  socket.message({ type: "delta", text: "buka CoDev" });
-  assert.equal(socket.messages.at(-1).type, "commit");
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  feed(0.1, 3200);
-  socket.message({ type: "ready" });
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  socket.message({ type: "decision", action: "show", section: "codev" });
-  feed(0.1, 4000);
-  assert.equal(socket.messages.at(-1).type, "audio");
-  h.escape();
-});
-
-test("cancelled or stalled startup discards buffered audio and releases the microphone", async () => {
-  for (const stalled of [false, true]) {
-    const h = browser();
-    const first = await h.connect();
-    const feed = samples => first.context.processor.onaudioprocess({
-      inputBuffer: { getChannelData: () => samples },
-    });
-    feed(new Float32Array(4096).fill(0.1));
-    if (stalled) feed(new Float32Array(24000 * 31));
-    else h.escape();
-    assert.equal(first.track.stopped, true);
-    assert.equal(first.context.state, "closed");
-    first.socket.message({ type: "ready" });
-    assert.deepEqual(first.socket.messages.map(message => message.type), ["stop"]);
-    const next = await h.connect();
-    next.socket.message({ type: "ready" });
-    assert.deepEqual(next.socket.messages, [], "A new session cannot send old microphone audio");
-    h.escape();
-  }
-});
-
-test("backend errors tear down microphone, socket, and audio context", async () => {
-  const h = browser();
-  const { socket, track, context } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "error" });
-  assert.equal(h.ui.root.dataset.state, "deaf");
-  assert.equal(h.ui.button.attributes["aria-pressed"], "false");
-  assert.equal(track.stopped, true);
-  assert.equal(context.state, "closed");
-  assert.equal(socket.readyState, 3);
-  assert.equal(h.ui.wave.analyser, null);
-});
-
-test("failed health stops a microphone that resolves after the error", async () => {
-  const h = browser();
-  h.click();
-  h.health[0].resolve({ ok: false });
-  await flush();
-  assert.equal(h.ui.root.dataset.state, "deaf");
-  const { track, media } = microphone();
-  h.microphones[0].resolve(media);
-  await flush();
-  assert.equal(track.stopped, true);
-  assert.equal(h.sockets.length, 0);
-});
-
-test("a microphone obtained while health is pending stops immediately on Escape", async () => {
-  const h = browser();
-  h.click();
-  const { track, media } = microphone();
-  h.microphones[0].resolve(media);
-  await flush();
-  h.escape();
-  assert.equal(track.stopped, true);
-  assert.equal(h.ui.root.dataset.state, "idle");
-});
-
-test("AudioContext resume rejection cleans up the entire session", async () => {
-  const resume = deferred();
-  const h = browser({ resume });
-  const { socket, track, context } = await h.connect();
-  resume.reject(new Error("audio blocked"));
-  await flush();
-  assert.equal(h.ui.root.dataset.state, "deaf");
-  assert.equal(track.stopped, true);
-  assert.equal(context.state, "closed");
-  assert.equal(socket.readyState, 3);
-});
-
-test("denied and unsupported microphones show an inactive actionable error", async () => {
-  const denied = browser();
-  denied.click();
-  denied.microphones[0].reject(new Error("NotAllowedError"));
-  await flush();
-  assert.equal(denied.ui.root.dataset.state, "blocked");
-  assert.equal(denied.ui.status.textContent, denied.copy.blocked);
-  assert.equal(denied.ui.button.attributes["aria-pressed"], "false");
-  const unsupported = browser({ unsupported: true });
-  unsupported.click();
-  assert.equal(unsupported.ui.status.textContent, unsupported.copy.unsupported);
-  assert.equal(unsupported.ui.button.attributes["aria-pressed"], "false");
-  assert.equal(unsupported.microphones.length, 0);
-});
-
-test("a cancelled startup cannot stop or replace a newer session", async () => {
-  const h = browser();
-  h.click();
-  h.click();
-  const current = await h.connect();
-  current.socket.message({ type: "ready" });
-  const stale = microphone();
-  h.microphones[0].resolve(stale.media);
-  h.health[0].resolve({ ok: false });
-  await flush();
-  assert.equal(stale.track.stopped, true);
-  assert.equal(current.track.stopped, false);
-  assert.equal(h.sockets.length, 1);
-  assert.equal(h.ui.root.dataset.state, "listening");
-  h.click();
-});
-
-test("protocol keeps transcripts in listening, navigates decisions, and sends PCM audio", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "delta", text: "buka proyek" });
-  assert.equal(h.ui.root.dataset.state, "listening");
-  assert.equal(h.ui.transcript.textContent, "buka proyek");
-  assert.equal(h.ui.root.dataset.speaking, "true", "Recognized speech enables an audio-gated nod");
-  socket.message({ type: "final", text: "buka proyek" });
-  assert.equal(h.ui.root.dataset.speaking, "false", "Processing clears the speech signal");
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  assert.equal(h.ui.transcript.textContent, "");
-  socket.message({ type: "decision", action: "show", section: "projects" });
-  assert.deepEqual(h.sections, ["projects"]);
-  assert.equal(h.ui.root.dataset.state, "listening");
-  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array([0, 0.5, -0.5]) } });
-  assert.deepEqual(socket.messages.at(-1), { type: "audio", pcm: "AAD/PwDA" });
-  socket.message({ type: "final" });
-  socket.message({ type: "noop" });
-  assert.equal(h.ui.root.dataset.state, "listening");
-  h.click();
-  assert.deepEqual(socket.messages.at(-1), { type: "stop" });
-});
-
-test("speech commits after a pause before manual transcription produces captions", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "speech_started", item_id: "empty" });
-  socket.message({ type: "delta", item_id: "empty", text: "" });
-  socket.message({ type: "delta", item_id: "empty", text: "   " });
-  assert.equal(h.ui.transcript.textContent, "");
-  socket.message({ type: "speech_stopped", item_id: "empty" });
-  socket.message({ type: "final", item_id: "empty", transcript: "" });
-  assert.equal(h.ui.root.dataset.state, "listening", "Empty finals must not process");
-  const frame = (level, now) => {
-    h.sandbox.performance.now = () => now;
-    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
-  };
-  frame(0.1, 1000);
-  for (let now = 1100; now <= 3000; now += 100) frame(0, now);
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
-  assert.equal(h.ui.root.dataset.state, "thinking", "Detected speech must commit before captions arrive");
-  socket.message({ type: "delta", item_id: "empty", text: "buka Arkiv" });
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  assert.ok(socket.messages.some(message => message.type === "commit"));
-  socket.message({ type: "noop", item_id: "empty" });
-  assert.equal(h.ui.root.dataset.state, "listening", "An unusable transcript releases the turn");
-  h.escape();
-});
-
-test("processing pauses audio streaming and ignores interruptions until the original result", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  const frame = () => context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.1) } });
-  socket.message({ type: "ready" });
-  socket.message({ type: "speech_started", item_id: "first" });
-  socket.message({ type: "delta", item_id: "first", text: "CoDev" });
-  frame();
-  socket.message({ type: "final", item_id: "first" });
-  const sent = socket.messages.length;
-  frame();
-  assert.equal(socket.messages.length, sent);
-  socket.message({ type: "speech_started", item_id: "interruption" });
-  socket.message({ type: "delta", item_id: "interruption", text: "bukan, buka Arkiv" });
-  socket.message({ type: "final", item_id: "interruption" });
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  assert.equal(h.ui.transcript.textContent, "");
-  socket.message({ type: "decision", item_id: "first", action: "show", section: "codev" });
-  assert.deepEqual(h.sections, ["codev"]);
-  assert.equal(h.ui.root.dataset.state, "listening");
-  socket.message({ type: "delta", item_id: "interruption", text: "late caption" });
-  assert.equal(h.ui.transcript.textContent, "");
-  frame();
-  assert.equal(socket.messages.length, sent + 1);
-  socket.message({ type: "speech_started", item_id: "next" });
-  socket.message({ type: "delta", item_id: "next", text: "buka Arkiv" });
-  assert.equal(h.ui.transcript.textContent, "buka Arkiv");
-  h.escape();
-});
-
-test("successive requests accept their first caption after the audio was submitted", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  socket.message({ type: "ready" });
-  const frame = (level, now) => {
-    h.sandbox.performance.now = () => now;
-    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
-  };
-  for (const [item, start] of [["A", 1000], ["B", 5000]]) {
-    frame(0.1, start);
-    socket.message({ type: "speech_started", item_id: item });
-    socket.message({ type: "delta", item_id: item, text: "CoDev" });
-    for (let now = start + 100; now <= start + 1900; now += 100) frame(0, now);
-    assert.equal(h.ui.root.dataset.state, "thinking");
-    const sent = socket.messages.length;
-    socket.message({ type: "speech_started", item_id: item });
-    socket.message({ type: "delta", item_id: item, text: "CoDev" });
-    frame(0.1, start + 2000);
-    assert.equal(socket.messages.length, sent);
-    socket.message({ type: "final", item_id: item });
-    socket.message({ type: "decision", item_id: item, action: "show", section: "codev" });
-    assert.equal(h.ui.root.dataset.state, "listening");
-  }
-  assert.deepEqual(h.sections, ["codev", "codev"]);
-  h.escape();
-});
-
-test("recoverable turn errors keep the microphone and next command available", async () => {
-  const h = browser();
-  const { socket, track, context } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "final" });
-  socket.message({ type: "error", recoverable: true });
-  assert.equal(track.stopped, false);
-  assert.equal(context.state, "running");
-  assert.equal(h.ui.root.dataset.state, "listening");
-  socket.message({ type: "delta", text: "buka Arkiv" });
-  assert.equal(h.ui.transcript.textContent, "buka Arkiv");
-  h.escape();
-});
-
-test("microphone noise during processing does not discard a valid CoDev decision", async () => {
-  const h = browser();
-  const { socket, context, track } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "speech_started", item_id: "codev-request" });
-  socket.message({ type: "delta", item_id: "codev-request", text: "CoDev" });
-  socket.message({ type: "final", item_id: "codev-request", transcript: "CoDev" });
-  const noise = Float32Array.from({ length: 4096 }, (_, i) => i % 2 ? 0.018 : -0.018);
-  context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => noise } });
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  socket.message({ type: "decision", item_id: "codev-request", action: "show", section: "codev" });
-  assert.deepEqual(h.sections, ["codev"]);
-  assert.equal(track.stopped, false);
-  h.escape();
-});
-
-test("short quiet commands and transcript-only speech finish once after a natural pause", () => {
-  const { sandbox } = browser();
-  const create = vm.runInContext("createPauseDetector", sandbox);
-  const pause = create();
-  const quiet = new Float32Array(4096);
-  const speech = new Float32Array(4096).fill(0.018);
-  assert.equal(pause.update(quiet, 1000), null);
-  assert.equal(pause.update(speech, 1170), "start");
-  assert.equal(pause.update(quiet, 1870), null);
-  assert.equal(pause.update(quiet, 2370), null);
-  assert.equal(pause.update(quiet, 3070), "commit");
-  assert.equal(pause.update(quiet, 3700), null);
-  pause.transcript(4000);
-  assert.equal(pause.update(quiet, 4500), null);
-  pause.transcript(4600);
-  assert.equal(pause.update(quiet, 5100), null);
-  assert.equal(pause.update(quiet, 5800), null);
-  assert.equal(pause.update(quiet, 6500), "commit");
-  assert.equal(pause.update(quiet, 7000), null);
-  pause.transcript(7200);
-  pause.reset();
-  assert.equal(pause.update(quiet, 9000), null);
-});
-
-test("background noise and trailing captions cannot keep a finished foreground command open", () => {
-  const create = vm.runInContext("createPauseDetector", browser().sandbox);
-  const pause = create();
-  const frame = level => Float32Array.from({ length: 4096 }, (_, i) => i % 2 ? level : -level);
-  for (let now = 1000; now <= 3000; now += 100) {
-    pause.update(frame(0.1), now);
-    pause.transcript(now);
-  }
-  let committedAt;
-  for (let now = 3100; now <= 5000; now += 100) {
-    pause.transcript(now); // Distant conversation continues generating captions.
-    if (pause.update(frame(0.024), now) === "commit") {
-      committedAt = now;
-      break;
-    }
-  }
-  assert.ok(committedAt >= 4700 && committedAt <= 5000, `Expected a natural pause, got ${committedAt}`);
-  pause.reset();
-  for (let now = 5100; now <= 8000; now += 100) {
-    assert.equal(pause.update(frame(0.024), now), null, "Learned room noise should stay idle");
-  }
-});
-
-test("a long foreground sentence and brief pauses are not cut by a fixed timeout", () => {
-  const create = vm.runInContext("createPauseDetector", browser().sandbox);
-  const pause = create();
-  for (let now = 1000; now <= 9000; now += 100) {
-    const level = now >= 4000 && now <= 4500 ? 0.02 : [0.07, 0.1, 0.06][now / 100 % 3];
-    assert.notEqual(pause.update(new Float32Array(4096).fill(level), now), "commit");
-    pause.transcript(now);
-  }
-});
-
-test("softer speech after a loud opening keeps streaming beyond twelve seconds", async () => {
-  const h = browser();
-  const { socket, context, track } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "delta", text: "buka CoDev" });
-  const step = 4096 / context.sampleRate * 1000;
-  const feed = (level, elapsed) => {
-    h.sandbox.performance.now = () => 1000 + elapsed;
-    context.processor.onaudioprocess({
-      inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) },
-    });
-  };
-  let elapsed = 0;
-  for (; elapsed < 12000; elapsed += step) {
-    const level = elapsed < 1000 ? 0.18 : [0.018, 0.045, 0.025, 0.055][Math.floor(elapsed / step) % 4];
-    feed(level, elapsed);
-    assert.equal(h.ui.root.dataset.state, "listening", `Speech cut off at ${elapsed}ms`);
-  }
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 0);
-  const speechEnd = elapsed;
-  for (; elapsed < speechEnd + 2200; elapsed += step) feed(0.008, elapsed);
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  assert.equal(track.stopped, false);
-  h.escape();
-});
-
-test("laptop speech below the old energy floor stays listening until a real pause", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  socket.message({ type: "ready" });
-  let now = 1000;
-  const feed = level => {
-    h.sandbox.performance.now = () => now;
-    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
-    now += 4096 / 48000 * 1000;
-  };
-  // Rounded RMS levels from the laptop trace that submitted mid-sentence.
-  const speech = [0.01281, 0.00994, 0.01315, 0.01335, 0.01249, 0.01233,
-    0.01027, 0.01394, 0.01265, 0.01216, 0.01144, 0.00869, 0.00531,
-    0.01269, 0.0111, 0.01154, 0.01109, 0.00875, 0.00991, 0.00901, 0.00638, 0.00526];
-  for (let i = 0; i < 10; i++) feed(0.0005);
-  feed(0.01471);
-  for (let i = 0; i < 8; i++) feed(0.01);
-  feed(0.01577);
-  for (let i = 0; i < 150; i++) {
-    feed(speech[i % speech.length]);
-    assert.equal(h.ui.root.dataset.state, "listening", `Speech cut off at frame ${i}`);
-  }
-  for (let i = 0; i < 24; i++) feed(0.0005);
-  assert.equal(socket.messages.filter(message => message.type === "commit").length, 1);
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  h.escape();
-});
-
-test("a breathing pause in background noise keeps the sentence open until speech resumes", () => {
-  const create = vm.runInContext("createPauseDetector", browser().sandbox);
-  const pause = create();
-  const frame = level => new Float32Array(4096).fill(level);
-  for (let now = 1000; now <= 2000; now += 100) pause.update(frame(0.1), now);
-  for (let now = 2100; now <= 3400; now += 100) {
-    assert.notEqual(pause.update(frame(0.024), now), "commit", "A breath should not submit half a sentence");
-  }
-  for (let now = 3500; now <= 5000; now += 100) {
-    assert.notEqual(pause.update(frame(0.09), now), "commit");
-  }
-  let commits = 0;
-  for (let now = 5100; now <= 7100; now += 100) {
-    if (pause.update(frame(0.024), now) === "commit") commits++;
-  }
-  assert.equal(commits, 1, "Background noise must not hold the completed sentence open");
-});
-
-test("late captions cannot reopen a turn that was already submitted", async () => {
-  const h = browser();
-  const { socket, context } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "speech_started", item_id: "A" });
-  const frame = (level, now) => {
-    h.sandbox.performance.now = () => now;
-    context.processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(level) } });
-  };
-  frame(0.1, 1000);
-  socket.message({ type: "delta", item_id: "A", text: "Buka CoDev" });
-  for (let now = 1100; now <= 2900; now += 100) frame(0.02, now);
-  assert.ok(socket.messages.some(message => message.type === "commit"));
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  socket.message({ type: "delta", item_id: "A", text: "Buka CoDev suara latar" });
-  assert.equal(h.ui.root.dataset.state, "thinking");
-  assert.equal(h.ui.transcript.textContent, "");
-  socket.message({ type: "decision", item_id: "A", action: "show", section: "codev" });
-  socket.message({ type: "speech_started", item_id: "B" });
-  socket.message({ type: "delta", item_id: "B", text: "Sekarang Arkiv" });
-  assert.equal(h.ui.transcript.textContent, "Sekarang Arkiv");
-  h.escape();
-});
-
-test("unmatched commands trigger eye feedback without moving the button", async () => {
-  const h = browser();
-  const { socket, track } = await h.connect();
-  socket.message({ type: "ready" });
-  socket.message({ type: "noop" });
-  assert.equal(h.animations.length, 0);
-  assert.ok(!h.ui.root.dataset.fallback);
-  socket.message({ type: "decision", action: "clarify", hypotheses: [] });
-  const first = h.ui.root.dataset.fallback;
-  assert.ok(first, "An unmatched decision starts fallback feedback");
-  assert.equal(h.animations.length, 0, "The button never animates");
-  assert.equal(h.ui.root.dataset.state, "listening");
-  assert.equal(track.stopped, false);
-  socket.message({ type: "decision", action: "noop" });
-  assert.ok(h.ui.root.dataset.fallback && h.ui.root.dataset.fallback !== first, "Each failed command gets one new reaction");
-  socket.message({ type: "decision", action: "show", section: "codev" });
-  assert.ok(!h.ui.root.dataset.fallback, "Successful navigation cancels fallback");
-  socket.message({ type: "final" });
-  socket.message({ type: "noop" });
-  assert.ok(!h.ui.root.dataset.fallback, "Empty silence is not a failed command");
-  socket.message({ type: "decision", action: "noop" });
-  socket.message({ type: "speech_started" });
-  assert.ok(!h.ui.root.dataset.fallback, "New speech interrupts feedback");
-  socket.message({ type: "decision", action: "noop" });
-  socket.message({ type: "delta", text: "Buka CoDev" });
-  assert.ok(!h.ui.root.dataset.fallback, "A caption also interrupts feedback without a speech-start event");
-  socket.message({ type: "decision", action: "noop" });
-  h.escape();
-  assert.ok(!h.ui.root.dataset.fallback, "Stopping clears feedback");
-  assert.equal(h.animations.length, 0);
-  const reduced = browser({ reducedMotion: true });
-  const r = await reduced.connect();
-  r.socket.message({ type: "ready" });
-  r.socket.message({ type: "decision", action: "noop" });
-  assert.equal(reduced.animations.length, 0);
-  assert.match(reduced.ui.status.textContent, /belum ditemukan/i);
-  reduced.escape();
-});
-
 test("fallback shakes its eyes once and returns within 500 ms with a stationary orb", () => {
   const setup = (reduced = false) => {
     let frame, next, now = 1000;
@@ -983,6 +424,8 @@ test("fallback shakes its eyes once and returns within 500 ms with a stationary 
   h.wave.refresh();
   const frames = h.run(30);
   const center = frame => (frame.layers[1].position[0] + frame.layers[2].position[0]) / 2;
+  const captions = setup(); captions.root.dataset.fallback = "caption"; captions.root.dataset.speaking = "true"; captions.wave.refresh();
+  assert.ok(captions.run(15).map(center).some(value => value < -10), "Incoming captions must not cancel the shake");
   const centers = frames.map(center);
   assert.equal(centers.filter((value, i) => value < -10 && (i === 0 || centers[i - 1] >= -10)).length, 1,
     "Eyes make one decisive sweep left");
@@ -1061,6 +504,290 @@ test("voice navigation starts at the project list and centers individual content
   }
 });
 
+test("voice demo controls reuse page triggers and only control an open demo", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
+  const dialog = { open: false, close() { this.open = false; } };
+  let played = 0, paused = 0, selected;
+  const video = { currentTime: 15, play() { played++; return Promise.resolve(); }, pause() { paused++; } };
+  const elements = {
+    'project-demo-dialog': dialog, 'project-demo-video': video,
+    bikinkonten: { querySelector: () => ({ click() { selected = 'bikinkonten'; dialog.open = true; } }) },
+    lubna: { querySelector: () => ({ click() { selected = 'lubna'; dialog.open = true; } }) },
+    codev: { querySelector: () => null },
+  };
+  const sandbox = vm.createContext({ document: { getElementById: id => elements[id] }, window: {} });
+  vm.runInContext(`${navigation}\ncurrentVoiceSection = () => 'lubna'; showSection = () => true;`, sandbox);
+  const action = vm.runInContext('runPageAction', sandbox);
+  assert.equal(action({ action: 'video_pause' }), false);
+  assert.equal(action({ action: 'demo', section: 'codev' }), false);
+  assert.equal(action({ action: 'demo', section: 'https://evil.test' }), false);
+  assert.equal(action({ action: 'demo', section: 'bikinkonten' }), true);
+  assert.equal(selected, 'bikinkonten');
+  assert.equal(action({ action: 'video_pause' }), true);
+  assert.equal(paused, 1);
+  assert.equal(action({ action: 'video_resume' }), true);
+  assert.equal(played, 1);
+  assert.equal(action({ action: 'video_restart' }), true);
+  assert.equal(video.currentTime, 0);
+  assert.equal(played, 2);
+  assert.equal(action({ action: 'video_close' }), true);
+  assert.equal(dialog.open, false);
+  assert.equal(action({ action: 'video_resume' }), false);
+  assert.equal(action({ action: 'demo', section: 'current' }), true);
+  assert.equal(selected, 'lubna');
+});
+
+test("demo modal raises the existing voice surface and restores it on close and cleanup", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const source = work.slice(work.indexOf('function bindProjectDemoModal()'), work.indexOf('function applyShot()'));
+  const node = () => Object.assign(new EventTarget(), { classList: { add() {}, remove() {} } });
+  const body = Object.assign(node(), { append(el) { el.parentElement = this; } });
+  const voice = { hidden: false, parentElement: body, setAttribute() {}, removeAttribute() {}, showPopover() { this.raised = true; }, hidePopover() { this.raised = false; } };
+  const closeButton = node(), title = {};
+  const video = { pause() {}, removeAttribute() {}, load() {}, play: () => Promise.resolve() };
+  const trigger = Object.assign(node(), { dataset: { demoSrc: 'demo.mp4' } });
+  const dialog = Object.assign(node(), {
+    append(el) { el.parentElement = this; }, getBoundingClientRect() {},
+    showModal() { this.open = true; },
+    close() { this.open = false; this.dispatchEvent(new Event('close')); },
+    querySelector(selector) { return selector === '.project-demo-close' ? closeButton : voice.parentElement === this ? voice : null; },
+  });
+  const elements = { 'project-demo-dialog': dialog, 'project-demo-video': video, 'project-demo-title': title, 'voice-surface': voice };
+  const sandbox = vm.createContext({
+    document: { body, getElementById: id => elements[id], querySelectorAll: () => [trigger] },
+    window: { clearTimeout() {} }, reducedMotionMedia: { matches: false },
+  });
+  const cleanup = vm.runInContext(`${source}\nbindProjectDemoModal()`, sandbox);
+  trigger.dispatchEvent(new Event('click'));
+  assert.equal(voice.parentElement, dialog);
+  assert.equal(voice.raised, true);
+  dialog.close();
+  assert.equal(voice.parentElement, body);
+  assert.equal(voice.raised, false);
+  trigger.dispatchEvent(new Event('click'));
+  cleanup();
+  assert.equal(voice.parentElement, body);
+  assert.equal(voice.raised, false);
+});
+
+test("click opens a persistent session; thanks ends it and voice can reopen it", async () => {
+  const h = browser(); await h.enable();
+  assert.equal(h.sockets.length, 1, "First click must start cloud listening");
+  const socket = h.sockets[0]; socket.open(); socket.message({ type: "ready" });
+  h.tick(8000); assert.equal(h.ui.root.dataset.state, "listening", "Silence does not end the session");
+  socket.message({ type: "delta", text: "Buka CoDev", item_id: "a" });
+  h.tick(2000); h.audio();
+  socket.message({ type: "decision", action: "show", section: "codev", item_id: "a" });
+  assert.equal(h.ui.root.dataset.state, "listening"); assert.equal(socket.readyState, 1);
+  assert.equal(h.sections.at(-1), "codev");
+  socket.message({ type: "delta", text: "terimakasih", item_id: "b" });
+  assert.equal(h.ui.root.dataset.state, "armed"); assert.equal(socket.readyState, 3);
+  const count = socket.messages.length; h.audio(.1); assert.equal(socket.messages.length, count);
+  h.wake(); assert.equal(h.sockets.length, 2); h.wake(); assert.equal(h.sockets.length, 2);
+  h.click(); assert.equal(h.ui.root.dataset.state, "armed");
+  h.click(); assert.equal(h.sockets.length, 3); assert.equal(h.microphones.length, 1); h.escape();
+});
+
+test("no-action shakes while keeping listening and final thank-you cancels pending interpretation", async () => {
+  const h = browser(); await h.enable();
+  const socket = h.sockets[0]; assert.ok(socket); socket.open(); socket.message({ type: "ready" });
+  socket.message({ type: "delta", text: "tidak dikenal", item_id: "a" }); h.tick(2000); h.audio();
+  socket.message({ type: "noop", item_id: "a" });
+  assert.equal(h.ui.root.dataset.state, "listening"); assert.ok(h.ui.root.dataset.fallback);
+  socket.message({ type: "delta", text: "thanksgiving", item_id: "b" });
+  h.tick(499); assert.ok(h.ui.root.dataset.fallback); h.tick(1); assert.equal(h.ui.root.dataset.fallback, "");
+  socket.message({ type: "delta", text: "thanksgiving", item_id: "b" });
+  assert.equal(h.ui.root.dataset.state, "listening"); h.tick(2000); h.audio();
+  socket.message({ type: "final", transcript: "Thanks!", item_id: "b" });
+  assert.equal(h.ui.root.dataset.state, "armed");
+  socket.message({ type: "decision", action: "show", section: "codev", item_id: "b" });
+  assert.equal(h.sections.length, 0); h.escape();
+});
+
+test("a retired result cannot act on a later turn in the same conversation", async () => {
+  const h = browser(); const { socket } = await h.connect();
+  socket.message({ type: "delta", item_id: "a", text: "buka CoDev" }); h.tick(2000); h.audio();
+  socket.message({ type: "decision", item_id: "a", action: "show", section: "codev" });
+  socket.message({ type: "delta", item_id: "b", text: "buka Arkiv" }); h.tick(2000); h.audio();
+  socket.message({ type: "decision", item_id: "a", action: "show", section: "codev" });
+  assert.equal(h.sections.length, 1); assert.equal(h.ui.root.dataset.state, "thinking");
+  socket.message({ type: "decision", item_id: "b", action: "show", section: "arkiv" });
+  assert.deepEqual(h.sections, ["codev", "arkiv"]); assert.equal(h.ui.root.dataset.state, "listening");
+  h.escape();
+});
+
+test("wake mode keeps idle audio local and reuses the microphone across sessions", async () => {
+  const h = browser(); const { track } = await h.enable();
+  assert.equal(h.microphones[0].constraints.audio.autoGainControl, true);
+  h.click(); assert.equal(h.ui.root.dataset.state, "armed");
+  const first = h.sockets[0]; const count = first.messages.length;
+  h.audio(.1); assert.equal(first.messages.length, count); assert.equal(h.health.length, 0);
+  h.wake("Halo Nadi"); assert.equal(h.sockets.length, 1);
+  h.wake(); h.wake(); assert.equal(h.sockets.length, 2);
+  const socket = h.sockets[1]; h.audio(.1); assert.equal(socket.messages.length, 0);
+  socket.open(); socket.message({ type: "ready" });
+  assert.equal(socket.messages.filter(m => m.type === "audio").length, 1);
+  h.tick(2000); h.audio(); assert.equal(h.ui.root.dataset.state, "thinking");
+  const sent = socket.messages.length; h.audio(.1); assert.equal(socket.messages.length, sent);
+  socket.message({ type: "decision", action: "show", section: "codev" });
+  assert.equal(h.sections[0], "codev"); assert.equal(h.ui.root.dataset.state, "listening");
+  socket.message({ type: "delta", text: "Terima kasih!" });
+  assert.equal(h.ui.root.dataset.state, "armed"); assert.equal(socket.readyState, 3);
+  assert.equal(track.stopped, false); assert.equal(h.microphones.length, 1);
+  h.escape(); assert.equal(track.stopped, true); assert.equal(h.workers[0].terminated, true);
+});
+
+test("session bounds connections, audio buffers and processing without ending on silence", async () => {
+  const h = browser(); await h.enable(); const stale = h.sockets[0];
+  h.audio(.1); h.tick(10000); assert.equal(h.ui.root.dataset.state, "armed");
+  stale.message({ type: "ready" }); assert.equal(h.ui.root.dataset.state, "armed");
+  h.wake(); let socket = h.sockets.at(-1); socket.open(); socket.message({ type: "ready" });
+  h.tick(8000); assert.equal(h.ui.root.dataset.state, "listening");
+  h.tick(22000); assert.equal(socket.messages.at(-1).type, "commit");
+  socket.message({ type: "noop" }); assert.equal(h.ui.root.dataset.state, "listening");
+  assert.equal(h.ui.root.dataset.fallback, "", "Silence flush must not shake");
+  h.audio(.1); h.tick(30000); assert.equal(h.ui.root.dataset.state, "thinking");
+  h.tick(30000); assert.equal(h.ui.root.dataset.state, "armed");
+  socket.message({ type: "decision", action: "show", section: "codev" }); assert.equal(h.sections.length, 0);
+  h.wake(); socket = h.sockets.at(-1); socket.message({ type: "error" });
+  assert.equal(h.ui.root.dataset.state, "armed"); h.escape();
+});
+
+test("cancel during initialization cleans up late microphone and worker results", async () => {
+  const h = browser(); h.click(); const worker = h.workers[0]; h.escape();
+  const mic = microphone(); h.microphones[0].resolve(mic.media); await flush();
+  worker.message({ type: "ready" });
+  assert.equal(mic.track.stopped, true); assert.equal(worker.terminated, true);
+  assert.equal(h.ui.root.dataset.state, "idle"); assert.equal(h.sockets.length, 0);
+});
+
+test("hidden pages pause sessions and resume silently without another microphone request", async () => {
+  const h = browser(); const { socket } = await h.connect();
+  const tones = () => h.stateSounds.filter(state => ["armed", "connecting", "listening"].includes(state)).length;
+  const before = tones();
+  for (let i = 0; i < 4; i++) {
+    h.hide(true); assert.equal(h.ui.root.dataset.state, "paused");
+    const count = socket.messages.length; h.audio(.2); assert.equal(socket.messages.length, count);
+    h.hide(false); await flush(); const next = h.sockets.at(-1); next.open(); next.message({ type: "ready" });
+    assert.equal(h.ui.root.dataset.state, "listening");
+  }
+  assert.equal(tones(), before, "Returning to the browser must be silent");
+  assert.equal(h.microphones.length, 1); h.escape();
+});
+
+test("denied microphone and worker failure stop all resources without cloud fallback", async () => {
+  const h = browser(); h.click(); h.microphones[0].reject(new Error("denied")); await flush();
+  assert.equal(h.ui.root.dataset.state, "blocked"); assert.equal(h.workers[0].terminated, true);
+  assert.equal(h.sockets.length, 0);
+  const g = browser(); const { track } = await g.enable();
+  g.workers[0].message({ type: "error", message: "model failed" });
+  assert.equal(track.stopped, true); assert.ok(g.sockets.every(socket => socket.readyState === 3));
+});
+
+test("voice energy responds to waveform and frequency, with bounded output", () => {
+  const { sandbox } = browser();
+  assert.equal(vm.runInContext("typeof voiceEnergy", sandbox), "function");
+  const energy = vm.runInContext("voiceEnergy", sandbox);
+  const silence = new Uint8Array(256).fill(128);
+  const low = new Uint8Array(256).fill(132);
+  const loud = new Uint8Array(256).fill(200);
+  const quietFreq = new Uint8Array(128);
+  const loudFreq = new Uint8Array(128).fill(220);
+  assert.equal(energy(silence, quietFreq), 0);
+  assert.ok(energy(loud, quietFreq) > energy(low, quietFreq));
+  assert.ok(energy(low, loudFreq) > energy(low, quietFreq));
+  for (const waveform of [silence, low, loud, new Uint8Array(256).fill(255)]) {
+    const value = energy(waveform, loudFreq);
+    assert.ok(value >= 0 && value <= 1);
+  }
+});
+
+test("energy smoothing attacks faster than release and is frame-rate independent", () => {
+  const { sandbox } = browser();
+  assert.equal(vm.runInContext("typeof smoothVoiceEnergy", sandbox), "function");
+  const smooth = vm.runInContext("smoothVoiceEnergy", sandbox);
+  assert.ok(smooth(0, 1, 0.02) > 1 - smooth(1, 0, 0.02));
+  for (const [current, target] of [[0, 1], [1, 0]]) {
+    assert.ok(Math.abs(smooth(current, target, 0.04) - smooth(smooth(current, target, 0.02), target, 0.02)) < 1e-10);
+  }
+});
+
+test("short quiet commands and transcript-only speech finish once after a natural pause", () => {
+  const { sandbox } = browser();
+  const create = vm.runInContext("createPauseDetector", sandbox);
+  const pause = create();
+  const quiet = new Float32Array(4096);
+  const speech = new Float32Array(4096).fill(0.018);
+  assert.equal(pause.update(quiet, 1000), null);
+  assert.equal(pause.update(speech, 1170), "start");
+  assert.equal(pause.update(quiet, 1870), null);
+  assert.equal(pause.update(quiet, 2370), null);
+  assert.equal(pause.update(quiet, 3070), "commit");
+  assert.equal(pause.update(quiet, 3700), null);
+  pause.transcript(4000);
+  assert.equal(pause.update(quiet, 4500), null);
+  pause.transcript(4600);
+  assert.equal(pause.update(quiet, 5100), null);
+  assert.equal(pause.update(quiet, 5800), null);
+  assert.equal(pause.update(quiet, 6500), "commit");
+  assert.equal(pause.update(quiet, 7000), null);
+  pause.transcript(7200);
+  pause.reset();
+  assert.equal(pause.update(quiet, 9000), null);
+});
+
+test("background noise and trailing captions cannot keep a finished foreground command open", () => {
+  const create = vm.runInContext("createPauseDetector", browser().sandbox);
+  const pause = create();
+  const frame = level => Float32Array.from({ length: 4096 }, (_, i) => i % 2 ? level : -level);
+  for (let now = 1000; now <= 3000; now += 100) {
+    pause.update(frame(0.1), now);
+    pause.transcript(now);
+  }
+  let committedAt;
+  for (let now = 3100; now <= 5000; now += 100) {
+    pause.transcript(now); // Distant conversation continues generating captions.
+    if (pause.update(frame(0.024), now) === "commit") {
+      committedAt = now;
+      break;
+    }
+  }
+  assert.ok(committedAt >= 4700 && committedAt <= 5000, `Expected a natural pause, got ${committedAt}`);
+  pause.reset();
+  for (let now = 5100; now <= 8000; now += 100) {
+    assert.equal(pause.update(frame(0.024), now), null, "Learned room noise should stay idle");
+  }
+});
+
+test("a long foreground sentence and brief pauses are not cut by a fixed timeout", () => {
+  const create = vm.runInContext("createPauseDetector", browser().sandbox);
+  const pause = create();
+  for (let now = 1000; now <= 9000; now += 100) {
+    const level = now >= 4000 && now <= 4500 ? 0.02 : [0.07, 0.1, 0.06][now / 100 % 3];
+    assert.notEqual(pause.update(new Float32Array(4096).fill(level), now), "commit");
+    pause.transcript(now);
+  }
+});
+
+test("a breathing pause in background noise keeps the sentence open until speech resumes", () => {
+  const create = vm.runInContext("createPauseDetector", browser().sandbox);
+  const pause = create();
+  const frame = level => new Float32Array(4096).fill(level);
+  for (let now = 1000; now <= 2000; now += 100) pause.update(frame(0.1), now);
+  for (let now = 2100; now <= 3400; now += 100) {
+    assert.notEqual(pause.update(frame(0.024), now), "commit", "A breath should not submit half a sentence");
+  }
+  for (let now = 3500; now <= 5000; now += 100) {
+    assert.notEqual(pause.update(frame(0.09), now), "commit");
+  }
+  let commits = 0;
+  for (let now = 5100; now <= 7100; now += 100) {
+    if (pause.update(frame(0.024), now) === "commit") commits++;
+  }
+  assert.equal(commits, 1, "Background noise must not hold the completed sentence open");
+});
+
 test("voice showcase actions use the visible product, focus its CTA, and restore navigation", async () => {
   const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
   const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
@@ -1090,7 +817,7 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   vm.runInContext(`${navigation}\nwindow.xstationShowSection = showSection; window.xstationPageAction = runPageAction;`, h.sandbox);
   const { socket } = await h.connect();
   socket.message({ type: 'ready' });
-  const action = payload => socket.message({ type: 'decision', ...payload });
+  const action = payload => { const active = h.sockets.at(-1); active.message({ type: 'delta', text: 'perintah' }); h.tick(2000); h.audio(); active.message({ type: 'decision', ...payload }); };
   action({ action: 'back' });
   assert.equal(vm.runInContext('voiceActionLog.index', h.sandbox), -1, 'Empty history cannot go back');
   action({ action: 'next' });
@@ -1179,89 +906,27 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   h.escape();
 });
 
-test("voice demo controls reuse page triggers and only control an open demo", async () => {
-  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
-  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
-  const dialog = { open: false, close() { this.open = false; } };
-  let played = 0, paused = 0, selected;
-  const video = { currentTime: 15, play() { played++; return Promise.resolve(); }, pause() { paused++; } };
-  const elements = {
-    'project-demo-dialog': dialog, 'project-demo-video': video,
-    bikinkonten: { querySelector: () => ({ click() { selected = 'bikinkonten'; dialog.open = true; } }) },
-    lubna: { querySelector: () => ({ click() { selected = 'lubna'; dialog.open = true; } }) },
-    codev: { querySelector: () => null },
-  };
-  const sandbox = vm.createContext({ document: { getElementById: id => elements[id] }, window: {} });
-  vm.runInContext(`${navigation}\ncurrentVoiceSection = () => 'lubna'; showSection = () => true;`, sandbox);
-  const action = vm.runInContext('runPageAction', sandbox);
-  assert.equal(action({ action: 'video_pause' }), false);
-  assert.equal(action({ action: 'demo', section: 'codev' }), false);
-  assert.equal(action({ action: 'demo', section: 'https://evil.test' }), false);
-  assert.equal(action({ action: 'demo', section: 'bikinkonten' }), true);
-  assert.equal(selected, 'bikinkonten');
-  assert.equal(action({ action: 'video_pause' }), true);
-  assert.equal(paused, 1);
-  assert.equal(action({ action: 'video_resume' }), true);
-  assert.equal(played, 1);
-  assert.equal(action({ action: 'video_restart' }), true);
-  assert.equal(video.currentTime, 0);
-  assert.equal(played, 2);
-  assert.equal(action({ action: 'video_close' }), true);
-  assert.equal(dialog.open, false);
-  assert.equal(action({ action: 'video_resume' }), false);
-  assert.equal(action({ action: 'demo', section: 'current' }), true);
-  assert.equal(selected, 'lubna');
-});
-
-test("demo modal raises the existing voice surface and restores it on close and cleanup", async () => {
-  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
-  const source = work.slice(work.indexOf('function bindProjectDemoModal()'), work.indexOf('function applyShot()'));
-  const node = () => Object.assign(new EventTarget(), { classList: { add() {}, remove() {} } });
-  const body = Object.assign(node(), { append(el) { el.parentElement = this; } });
-  const voice = { hidden: false, parentElement: body, setAttribute() {}, removeAttribute() {}, showPopover() { this.raised = true; }, hidePopover() { this.raised = false; } };
-  const closeButton = node(), title = {};
-  const video = { pause() {}, removeAttribute() {}, load() {}, play: () => Promise.resolve() };
-  const trigger = Object.assign(node(), { dataset: { demoSrc: 'demo.mp4' } });
-  const dialog = Object.assign(node(), {
-    append(el) { el.parentElement = this; }, getBoundingClientRect() {},
-    showModal() { this.open = true; },
-    close() { this.open = false; this.dispatchEvent(new Event('close')); },
-    querySelector(selector) { return selector === '.project-demo-close' ? closeButton : voice.parentElement === this ? voice : null; },
-  });
-  const elements = { 'project-demo-dialog': dialog, 'project-demo-video': video, 'project-demo-title': title, 'voice-surface': voice };
-  const sandbox = vm.createContext({
-    document: { body, getElementById: id => elements[id], querySelectorAll: () => [trigger] },
-    window: { clearTimeout() {} }, reducedMotionMedia: { matches: false },
-  });
-  const cleanup = vm.runInContext(`${source}\nbindProjectDemoModal()`, sandbox);
-  trigger.dispatchEvent(new Event('click'));
-  assert.equal(voice.parentElement, dialog);
-  assert.equal(voice.raised, true);
-  dialog.close();
-  assert.equal(voice.parentElement, body);
-  assert.equal(voice.raised, false);
-  trigger.dispatchEvent(new Event('click'));
-  cleanup();
-  assert.equal(voice.parentElement, body);
-  assert.equal(voice.raised, false);
-});
-
-test("robot sounds follow state changes without repeating for transcripts", async () => {
-  const h = browser();
-  assert.deepEqual(h.stateSounds, []);
-  const { socket } = await h.connect();
-  socket.message({ type: 'ready' });
-  assert.deepEqual(h.stateSounds, ['connecting', 'listening']);
-  socket.message({ type: 'delta', text: 'See demo', item_id: 'demo' });
-  socket.message({ type: 'delta', text: 'See demo please', item_id: 'demo' });
-  assert.equal(h.stateSounds.length, 2);
-  socket.message({ type: 'final', transcript: 'See demo', item_id: 'demo' });
-  assert.equal(h.stateSounds.at(-1), 'thinking');
-  socket.message({ type: 'decision', action: 'noop', item_id: 'demo' });
-  assert.equal(h.stateSounds.at(-1), 'fallback');
-  assert.equal(h.stateSounds.filter(state => state === 'listening').length, 1, 'Shake replaces the listening chime');
-  h.escape();
-  assert.equal(h.stateSounds.at(-1), 'idle');
+test("idle silences scheduled tones and cancels delayed audio resume", async () => {
+  const ready = deferred();
+  let starts = 0, muted = 0;
+  const param = { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} };
+  class Audio {
+    state = "suspended"; currentTime = 0; destination = {};
+    async resume() { await ready.promise; this.state = "running"; }
+    createOscillator() { return { frequency: param, connect() {}, disconnect() {}, start() { starts++; }, stop() {} }; }
+    createGain() { return { gain: param, connect() {}, disconnect() { muted++; } }; }
+  }
+  const soundSource = source.slice(source.indexOf("function createStateSound()"), source.indexOf("function bindVoice()"));
+  const play = vm.runInNewContext(`${soundSource}\ncreateStateSound()`, { window: { AudioContext: Audio } });
+  const pending = play("listening");
+  const idle = play("idle");
+  ready.resolve(); await Promise.all([pending, idle]);
+  assert.equal(starts, 0, "Idle must cancel a tone waiting for audio permission");
+  await play("listening"); assert.equal(starts, 2);
+  await play("idle"); assert.equal(starts, 2, "Idle must not create a tone");
+  assert.equal(muted, 2, "Idle must disconnect already scheduled tones");
+  await play("armed"); await play("paused");
+  assert.equal(muted, 4, "Hidden-page pause must silence tones too");
 });
 
 test("robot tones are short, quiet, reused, and tolerate blocked audio", async () => {
@@ -1278,10 +943,10 @@ test("robot tones are short, quiet, reused, and tolerate blocked audio", async (
   const gesture = vm.runInContext('FALLBACK_GESTURE', browser().sandbox);
   const sandbox = vm.createContext({ window: { AudioContext: Audio }, FALLBACK_GESTURE: gesture });
   const play = vm.runInContext(`${soundSource}\ncreateStateSound()`, sandbox);
-  for (const state of ['connecting', 'listening', 'thinking', 'idle', 'deaf', 'blocked']) await play(state);
+  for (const state of ['connecting', 'listening', 'thinking', 'armed', 'deaf', 'blocked']) await play(state);
   assert.equal(contexts, 1);
   assert.equal(starts.length, 12);
-  assert.ok(stops.every((end, i) => Math.abs(end - starts[i] - 0.13) < 1e-8));
+  assert.ok(stops.filter(end => end !== undefined).every((end, i) => Math.abs(end - starts[i] - 0.13) < 1e-8));
   assert.ok(volumes.every(value => value <= 0.055));
   assert.ok(frequencies[3] > frequencies[2], 'Listening rises');
   assert.ok(frequencies[5] < frequencies[4], 'Thinking descends');
@@ -1295,4 +960,34 @@ test("robot tones are short, quiet, reused, and tolerate blocked audio", async (
   }
   sandbox.window.AudioContext = class { constructor() { throw new Error('Audio blocked'); } };
   await assert.doesNotReject(vm.runInContext('createStateSound()', sandbox)('connecting'));
+});
+
+test("worker epochs reject stale detections and explicit resume recovers a suspended context", async () => {
+  const h = browser(); const { context } = await h.enable(); h.click();
+  const worker = h.workers[0]; const old = worker.messages.at(-1).epoch;
+  h.hide(true); h.hide(false); await flush();
+  worker.message({ type: "wake", phrase: "Hei Nadi", epoch: old }); assert.equal(h.sockets.length, 1);
+  context.resume = async () => { throw new Error("gesture required"); };
+  h.hide(true); h.hide(false); await flush();
+  assert.equal(h.ui.root.dataset.state, "resume");
+  context.resume = async () => { context.state = "running"; };
+  h.click(); await flush(); assert.equal(h.ui.root.dataset.state, "armed");
+  assert.equal(h.microphones.length, 1); h.escape();
+});
+
+test("a stopped listener cannot be revived by late model readiness or a previous command", async () => {
+  const h = browser(); const { socket, track } = await h.connect();
+  const worker = h.workers[0]; h.escape();
+  socket.message({ type: "decision", action: "show", section: "codev" }); worker.message({ type: "ready" });
+  assert.equal(h.sections.length, 0); assert.equal(h.ui.root.dataset.state, "idle"); assert.equal(track.stopped, true);
+  await h.enable(); assert.equal(h.microphones.length, 2); assert.equal(h.ui.root.dataset.state, "connecting"); h.escape();
+});
+
+test("missing isolation fails before requesting the microphone, and slow inference fails without cloud fallback", async () => {
+  const h = browser(); h.sandbox.window.crossOriginIsolated = false; h.click();
+  assert.equal(h.microphones.length, 0);
+  assert.equal(h.ui.root.dataset.state, "blocked");
+  const g = browser(); const { track } = await g.enable(); g.click();
+  for (let i = 0; i < 20 && !track.stopped; i++) g.audio(.1);
+  assert.equal(track.stopped, true); assert.ok(g.sockets.every(socket => socket.readyState === 3));
 });
