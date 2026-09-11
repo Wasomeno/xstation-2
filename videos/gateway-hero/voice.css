@@ -135,8 +135,8 @@
 }
 
 /* Voice controls are intentionally available only in the desktop composition. */
-@media (max-width: 63.999rem) {
+@media (max-width: 68rem), (hover: none), (pointer: coarse) {
   #voice-surface {
-    display: none;
+    display: none !important;
   }
 }

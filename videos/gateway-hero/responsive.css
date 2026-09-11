@@ -138,6 +138,19 @@ body {
   }
 }
 
+/* Large tablets such as iPad Pro 13 use the desktop two-column system story,
+   but the section height should follow its content instead of the viewport. */
+@media (min-width: 64.001rem) and (max-width: 68rem) {
+  .ns-root {
+    min-height: 0;
+    padding-block: clamp(4rem, 7vh, 5rem);
+  }
+
+  .sys-grid {
+    align-items: start;
+  }
+}
+
 @media (max-width: 47.999rem) {
   :root {
     --page-gutter: clamp(1rem, 5vw, 1.5rem);
@@ -1046,7 +1059,8 @@ html.is-shot .site-footer {
 
   .client-list {
     grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 1.35rem 1rem;
+    grid-auto-flow: row;
+    gap: clamp(1.25rem, 2.25vh, 1.75rem) clamp(0.75rem, 1.6vw, 1.25rem);
   }
 
   .client-list li {

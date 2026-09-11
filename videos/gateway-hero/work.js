@@ -888,6 +888,96 @@ function bindProjectVideoPlayback() {
   };
 }
 
+function bindProjectDemoModal() {
+  const dialog = document.getElementById("project-demo-dialog");
+  const video = document.getElementById("project-demo-video");
+  const title = document.getElementById("project-demo-title");
+  const closeButton = dialog?.querySelector(".project-demo-close");
+  const triggers = [...document.querySelectorAll(".project-demo-trigger")];
+
+  if (!dialog || !video || !title || !closeButton || !triggers.length) return () => {};
+
+  let opener = null;
+  let closeTimer = 0;
+
+  const resetVideo = () => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  };
+
+  const finishClose = () => {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    if (dialog.open) dialog.close();
+  };
+
+  const closeDialog = () => {
+    if (!dialog.open || closeTimer) return;
+    dialog.classList.remove("is-visible");
+    closeTimer = window.setTimeout(
+      finishClose,
+      reducedMotionMedia.matches ? 160 : 400,
+    );
+  };
+
+  const openDialog = (event) => {
+    const trigger = event.currentTarget;
+    const source = trigger.dataset.demoSrc;
+    if (!source) return;
+
+    opener = trigger;
+    title.textContent = trigger.dataset.demoTitle || "Project demo";
+    video.src = source;
+    video.load();
+    dialog.classList.remove("is-visible");
+    dialog.showModal();
+    document.body.classList.add("demo-modal-open");
+    dialog.getBoundingClientRect();
+    dialog.classList.add("is-visible");
+    video.play().catch(() => {});
+  };
+
+  const onBackdropClick = (event) => {
+    if (event.target === dialog) closeDialog();
+  };
+
+  const onCancel = (event) => {
+    event.preventDefault();
+    closeDialog();
+  };
+
+  const onClose = () => {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    dialog.classList.remove("is-visible");
+    document.body.classList.remove("demo-modal-open");
+    resetVideo();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+    opener = null;
+  };
+
+  triggers.forEach((trigger) => trigger.addEventListener("click", openDialog));
+  closeButton.addEventListener("click", closeDialog);
+  dialog.addEventListener("click", onBackdropClick);
+  dialog.addEventListener("cancel", onCancel);
+  dialog.addEventListener("close", onClose);
+
+  return () => {
+    triggers.forEach((trigger) => trigger.removeEventListener("click", openDialog));
+    closeButton.removeEventListener("click", closeDialog);
+    dialog.removeEventListener("click", onBackdropClick);
+    dialog.removeEventListener("cancel", onCancel);
+    dialog.removeEventListener("close", onClose);
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+    dialog.classList.remove("is-visible");
+    if (dialog.open) dialog.close();
+    document.body.classList.remove("demo-modal-open");
+    resetVideo();
+  };
+}
+
 function applyShot() {
   if (!shot) return false;
   const pinSlot = document.getElementById("pin-slot");
@@ -911,9 +1001,11 @@ if (currentYear) currentYear.textContent = String(new Date().getFullYear());
 const cleanupHeaderState = isShot ? () => {} : bindHeaderState();
 let cleanupProjectVideos = () => {};
 if (!isShot) cleanupProjectVideos = bindProjectVideoPlayback();
+const cleanupProjectDemoModal = bindProjectDemoModal();
 window.addEventListener("pagehide", () => {
   cleanupHeaderState();
   cleanupProjectVideos();
+  cleanupProjectDemoModal();
 }, { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);

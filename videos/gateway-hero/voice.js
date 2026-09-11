@@ -1,6 +1,10 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
 
 const TARGET_RATE = 24000;
+const DESKTOP_VOICE = window.matchMedia(
+  "(min-width: 68.0625rem) and (hover: hover) and (pointer: fine)",
+);
+let voiceInitialized = false;
 
 const COPY = {
   deaf: "Koneksi suara terputus. Ketuk untuk mencoba lagi.",
@@ -312,6 +316,9 @@ function createSurface() {
 }
 
 function bindVoice() {
+  if (voiceInitialized || !DESKTOP_VOICE.matches) return;
+  voiceInitialized = true;
+
   const ui = createSurface();
   ui.root.hidden = false;
 
@@ -639,3 +646,6 @@ function bindVoice() {
 }
 
 bindVoice();
+DESKTOP_VOICE.addEventListener("change", ({ matches }) => {
+  if (matches) bindVoice();
+});
