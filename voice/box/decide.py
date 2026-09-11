@@ -41,9 +41,10 @@ Pertanyaan siapa klien NADI, siapa yang sudah memakai solusi, dan track record a
 Menyimpan, mengatur, dan mengakses pengetahuan perusahaan dari satu tempat adalah Arkiv. Konsep yang ingin ditunjukkan kepada klien atau prototipe ide adalah CoFrame.
 Screening/mencari kandidat lebih cepat adalah HireAssess; developer/fitur proyek lebih cepat adalah CoDev.
 Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
+Review kontrak, pemeriksaan kelengkapan dokumen legal terhadap standar perusahaan, dan konsistensi review legal adalah CoLegal. Penyimpanan, pengaturan, dan pencarian dokumen tetap Arkiv.
 
 "back"/"go back" mundur satu entri action log.
-"next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
+"next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → CoLegal → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
 "explore"/"What else can I explore?" mengeksplorasi section berikutnya sesuai posisi halaman, bukan maju dalam riwayat.
 Demo video tersedia HANYA untuk BikinKonten dan Lubna melalui player halaman. Permintaan melihat/memutar demo: demo dengan section produk tersebut, atau current jika tidak disebut. Produk lain belum punya demo: noop, jangan buka video teaser dekoratif atau contact.
 "Play the demo" / "lihat demonya" → demo current. "Putar demo Lubna" → demo lubna.

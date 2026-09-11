@@ -84,6 +84,16 @@ CASES = {
         ("Pengetahuan perusahaan tersebar di banyak tempat, pengen tim gampang mengaksesnya dari satu tempat.", "show", "arkiv"),
         ("Our internal knowledge is hard to locate; I need it organized and accessible to the team.", "show", "arkiv"),
     ],
+    "colegal": [
+        ("Show CoLegal", "show", "colegal"),
+        ("Tampilkan Co Legal", "show", "colegal"),
+        ("Saya ingin memeriksa kelengkapan kontrak sesuai standar legal perusahaan", "show", "colegal"),
+        ("Our contract reviews are slow and inconsistent; help us catch missing clauses against our legal standards", "show", "colegal"),
+        ("Hubungi tim CoLegal", "contact", "colegal"),
+        ("Buka WhatsApp CoLegal", "whatsapp", "colegal"),
+        ("Play CoLegal demo", "noop", None),
+        ("Saya hanya ingin menyimpan dan mencari dokumen kontrak", "show", "arkiv"),
+    ],
     "video": [
         ("Putar video demo BikinKonten", "demo", "bikinkonten"),
         ("Show me the Lubna demo", "demo", "lubna"),

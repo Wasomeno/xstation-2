@@ -56,6 +56,15 @@ class DecideTests(unittest.TestCase):
             {"action": "show", "section": "hireassess"},
         )
 
+    def test_colegal_supports_navigation_and_contact_but_has_no_demo(self):
+        for alias in ("CoLegal", "co legal", "legal operations", "review kontrak"):
+            self.assertEqual(decide({"action": "show", "section": alias}),
+                             {"action": "show", "section": "colegal"})
+        for action, transcript in (("contact", "Hubungi tim CoLegal"), ("whatsapp", "Buka WhatsApp CoLegal")):
+            self.assertEqual(decide({"action": action, "section": "colegal"}, transcript),
+                             {"action": action, "section": "colegal"})
+        self.assertEqual(decide({"action": "demo", "section": "colegal"}, "Play CoLegal demo")["action"], "clarify")
+
     def test_unknown_section_clarifies(self):
         result = decide({"action": "show", "section": "pricing"})
         self.assertEqual(result["action"], "clarify")

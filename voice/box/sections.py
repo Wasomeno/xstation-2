@@ -55,6 +55,10 @@ SECTIONS: tuple[Section, ...] = (
             "Agent keuangan yang menghubungkan milestone proyek, invoice/collection, dan proyeksi cashflow untuk memantau likuiditas, mengantisipasi risiko, dan membantu keputusan finansial. "
             "Cocok untuk melacak data keuangan, pembayaran tertunda, arus kas, dan memperkirakan kecukupan dana. "
             "Pembeda: proses dan analisis keuangan, bukan arsip dokumen atau promosi untuk menaikkan penjualan."),
+    Section("colegal", "CoLegal", ("co legal", "legal", "legal operations", "contract review", "review kontrak", "tinjau kontrak", "pemeriksaan kontrak"),
+            "Membantu tim legal meninjau kontrak lebih cepat dengan memeriksa dokumen terhadap standar legal perusahaan, menemukan kekurangan, memeriksa kelengkapan, dan menjaga konsistensi review. "
+            "Cocok untuk review kontrak yang lambat, pemeriksaan dokumen tidak konsisten, dan kebutuhan menemukan bagian yang terlewat. "
+            "Pembeda dari Arkiv: memeriksa isi dan kelengkapan kontrak terhadap standar legal; Arkiv mengatur, menyimpan, dan mencari dokumen."),
     Section("clients", "Trusted by", ("trusted by", "logos", "customers", "klien", "track record", "rekam jejak", "referensi klien", "Pamapersada Nusantara", "PAMA", "Hakuhodo Indonesia", "Universitas Brawijaya", "UB", "Collins Property Group", "Meet and Move", "Bina", "Qasir"),
             "Section bukti kepercayaan/rekam jejak berisi logo Pamapersada Nusantara, Hakuhodo Indonesia, Universitas Brawijaya (UB), Collins Property Group, Meet and Move, Bina, dan Qasir. "
             "Pilih saat pengunjung bertanya siapa klien NADI, perusahaan yang sudah memakai solusi, atau ingin melihat track record. "

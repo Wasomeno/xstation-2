@@ -1066,7 +1066,7 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
   const h = browser();
   let focused, opened;
-  const ids = ['hero', 'system', 'work', 'bikinkonten', 'lubna', 'crm-ai-agent', 'hireassess', 'arkiv', 'codev', 'coframe', 'cofinance', 'clients', 'contact'];
+  const ids = ['hero', 'system', 'work', 'bikinkonten', 'lubna', 'crm-ai-agent', 'hireassess', 'arkiv', 'codev', 'coframe', 'cofinance', 'colegal', 'clients', 'contact'];
   const position = id => ids.indexOf(id) * 800;
   const elements = Object.fromEntries(ids.map((id, index) => [id, {
     id, classList: { add() {}, remove() {} },
@@ -1131,6 +1131,8 @@ test("voice showcase actions use the visible product, focus its CTA, and restore
   assert.equal(h.sandbox.window.scrollY, position('coframe'), 'Next uses the manually scrolled service, not the last logged destination');
   action({ action: 'next' });
   assert.equal(h.sandbox.window.scrollY, position('cofinance'));
+  action({ action: 'next' });
+  assert.equal(h.sandbox.window.scrollY, position('colegal'), 'Next includes CoLegal after CoFinance');
   action({ action: 'next' });
   assert.equal(h.sandbox.window.scrollY, position('clients'), 'Next continues beyond the last product to Trusted by');
   action({ action: 'next' });
