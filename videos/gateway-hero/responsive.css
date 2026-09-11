@@ -1420,3 +1420,64 @@ html.is-shot .site-footer {
     display: inline-block;
   }
 }
+
+@media (max-width: 47.999rem) {
+  /* Eight marks now, so the odd-count rule that let the seventh span the row
+     is off, and every cell carries the same weight. Each mark is sized by its
+     own shape: two-line lock-ups and the crest need height, wide wordmarks do
+     not, and a width cap keeps the long ones from dominating the row. */
+  .client-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    justify-items: center;
+    gap: clamp(1.6rem, 5vw, 2.25rem) clamp(1rem, 4vw, 1.75rem);
+  }
+
+  .client-list li {
+    width: 100%;
+    min-height: 3.25rem;
+  }
+
+  .client-list li:nth-child(7) {
+    grid-column: auto;
+  }
+
+  .client-list img {
+    max-width: 78%;
+    height: 1.5rem;
+  }
+
+  .client-list [data-client="pama"] img {
+    height: 2.3rem;
+  }
+
+  .client-list [data-client="brawijaya"] img {
+    height: 2.4rem;
+  }
+
+  .client-list [data-client="meetandmove"] img {
+    height: 1.85rem;
+  }
+
+  .client-list [data-client="cias"] img,
+  .client-list [data-client="collins"] img,
+  .client-list [data-client="hakuhodo"] img {
+    height: 1.3rem;
+  }
+
+  .client-list [data-client="bina"] img {
+    height: 1.5rem;
+  }
+
+  .client-list [data-client="qasir"] img {
+    height: 1.4rem;
+  }
+
+  /* The closing CTA gets the screen to itself: pinched between the dark band
+     and the footer, the message had no room to land. */
+  .inquiry {
+    min-height: 100svh;
+    align-content: center;
+    padding-block: clamp(4rem, 12dvh, 6.5rem);
+  }
+}

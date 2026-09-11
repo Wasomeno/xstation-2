@@ -16,7 +16,8 @@ The hero illustration is a canvas animation that repaints screen-sized radial
 gradients every frame, which is the work a phone GPU handles worst. Below 768px
 the canvas and its agent callouts are hidden and `videos/gateway-hero/media/hero/`
 carries a recorded portrait clip of the same canopy instead: `hero-mobile.mp4`
-(H.264, 540x1200, ~157 KB) with `hero-mobile-poster.jpg` as its first frame.
+(H.264, 540x1200, 30fps, 14s, ~1.4 MB) with `hero-mobile-poster.jpg` as a frame
+from it.
 
 The clip is framed so the canopy sits in the upper half and fades out over the
 lower half, leaving the hero copy on dark ground. The `<video>` element ships
@@ -25,10 +26,24 @@ load, skips it entirely under `prefers-reduced-motion` or Save-Data, and pauses
 it once the hero scrolls away. If the file never loads, the poster shows; if that
 fails too, the stage's own `#04100b` ground stays and nothing else moves.
 
-To re-record after changing the canvas, capture `#nadi-cluster` at a portrait
-size, composite each frame over `#04100b` first (the canvas keeps a translucent
-trail buffer, so a raw capture blooms), then encode with
-`-crf 31 -profile:v main -movflags +faststart`.
+To re-record after changing the canvas, render it frame by frame rather than
+capturing it in real time. Three things bite otherwise:
+
+- Headless Chrome throttles `requestAnimationFrame` to roughly 0.2fps, and
+  `MediaRecorder` on a canvas stream yields no frames at all there. Take the
+  loop over instead: override `requestAnimationFrame`, collect the pending
+  callbacks, and call them with a synthetic clock that advances one frame step
+  at a time. Timing then comes out exact however slowly the machine paints.
+- `bindHeroMotion()` pauses the cluster at phone widths, because a phone is
+  meant to watch the clip. During a render at those widths the canvas freezes on
+  its last frame and every frame comes out identical, so the phone media query
+  has to report false for the duration.
+- The canvas keeps a translucent trail buffer, so composite each frame over
+  `#04100b` before reading it; a raw capture blooms into a solid mass.
+
+Then encode the frames with `-framerate 30 -crf 22 -profile:v main
+-movflags +faststart`. Checking the mean pixel delta between consecutive frames
+catches a frozen render before it ships.
 
 ## Voice (local box)
 
