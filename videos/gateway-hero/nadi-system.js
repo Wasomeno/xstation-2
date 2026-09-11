@@ -12,6 +12,7 @@
   const items = [...list.querySelectorAll("button[data-system-state]")];
   const caption = document.getElementById("sys-cap");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const compact = window.matchMedia("(max-width: 63.999rem)").matches;
   const pointer = window.matchMedia("(hover: hover) and (min-width: 901px)");
   let current = "ecosystem";
   let hoverLock = 0;
@@ -75,7 +76,12 @@
   gsap.set(titleLines, { autoAlpha: 0, yPercent: 112, rotate: 1 });
   gsap.set(support, { autoAlpha: 0, y: 20 });
   gsap.set(items, { autoAlpha: 0, y: 18 });
-  gsap.set(stage, { autoAlpha: 0, x: 34, scale: 0.985 });
+  gsap.set(stage, {
+    autoAlpha: 0,
+    x: compact ? 0 : 34,
+    y: compact ? 18 : 0,
+    scale: 0.985,
+  });
 
   gsap.timeline({
     defaults: { ease: "power3.out" },
@@ -108,6 +114,7 @@
     .to(stage, {
       autoAlpha: 1,
       x: 0,
+      y: 0,
       scale: 1,
       duration: 0.9,
     }, 0.14);

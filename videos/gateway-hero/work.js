@@ -199,8 +199,8 @@ function showSection(id, focusContact = false, record = true) {
   const bounds = target.getBoundingClientRect();
   const headerHeight = document.getElementById("site-nav")?.getBoundingClientRect().height || 0;
   const voiceSurface = document.getElementById("voice-surface");
-  // The surface is hidden outright on phones, where a display:none element
-  // still answers getBoundingClientRect with zeroes.
+  // Use the live surface bounds so compact destinations stay clear of its
+  // transcript panel and desktop destinations keep their centered framing.
   const voiceRect = voiceSurface && !voiceSurface.hidden
     ? voiceSurface.getBoundingClientRect()
     : null;
@@ -538,6 +538,18 @@ function bindHeaderState() {
 
   if (!nav || !hero) return () => {};
 
+  const sectionLinks = [...nav.querySelectorAll('#site-links a[href^="#"]')];
+  const work = document.getElementById("work");
+  const contact = document.getElementById("contact");
+
+  function setCurrent(sectionId) {
+    sectionLinks.forEach((link) => {
+      const current = link.getAttribute("href") === `#${sectionId}`;
+      if (current) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    });
+  }
+
   const heroObserver = new IntersectionObserver(([entry]) => {
     nav.classList.toggle("is-scrolled", !entry.isIntersecting);
   }, {
@@ -586,7 +598,7 @@ function bindHeaderState() {
 }
 
 function bindBrandVisibility() {
-  if (shot || !gsap) return () => {};
+  if (shot || !gsap || !ScrollTrigger) return () => {};
 
   const nav = document.getElementById("site-nav");
   const brand = document.getElementById("brand");
@@ -595,8 +607,6 @@ function bindBrandVisibility() {
   if (!nav || !brand || !brandLabel || !brandMask) return () => {};
 
   let visible = true;
-  let lastY = window.scrollY;
-  let ticking = false;
 
   function setVisible(nextVisible) {
     if (nextVisible === visible) return;
@@ -632,26 +642,23 @@ function bindBrandVisibility() {
     });
   }
 
-  const update = () => {
-    ticking = false;
-    const y = window.scrollY;
-    const delta = y - lastY;
-    const band = navBandHeight();
+  const visibilityTrigger = ScrollTrigger.create({
+    id: "site-nav-visibility",
+    start: 0,
+    end: "max",
+    onUpdate: (self) => {
+      const y = self.scroll();
+      const band = navBandHeight();
 
-    if (y <= band || delta < -2) setVisible(true);
-    else if (delta > 2 && y > band * 1.5) setVisible(false);
+      if (y <= band || self.direction < 0) setVisible(true);
+      else if (self.direction > 0 && y > band * 1.5) setVisible(false);
+    },
+  });
 
-    lastY = y;
+  return () => {
+    visibilityTrigger.kill();
+    gsap.killTweensOf([nav, brandMask, brandLabel]);
   };
-
-  const onScroll = () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(update);
-  };
-
-  window.addEventListener("scroll", onScroll, { passive: true });
-  return () => window.removeEventListener("scroll", onScroll);
 }
 
 function bindInquiryEntry() {

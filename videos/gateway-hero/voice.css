@@ -119,10 +119,17 @@
   }
 }
 
-/* The Voice Surface is a desktop affordance: on a phone it covers the content
-   it is meant to drive, so it stays out of the way there. */
 @media (max-width: 47.999rem) {
   #voice-surface {
-    display: none;
+    left: 50%;
+    right: auto;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    width: min(20rem, calc(100vw - 2 * var(--page-gutter)));
+    align-items: center;
+    transform: translateX(-50%);
+  }
+
+  .voice-copy {
+    text-align: center;
   }
 }

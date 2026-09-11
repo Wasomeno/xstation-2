@@ -51,6 +51,8 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
     "HR & Hiring",
   ];
   const scopeItems = [...document.querySelectorAll("#hero-scope span")];
+  const navElement = document.getElementById("site-nav");
+  const heroCopyBlock = document.querySelector("#hero-copy .doctrine-block");
   let activeScope = -1;
   const setScope = (index) => {
     if (index === activeScope) return;
@@ -63,6 +65,7 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
   const labels = NAMES.map((n, i) => {
     const d = document.createElement("div");
     d.className = "nadi-lbl";
+    d.setAttribute("aria-hidden", "true");
     d.innerHTML = `<span><small>AGENT 0${i + 1}</small>${n}</span>`;
     stage.appendChild(d);
     return d;
@@ -686,6 +689,10 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
         ctx.strokeStyle = rgba(G, (1 - arr) * 0.28);
         ctx.stroke();
       }
+      const compactPortrait = W < 768 && Ht >= W;
+      const navBottom = navElement?.getBoundingClientRect().bottom || 0;
+      const copyTop = heroCopyBlock?.getBoundingClientRect().top || Ht;
+
       labels.forEach((Lb, i) => {
         if (i !== seg.agent) {
           Lb.style.opacity = "0";
@@ -705,8 +712,13 @@ export function createCluster({ canvas, active: startActive = true } = {}) {
           const labelX = labelSide
             ? Math.max(labelWidth + 30, ep[0])
             : Math.min(W - labelWidth - 30, ep[0]);
-          const labelTop = W < 768 ? Ht * 0.5 : labelHeight / 2 + 12;
-          const labelY = Math.min(Ht - labelHeight / 2 - 12, Math.max(labelTop, ep[1]));
+        const safeTop = compactPortrait
+          ? navBottom + labelHeight / 2 + 20
+          : labelHeight / 2 + 12;
+        const safeBottom = compactPortrait
+          ? Math.max(safeTop, copyTop - labelHeight / 2 - 22)
+          : Ht - labelHeight / 2 - 12;
+        const labelY = Math.min(safeBottom, Math.max(safeTop, ep[1]));
           Lb.style.left = labelX.toFixed(1) + "px";
           Lb.style.top = labelY.toFixed(1) + "px";
         } else {
