@@ -724,3 +724,22 @@ html.is-shot .site-footer {
     font-size: 0.62rem;
   }
 }
+
+@media (max-width: 47.999rem) {
+  /* The live canvas gives way to its recorded portrait clip. The stage keeps its
+     own dark ground, so a clip that never loads costs nothing but motion. */
+  #nadi-cluster,
+  .nadi-lbl {
+    display: none;
+  }
+
+  #hero-motion {
+    display: block;
+  }
+
+  /* The canvas glare used to light this section from behind; without it the
+     section needs its own ground. */
+  .ns-root {
+    background: var(--page);
+  }
+}

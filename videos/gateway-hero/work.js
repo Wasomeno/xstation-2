@@ -1,4 +1,4 @@
-import { createCluster } from "./cluster.js?v=surface-18";
+import { createCluster } from "./cluster.js?v=surface-23";
 
 const reducedMotionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
 const reduce = reducedMotionMedia.matches;
@@ -881,6 +881,68 @@ function bindProjectVideoPlayback() {
   };
 }
 
+/*
+ * Phones get a portrait clip of the nerve canopy instead of the live canvas:
+ * the canvas repaints screen-sized radial gradients every frame, which is the
+ * work a phone GPU is worst at. The element ships without a source, so nothing
+ * is fetched until this runs; if the fetch or decode fails there is no source
+ * to fall back from and the stage's own dark ground stays visible.
+ */
+function bindHeroMotion() {
+  const video = document.getElementById("hero-motion");
+  if (!video || shot) return () => {};
+
+  const phone = window.matchMedia("(max-width: 47.999rem)");
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const source = "videos/gateway-hero/media/hero/hero-mobile.mp4";
+  let attached = false;
+
+  const start = () => {
+    if (!phone.matches) return;
+    // The canvas is hidden here, so its loop is pure battery cost.
+    cluster.setActive(false);
+    if (reducedMotionMedia.matches || connection?.saveData) return;
+    if (!attached) {
+      attached = true;
+      video.src = source;
+      video.load();
+    }
+    video.play()?.catch(() => {});
+  };
+
+  const stop = () => {
+    if (phone.matches) return;
+    video.pause();
+    cluster.setActive(true);
+  };
+
+  const onChange = () => (phone.matches ? start() : stop());
+
+  // Never on the critical path: the clip waits for an idle moment after load.
+  const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 400));
+  const cancelIdle = window.cancelIdleCallback || window.clearTimeout;
+  const handle = idle(start);
+
+  phone.addEventListener("change", onChange);
+
+  // Nothing to decode once the hero has scrolled away.
+  const hero = document.getElementById("hero");
+  const visibility = hero
+    ? new IntersectionObserver(([entry]) => {
+      if (!phone.matches) return;
+      if (entry.isIntersecting) start();
+      else video.pause();
+    }, { threshold: 0 })
+    : null;
+  visibility?.observe(hero);
+
+  return () => {
+    cancelIdle(handle);
+    visibility?.disconnect();
+    phone.removeEventListener("change", onChange);
+  };
+}
+
 function applyShot() {
   if (!shot) return false;
   const pinSlot = document.getElementById("pin-slot");
@@ -903,10 +965,15 @@ const currentYear = document.getElementById("current-year");
 if (currentYear) currentYear.textContent = String(new Date().getFullYear());
 const cleanupHeaderState = isShot ? () => {} : bindHeaderState();
 let cleanupProjectVideos = () => {};
-if (!isShot) cleanupProjectVideos = bindProjectVideoPlayback();
+let cleanupHeroMotion = () => {};
+if (!isShot) {
+  cleanupProjectVideos = bindProjectVideoPlayback();
+  cleanupHeroMotion = bindHeroMotion();
+}
 window.addEventListener("pagehide", () => {
   cleanupHeaderState();
   cleanupProjectVideos();
+  cleanupHeroMotion();
 }, { once: true });
 
 if (gsap && ScrollTrigger) gsap.registerPlugin(ScrollTrigger);
