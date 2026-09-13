@@ -20,9 +20,9 @@ var Module = {
           tokens: "./tokens.txt", numThreads: 1, provider: "cpu", debug: 0,
           modelType: "zipformer2", modelingUnit: "bpe", bpeVocab: "",
         },
-        keywords: keywordText, maxActivePaths: 4, numTrailingBlanks: 1,
+        keywords: keywordText, maxActivePaths: 8, numTrailingBlanks: 1,
         // Calibrate against booth recordings: higher threshold reduces false wakes.
-        keywordsScore: 1.0, keywordsThreshold: 0.25,
+        keywordsScore: 1.0, keywordsThreshold: 0.15,
       });
       if (!detector.handle) throw new Error("Keyword model initialization failed");
       stream = detector.createStream();
@@ -53,7 +53,7 @@ self.onmessage = ({ data }) => {
     }
   } catch (error) { fail(error); }
 };
-fetch(ASSETS + "keywords.txt?v=hei-id-1").then(response => {
+fetch(ASSETS + "keywords.txt?v=hei-tolerant-2").then(response => {
   if (!response.ok) throw new Error("Keyword definitions failed to load");
   return response.text();
 }).then(text => {

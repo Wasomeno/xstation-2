@@ -1,6 +1,6 @@
 import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
 
-const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-id-1", import.meta.url);
+const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.url);
 
 const TARGET_RATE = 24000;
 const DESKTOP_VOICE = window.matchMedia(
@@ -202,6 +202,11 @@ function createWaveform(canvas) {
   let speechWeight = 0;
   let nodTime = 0.76;
   let nodCooldown = 0;
+  let scrollY = window.scrollY || 0;
+  let scrollDirection = 0;
+  let scrollUntil = 0;
+  let gazeYaw = 24 * Math.PI / 180;
+  let gazePitch = -18 * Math.PI / 180;
   let visualRadius = 24;
   let visualFace = 0;
   let curiosity = 0;
@@ -268,6 +273,22 @@ function createWaveform(canvas) {
       : fallbackBlend * Math.exp(-seconds / .09);
     const fallback = fallbackBlend > .001 ? fallbackEyePose(motion.matches ? .18 : fallbackTime) : null;
     const hearingSpeech = alive && listening && root.dataset.speaking === "true" && energy > 0.12;
+    // Actual page movement covers native scrolling and voice navigation through Lenis.
+    const pageY = Math.max(0, window.scrollY || 0);
+    const scrollDelta = pageY - scrollY;
+    scrollY = pageY;
+    const canFollowScroll = alive && listening && !feedback && !hearingSpeech;
+    if (!canFollowScroll) scrollUntil = 0;
+    else if (Math.abs(scrollDelta) > .5) {
+      scrollDirection = Math.sign(scrollDelta);
+      scrollUntil = now + 100;
+    }
+    const followingScroll = canFollowScroll && now < scrollUntil;
+    const targetYaw = followingScroll ? .12 : 24 * Math.PI / 180;
+    const targetPitch = followingScroll ? scrollDirection * .55 : -18 * Math.PI / 180;
+    const gazeBlend = 1 - Math.exp(-seconds / .07);
+    gazeYaw = alive ? gazeYaw + (targetYaw - gazeYaw) * gazeBlend : targetYaw;
+    gazePitch = alive ? gazePitch + (targetPitch - gazePitch) * gazeBlend : targetPitch;
     speechWeight = alive ? speechWeight + (Number(hearingSpeech) - speechWeight) * (1 - Math.exp(-seconds / 0.16)) : 0;
     nodCooldown = Math.max(0, nodCooldown - seconds);
     if (alive && listening) {
@@ -289,7 +310,7 @@ function createWaveform(canvas) {
       : 0;
     // B · Memahami: look screen-right and up; nod along the same sphere as thinking.
     const listeningPose = [
-      ...projectFaceEyes(24 * Math.PI / 180, -18 * Math.PI / 180 + nod * 0.11),
+      ...projectFaceEyes(gazeYaw, gazePitch + nod * 0.11),
       { x: -0.094579, y: 0.678436, rx: 0.161412, ry: 0.107188, spin: 0 },
     ];
     // Freeze the outgoing pose while it blends back into the other states.
@@ -577,7 +598,8 @@ function bindVoice() {
     };
     c.send = send;
     const connectionTimer = timer(fail, 10000);
-    setState("connecting", COPY.connecting, "", silent);
+    // Post-wake audio already buffers during connection setup, so show capture immediately.
+    setState(phrase ? "listening" : "connecting", phrase ? COPY.listening : COPY.connecting, "", silent);
     if (phrase) window.dispatchEvent(new CustomEvent("nadi:wake", { detail: { phrase } }));
     socket.addEventListener("error", fail);
     socket.addEventListener("close", fail);
@@ -600,7 +622,7 @@ function bindVoice() {
       if (payload.item_id && c.item && payload.item_id !== c.item) return;
       if (payload.item_id) c.item = payload.item_id;
       const text = payload.type === "delta" ? payload.text : payload.type === "final" ? payload.transcript : null;
-      if (typeof text === "string" && /\b(?:thanks|terima\s*kasih)\b/iu.test(text.normalize("NFKC"))) { arm(); return; }
+      if (typeof text === "string" && /\b(?:thanks|terima\s*kasih|makasih)\b/iu.test(text.normalize("NFKC"))) { arm(); return; }
       if (typeof text === "string" && text.trim()) {
         c.transcribed = true;
         if (c.committed) setState("thinking");

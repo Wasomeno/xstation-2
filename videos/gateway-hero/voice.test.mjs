@@ -391,34 +391,80 @@ test("voice orb preserves face visuals, reacts to audio, and respects reduced mo
   }
 });
 
-test("fallback shakes its eyes once and returns within 500 ms with a stationary orb", () => {
-  const setup = (reduced = false) => {
-    let frame, next, now = 1000;
-    const root = { dataset: { state: "listening", speaking: "false" }, style: { setProperty() {} } };
-    const ctx = {
-      clearRect() { frame = { layers: [] }; },
-      translate(x, y) { if (!frame.center) frame.center = [x, y]; else frame.layers.push({ position: [x, y], path: [] }); },
-      rotate(angle) { frame.layers.at(-1).spin = angle; },
-      moveTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
-      lineTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
-      roundRect(x, y, w) { frame.radius = w / 2; },
-      fill() { frame.layers.at(-1).color = this.fillStyle; },
-      save() {}, restore() {}, beginPath() {}, closePath() {}, clip() {}, fillRect() {}, setTransform() {},
-    };
-    const canvas = { clientWidth: 88, closest: () => root, getContext: () => ctx };
-    const window = Object.assign(new EventTarget(), {
-      matchMedia: () => Object.assign(new EventTarget(), { matches: reduced }),
-    });
-    const sandbox = vm.createContext({
-      canvas, window, document: new EventTarget(), performance: { now: () => now },
-      getComputedStyle: () => ({ getPropertyValue: name => name }),
-      requestAnimationFrame(fn) { assert.ok(!reduced); next = fn; return 1; }, cancelAnimationFrame() {},
-    });
-    const wave = vm.runInContext(`${source}\ncreateWaveform(canvas)`, sandbox);
-    const run = (count, step = 1000 / 60) => Array.from({ length: count }, () => { now += step; next(now); return frame; });
-    if (!reduced) run(120);
-    return { root, wave, run, get frame() { return frame; } };
+function waveformHarness(reduced = false) {
+  let frame, next, now = 1000;
+  const root = { dataset: { state: "listening", speaking: "false" }, style: { setProperty() {} } };
+  const ctx = {
+    clearRect() { frame = { layers: [] }; },
+    translate(x, y) { if (!frame.center) frame.center = [x, y]; else frame.layers.push({ position: [x, y], path: [] }); },
+    rotate(angle) { frame.layers.at(-1).spin = angle; },
+    moveTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
+    lineTo(x, y) { frame.layers.at(-1).path.push([x, y]); },
+    roundRect(x, y, w) { frame.radius = w / 2; },
+    fill() { frame.layers.at(-1).color = this.fillStyle; },
+    save() {}, restore() {}, beginPath() {}, closePath() {}, clip() {}, fillRect() {}, setTransform() {},
   };
+  const canvas = { clientWidth: 88, closest: () => root, getContext: () => ctx };
+  const window = Object.assign(new EventTarget(), {
+    scrollY: 0,
+    matchMedia: () => Object.assign(new EventTarget(), { matches: reduced }),
+  });
+  const sandbox = vm.createContext({
+    canvas, window, document: new EventTarget(), performance: { now: () => now },
+    Math: Object.assign(Object.create(Math), { random: () => .5 }),
+    getComputedStyle: () => ({ getPropertyValue: name => name }),
+    requestAnimationFrame(fn) { assert.ok(!reduced); next = fn; return 1; }, cancelAnimationFrame() {},
+  });
+  const wave = vm.runInContext(`${source}\ncreateWaveform(canvas)`, sandbox);
+  const run = (count, step = 1000 / 60, scrollStep = 0) => Array.from({ length: count }, () => {
+    now += step; window.scrollY += scrollStep; next(now); return frame;
+  });
+  if (!reduced) run(120);
+  return { root, wave, run, window, get frame() { return frame; } };
+}
+
+test("scroll gaze follows page direction and settles without moving the orb", () => {
+  const h = waveformHarness(), baseline = h.frame;
+  const eyeY = frame => (frame.layers[1].position[1] + frame.layers[2].position[1]) / 2;
+  const down = h.run(18, 1000 / 60, 20);
+  assert.ok(eyeY(down.at(-1)) > 9, "Scrolling down looks below the center of the face");
+  const up = h.run(18, 1000 / 60, -20);
+  assert.ok(eyeY(up.at(-1)) < -11, "Reversing scroll looks up promptly");
+  const settled = h.run(30);
+  const frames = [...down, ...up, ...settled];
+  frames.forEach((frame, i) => {
+    assert.deepEqual(frame.center, baseline.center);
+    assert.ok(Math.abs(frame.radius - baseline.radius) < .001, "The orb keeps its size");
+    assert.deepEqual(frame.layers.map(layer => layer.color), baseline.layers.map(layer => layer.color));
+    if (i) assert.ok(Math.abs(eyeY(frame) - eyeY(frames[i - 1])) < 6, "Direction changes and settling stay smooth");
+    for (const layer of frame.layers.slice(1)) for (const [x, y] of layer.path) {
+      const px = layer.position[0] + x * Math.cos(layer.spin) - y * Math.sin(layer.spin);
+      const py = layer.position[1] + x * Math.sin(layer.spin) + y * Math.cos(layer.spin);
+      assert.ok(Math.hypot(px, py) < 34, "Eyes remain inside the sphere");
+    }
+  });
+  const home = frame => frame.layers.slice(1).every((layer, i) => layer.position.every((value, axis) =>
+    Math.abs(value - baseline.layers[i + 1].position[axis]) < .25));
+  assert.ok(home(settled.at(-1)), "Listening B returns within 500 ms after scrolling stops");
+  assert.ok(h.run(18).every(home), "A stopped scroll cannot replay the gaze");
+  assert.ok(Math.abs(down.at(-1).layers[2].path[0][0] - baseline.layers[2].path[0][0]) > .5,
+    "Eye size follows spherical perspective, not a flat vertical translation");
+  for (const state of ["thinking", "idle"]) {
+    const moving = waveformHarness(), still = waveformHarness();
+    moving.root.dataset.state = still.root.dataset.state = state;
+    assert.deepEqual(moving.run(18, 1000 / 60, 20), still.run(18), "Scrolling preserves the other states");
+  }
+  const fallback = waveformHarness(), reference = waveformHarness();
+  fallback.root.dataset.fallback = reference.root.dataset.fallback = "1";
+  fallback.wave.refresh(); reference.wave.refresh();
+  assert.deepEqual(fallback.run(30, 1000 / 60, 20), reference.run(30), "Fallback keeps its own gesture");
+  const reduced = waveformHarness(true), staticFrame = reduced.frame;
+  reduced.window.scrollY = 400; reduced.wave.refresh();
+  assert.deepEqual(reduced.frame, staticFrame, "Reduced motion does not chase scrolling");
+});
+
+test("fallback shakes its eyes once and returns within 500 ms with a stationary orb", () => {
+  const setup = waveformHarness;
   const h = setup(), baseline = h.frame;
   h.root.dataset.fallback = "1";
   h.wave.refresh();
@@ -605,6 +651,22 @@ test("no-action shakes while keeping listening and final thank-you cancels pendi
   assert.equal(h.sections.length, 0); h.escape();
 });
 
+test("makasih ends the conversation in live and final transcripts", async () => {
+  for (const payload of [
+    { type: "delta", text: "makasih" },
+    { type: "final", transcript: "Oke, MAKASIH!" },
+  ]) {
+    const h = browser(); const { socket, track } = await h.connect();
+    socket.message({ type: "delta", text: "makasihnya", item_id: "a" });
+    assert.equal(h.ui.root.dataset.state, "listening");
+    socket.message({ ...payload, item_id: "a" });
+    assert.equal(h.ui.root.dataset.state, "armed");
+    assert.equal(socket.readyState, 3);
+    assert.equal(track.stopped, false);
+    h.escape();
+  }
+});
+
 test("a retired result cannot act on a later turn in the same conversation", async () => {
   const h = browser(); const { socket } = await h.connect();
   socket.message({ type: "delta", item_id: "a", text: "buka CoDev" }); h.tick(2000); h.audio();
@@ -625,6 +687,7 @@ test("wake mode keeps idle audio local and reuses the microphone across sessions
   h.audio(.1); assert.equal(first.messages.length, count); assert.equal(h.health.length, 0);
   h.wake("Halo Nadi"); assert.equal(h.sockets.length, 1);
   h.wake(); h.wake(); assert.equal(h.sockets.length, 2);
+  assert.equal(h.ui.root.dataset.state, "listening", "Wake immediately shows capture while the backend connects");
   const socket = h.sockets[1]; h.audio(.1); assert.equal(socket.messages.length, 0);
   socket.open(); socket.message({ type: "ready" });
   assert.equal(socket.messages.filter(m => m.type === "audio").length, 1);

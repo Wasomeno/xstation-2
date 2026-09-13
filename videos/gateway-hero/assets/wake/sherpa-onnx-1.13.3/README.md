@@ -1,5 +1,13 @@
 # Experimental Nadi wake detector
 
+Current tuning uses **eight active paths**, score 1.0 and threshold 0.15. Selection on 30 Ami/Ayu training recordings improved hits from 22/30 to 27/30. Independent positive test recordings improved only from 7/21 to 9/21, with no triggers on 20 similar-phrase clips for either configuration. Recognition remains experimental and below target. See `docs/validation/wake-ami-ayu-tuning.md` in the repository for the full comparison; no model weights were trained.
+
+## Tolerant pronunciation experiment (2026-09-13)
+
+The current keyword set accepts Hei/Hey/Hi/Hai Nadi and the existing Hey Naddy variant, all emitting the canonical `Hei Nadi` event. The threshold is now 0.15 (previously 0.25); score 1.0 and one trailing blank remain unchanged. Names such as Nani/Nabi are not added. This is a sensitivity experiment, not a demonstrated recognition improvement; the previous recording calibration was poor even at 0.15. Retest with new positive recordings and representative non-wake speech before claiming booth reliability.
+
+Voice activation immediately shows listening while the existing post-detection buffer waits for the backend (maximum connection wait: 10 seconds). Armed audio remains local. The historical test results below describe earlier configurations, not validation of this keyword set.
+
 Runtime: [sherpa-onnx v1.13.3](https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.3/wasm/kws), built with Emscripten 4.0.23 and the upstream pinned ONNX Runtime 1.24.4 static SIMD library.
 Model: [GigaSpeech English 3.3M, 2024-01-01](https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2), int8 encoder/decoder/joiner. The archive's own README declares Apache License 2.0; its unmodified text is retained as `MODEL-README.md`. Runtime/dependency licenses are retained in `licenses/`.
 

@@ -11,6 +11,20 @@ const { chromium } = require('playwright');
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const origin = process.env.WAKE_PREVIEW_URL || 'http://127.0.0.1:4174';
+    // Replay-only override: never edits the shipped worker or sends audio to a cloud model.
+    if (process.env.WAKE_TEST_CONFIG) {
+      const config = JSON.parse(process.env.WAKE_TEST_CONFIG);
+      assert.ok(Number.isInteger(config.paths) && config.paths >= 1 && config.paths <= 32);
+      assert.ok(Number.isFinite(config.score) && config.score > 0 && config.score <= 10);
+      assert.ok(Number.isFinite(config.threshold) && config.threshold > 0 && config.threshold <= 1);
+      await page.route('**/wake-worker.js', async route => {
+        const response = await route.fetch();
+        const body = (await response.text())
+          .replace(/maxActivePaths: [\d.]+/, `maxActivePaths: ${config.paths}`)
+          .replace(/keywordsScore: [\d.]+, keywordsThreshold: [\d.]+/, `keywordsScore: ${config.score}, keywordsThreshold: ${config.threshold}`);
+        await route.fulfill({ response, body });
+      });
+    }
     const sockets = [], audio = [];
     await page.routeWebSocket('**/v1/stream', socket => {
       sockets.push(socket);
@@ -29,6 +43,8 @@ const { chromium } = require('playwright');
     });
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.evaluate(() => crossOriginIsolated), true, 'WASM isolation headers missing');
+    // Dataset replay can skip the independent cloud-session controller smoke test.
+    if (!process.env.WAKE_AUDIO_ONLY) {
     await page.locator('.voice-orb').click();
     await page.waitForFunction(() => document.querySelector('#voice-surface')?.dataset.state === 'listening', null, { timeout: 60000 });
     assert.equal(sockets.length, 1, 'First click starts listening');
@@ -67,6 +83,7 @@ const { chromium } = require('playwright');
     assert.equal(await page.evaluate(() => window.micRequests), 1);
     await page.keyboard.press('Escape');
     console.log('PASS: click and wake start sessions; idle audio stays local; next command stays listening; no-action shake; thank-you stops audio; one microphone request.');
+    }
 
     // Real detector, optional recorded WAV inputs. Synthetic inputs are smoke tests, not booth acceptance.
     for (const file of process.argv.slice(2)) {
