@@ -37,7 +37,7 @@ const microphone = () => {
   return { track, media: { getTracks: () => [track], getAudioTracks: () => [track] } };
 };
 
-function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
+function browser({ resume, unsupported = false, reducedMotion = false, search = "?voice=1" } = {}) {
   const workers = [], timers = new Map();
   let clock = 1000, timerId = 0;
   const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [];
@@ -81,6 +81,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     createGain() { return { ...node(), gain: { value: 1 } }; }
   }
   const window = Object.assign(new EventTarget(), {
+    location: { search },
     crossOriginIsolated: true,
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
@@ -88,7 +89,7 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
   });
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
   const sandbox = vm.createContext({
-    window, document, ui, stateSounds, Event, AbortController,
+    window, document, ui, stateSounds, Event, AbortController, URLSearchParams,
     CustomEvent: class extends Event { constructor(type, init) { super(type); this.detail = init.detail; } },
     Worker: class extends EventTarget {
       messages = [];
@@ -133,6 +134,23 @@ function browser({ resume, unsupported = false, reducedMotion = false } = {}) {
     },
   };
 }
+
+test("voice agent only initializes with an explicit voice=1 query parameter", () => {
+  for (const [search, hidden] of [
+    ["", true], ["?voice", true], ["?voice=0", true], ["?voice=false", true],
+    ["?box=https://voice.test", true], ["?voice=1", false], ["?other=value&voice=1", false],
+  ]) {
+    const h = browser({ search });
+    assert.equal(h.ui.root.hidden, hidden, search);
+    if (h.ui.root.hidden) {
+      vm.runInContext("bindVoice()", h.sandbox);
+      assert.equal(h.ui.root.hidden, true, "A later desktop initialization must also stay hidden");
+      h.click();
+      assert.equal(h.microphones.length, 0);
+      assert.equal(h.workers.length, 0);
+    }
+  }
+});
 
 test("voice orb preserves face visuals, reacts to audio, and respects reduced motion", () => {
   let restingEyeY = 0;

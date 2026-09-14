@@ -12,6 +12,8 @@ Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
 ## Voice (local box)
 
+The voice agent is hidden by default. Add `?voice=1` to show it on desktop, for example [http://127.0.0.1:4174/?voice=1](http://127.0.0.1:4174/?voice=1).
+
 After a click or local wake-word detection, the floating mic opens a conversation session with the voice box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash`. Keys stay on the box. Live transcript appears in the popover.
 
 ```bash
@@ -29,7 +31,7 @@ npm start          # site on :4174
 npm run voice      # box on :4175; reloads when Python files change
 ```
 
-Point the live site at a tunneled box with `?box=https://your-tunnel`.
+Point the live site at a tunneled box with `?voice=1&box=https://your-tunnel`.
 
 The voice prompt includes all 38 commands from **AI Product Showcase - AI Voice Nav (1).csv**, reconciled against the product descriptions in `index.html` as the primary reference; the CSV is secondary. Business needs also select the best matching product without an explicit name or navigation command. General promotion or sales growth starts at BikinKonten; a more specific problem takes priority, such as unanswered customer messages selecting CRM AI Agent. Lubna handles marketing through chat from brief to publication. The catalog in `voice/box/sections.py` describes every product and the System services using the site's capabilities. Recommendations only navigate; they add no spoken or written explanation.
 

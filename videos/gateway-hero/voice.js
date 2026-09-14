@@ -504,6 +504,7 @@ function createStateSound() {
 
 function bindVoice() {
   if (voiceInitialized || !DESKTOP_VOICE.matches) return;
+  if (new URLSearchParams(window.location.search).get("voice") !== "1") return;
   voiceInitialized = true;
   const ui = createSurface();
   ui.root.hidden = false;
