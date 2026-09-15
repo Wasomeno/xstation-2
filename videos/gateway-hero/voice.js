@@ -594,7 +594,7 @@ function bindVoice() {
       c.committed = true;
       clearTimeout(c.captureTimer);
       send({ type: "commit" });
-      if (c.transcribed) setState("thinking");
+      setState("thinking");
       timer(fail, 30000);
     };
     c.send = send;
