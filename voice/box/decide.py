@@ -44,6 +44,8 @@ Efisiensi proses finansial dan pelacakan data keuangan adalah CoFinance.
 Review kontrak, pemeriksaan kelengkapan dokumen legal terhadap standar perusahaan, dan konsistensi review legal adalah CoLegal. Penyimpanan, pengaturan, dan pencarian dokumen tetap Arkiv.
 
 "back"/"go back" mundur satu entri action log.
+"scroll up" / "gulir ke atas" → scroll_up; "scroll down" / "geser ke bawah" → scroll_down. Keduanya menggeser halaman sekitar satu layar, bukan pindah Section seperti next.
+"scroll top" / "scroll to the top" / "gulir paling atas" → scroll_top; "scroll bottom" / "scroll to the bottom" / "gulir ke paling bawah" → scroll_bottom. Menuju tepi halaman, tanpa membuka kontak atau WhatsApp. Keempat aksi scroll tanpa section. "Go home" tetap Show hero.
 "next"/"go next"/"go forward"/"service berikutnya" adalah aksi next: tampilkan Section setelah yang sedang terlihat sesuai urutan SELURUH halaman, bukan maju dalam riwayat atau terbatas daftar produk. Urutannya Hero → The System Behind Every Agent → daftar produk → BikinKonten → Lubna → CRM AI Agent → HireAssess → Arkiv → CoDev → CoFrame → CoFinance → CoLegal → Trusted by → Contact. Berhenti di Contact. Browser menentukan tujuan dari posisi halaman; kembalikan next tanpa section, termasuk saat tujuan berikutnya Contact (tidak membuka WhatsApp).
 "explore"/"What else can I explore?" mengeksplorasi section berikutnya sesuai posisi halaman, bukan maju dalam riwayat.
 Demo video tersedia HANYA untuk BikinKonten dan Lubna melalui player halaman. Permintaan melihat/memutar demo: demo dengan section produk tersebut, atau current jika tidak disebut. Produk lain belum punya demo: noop, jangan buka video teaser dekoratif atau contact.
@@ -59,6 +61,10 @@ Kembalikan JSON saja, salah satu:
 {{"action":"show","section":"<id>"}}
 {{"action":"back"}}
 {{"action":"next"}}
+{{"action":"scroll_up"}}
+{{"action":"scroll_down"}}
+{{"action":"scroll_top"}}
+{{"action":"scroll_bottom"}}
 {{"action":"explore"}}
 {{"action":"demo","section":"<bikinkonten, lubna, atau current>"}}
 {{"action":"video_pause"}}
@@ -207,11 +213,15 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
     section = resolve_section(raw_section) if isinstance(raw_section, str) else None
     text = payload.get("text") or payload.get("prompt") or payload.get("clarification")
 
-    if action in {"back", "next", "explore", "contact", "whatsapp", "demo", "video_pause", "video_resume", "video_restart", "video_close"}:
+    if action in {"back", "next", "explore", "scroll_up", "scroll_down", "scroll_top", "scroll_bottom", "contact", "whatsapp", "demo", "video_pause", "video_resume", "video_restart", "video_close"}:
         blob = " ".join((transcript or "").lower().replace("’", "'").split())
         patterns = {
             "back": r"\b(back|previous|kembali|balik|sebelumnya)\b",
             "next": r"\b(next|forward|maju|lanjut|berikutnya|selanjutnya)\b",
+            "scroll_up": r"\b(scroll|move|go|gulir|geser)\b.*\b(up|atas)\b",
+            "scroll_down": r"\b(scroll|move|go|gulir|geser)\b.*\b(down|bawah)\b",
+            "scroll_top": r"\b(scroll|move|go|gulir|geser)\b.*\b(top|paling atas)\b",
+            "scroll_bottom": r"\b(scroll|move|go|gulir|geser)\b.*\b(bottom|paling bawah)\b",
             "explore": r"\b(explore|what else|anything else|jelajah|eksplorasi|lainnya|apa lagi|section berikutnya|bagian berikutnya)\b",
             "whatsapp": r"\b(open|launch|buka|bukakan)\b.*\b(whatsapp|wa)\b",
             "demo": r"\b(play|watch|see|show|open|putar|putarkan|tonton|lihat|tampilkan|buka)\b.*\b(demo|video)\b",
@@ -227,7 +237,7 @@ def decide(payload: dict[str, Any] | None, transcript: str | None = None) -> dic
             return _clarify(guessed, None) if guessed or raw_section else {"action": action}
         if action == "demo" and re.search(r"\b(book|schedule|jadwalkan|menjadwalkan)\b", blob):
             return _clarify([], UNCLEAR_ASK)
-        if action in {"back", "next", "explore"}:
+        if action in {"back", "next", "explore", "scroll_up", "scroll_down", "scroll_top", "scroll_bottom"}:
             return _clarify(guessed, None) if guessed or raw_section else {"action": action}
         target = section or ("current" if raw_section == "current" else None)
         allowed = {"bikinkonten", "lubna", "current"} if action == "demo" else PRODUCT_IDS | {"current", "contact"}

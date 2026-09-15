@@ -568,6 +568,37 @@ test("voice navigation starts at the project list and centers individual content
   }
 });
 
+test("voice scroll commands use page bounds, smooth scrolling and Back history", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
+  for (const smooth of [false, true]) {
+    const dialog = { open: true, close() { this.open = false; } };
+    let options;
+    const window = { innerHeight: 800, scrollY: 1000, scrollTo(value) { options = value; this.scrollY = value.top; } };
+    const sandbox = vm.createContext({ window, reduce: !smooth,
+      document: { documentElement: { scrollHeight: 4000 }, getElementById: () => dialog },
+      smoothInstance: smooth ? { scrollTo(top, value) { options = value; window.scrollY = top; } } : null,
+    });
+    vm.runInContext(navigation, sandbox);
+    const action = vm.runInContext('runPageAction', sandbox);
+    for (const [command, top] of [['scroll_down', 1640], ['scroll_up', 1000], ['scroll_top', 0], ['scroll_bottom', 3200]]) {
+      assert.equal(action({ action: command }), true);
+      assert.equal(window.scrollY, top);
+      assert.equal(dialog.open, false, 'Scrolling closes an open demo');
+      assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).top', sandbox), top);
+      assert.equal(smooth ? options.duration : options.behavior, smooth ? 1.15 : 'auto');
+    }
+    assert.equal(action({ action: 'scroll_down' }), false, 'Bottom cannot overscroll');
+    assert.equal(action({ action: 'back' }), true);
+    assert.equal(window.scrollY, 0, 'Back restores the position before scrolling to bottom');
+    assert.equal(action({ action: 'scroll_up' }), false, 'Top cannot overscroll');
+    assert.equal(action({ action: 'scroll_diagonal' }), false);
+    action({ action: 'scroll_down' });
+    assert.equal(window.scrollY, 640);
+    assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).top', sandbox), 640, 'New movement replaces forward history');
+  }
+});
+
 test("voice demo controls reuse page triggers and only control an open demo", async () => {
   const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
   const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));

@@ -11,6 +11,18 @@ from server import interpret
 # Expected decisions are independent of the production prompt. None means no section.
 CAKE = "Aku punya bisnis jual beli cake dan ingin meningkatkan penjualan, kira kira saya harus pakai service mana?"
 CASES = {
+    "scroll": [
+        ("Scroll up", "scroll_up", None),
+        ("Scroll down", "scroll_down", None),
+        ("Scroll top", "scroll_top", None),
+        ("Scroll bottom", "scroll_bottom", None),
+        ("Tolong geser halaman ke atas", "scroll_up", None),
+        ("Gulir halaman ke bawah", "scroll_down", None),
+        ("Gulir sampai paling atas", "scroll_top", None),
+        ("Geser sampai paling bawah", "scroll_bottom", None),
+        ("Don't scroll down", "noop", None),
+        ("Next", "next", None),
+    ],
     "cake": [(CAKE, "show", "bikinkonten")] * 3,
     "showcase": [
         ("Show me the solutions.", "show", "work"),

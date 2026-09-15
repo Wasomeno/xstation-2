@@ -184,6 +184,23 @@ class DecideTests(unittest.TestCase):
         result = decide({"action": "clarify", "hypotheses": ["HireAssess", "Arkiv"]})
         self.assertEqual(result["text"], "HireAssess, atau Arkiv?")
 
+    def test_directional_scroll_requires_a_matching_command_without_targets(self):
+        for action, phrases in {
+            "scroll_up": ("Scroll up", "Gulir ke atas"),
+            "scroll_down": ("Scroll down", "Geser ke bawah"),
+            "scroll_top": ("Scroll top", "Scroll to the top", "Gulir paling atas"),
+            "scroll_bottom": ("Scroll bottom", "Scroll to the bottom", "Gulir ke paling bawah"),
+        }.items():
+            for phrase in phrases:
+                with self.subTest(phrase=phrase):
+                    self.assertEqual(decide({"action": action}, phrase), {"action": action})
+                    for payload, text in (({"action": action}, "Hello"),
+                                          ({"action": action}, "Don't " + phrase),
+                                          ({"action": action}, "Jangan " + phrase),
+                                          ({"action": action, "section": "contact"}, phrase)):
+                        self.assertEqual(decide(payload, text)["action"], "clarify")
+        self.assertEqual(decide({"action": "scroll_up"}, "Scroll down")["action"], "clarify")
+
     def test_demo_actions_require_explicit_commands_and_supported_targets(self):
         for transcript, payload in (
             ("Play the BikinKonten demo", {"action": "demo", "section": "bikinkonten"}),

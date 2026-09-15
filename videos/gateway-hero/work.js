@@ -238,7 +238,20 @@ function runPageAction(decision) {
     }
     return true;
   }
-  if (dialog?.open && ["show", "back", "next", "explore", "contact", "whatsapp"].includes(decision.action)) dialog.close();
+  const scroll = ["scroll_up", "scroll_down", "scroll_top", "scroll_bottom"].includes(decision.action);
+  if (dialog?.open && (scroll || ["show", "back", "next", "explore", "contact", "whatsapp"].includes(decision.action))) dialog.close();
+  if (scroll) {
+    const bottom = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const target = decision.action === "scroll_top" ? 0 : decision.action === "scroll_bottom" ? bottom
+      : window.scrollY + window.innerHeight * 0.8 * (decision.action === "scroll_up" ? -1 : 1);
+    const top = Math.max(0, Math.min(bottom, target));
+    if (Math.abs(top - window.scrollY) < 1) return false;
+    showSection._focus = null;
+    recordVoiceAction({ action: decision.action, top });
+    if (smoothInstance) smoothInstance.scrollTo(top, { duration: reduce ? 0.05 : 1.15 });
+    else window.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+    return true;
+  }
   if (decision.action === "back") {
     const index = voiceActionLog.index - 1;
     const entry = voiceActionLog.entries[index];
