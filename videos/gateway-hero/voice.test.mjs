@@ -777,11 +777,11 @@ test("a speech pause starts processing within two seconds without waiting for ca
   assert.equal(h.ui.root.dataset.state, "thinking"); h.escape();
 });
 
-test("no new words for one second submits once even while crowd noise stays loud", async () => {
+test("no new words for two seconds submits once even while crowd noise stays loud", async () => {
   const h = browser(); const { socket } = await h.connect();
   h.audio(.1);
   socket.message({ type: "delta", item_id: "hello", text: "Hello" });
-  for (let i = 0; i < 9; i++) { h.tick(100); h.audio(.06); }
+  for (let i = 0; i < 19; i++) { h.tick(100); h.audio(.06); }
   assert.equal(h.ui.root.dataset.state, "listening");
   socket.message({ type: "delta", item_id: "hello", text: "Hello" });
   h.tick(100);
@@ -789,9 +789,9 @@ test("no new words for one second submits once even while crowd noise stays loud
   assert.equal(socket.messages.filter(m => m.type === "commit").length, 1);
   socket.message({ type: "noop", item_id: "hello" });
   socket.message({ type: "delta", item_id: "next", text: "Buka" });
-  h.tick(500);
+  h.tick(1500);
   socket.message({ type: "delta", item_id: "next", text: "Buka Arkiv" });
-  h.tick(500);
+  h.tick(1500);
   assert.equal(h.ui.root.dataset.state, "listening", "New words extend the command");
   h.tick(500);
   assert.equal(h.ui.root.dataset.state, "thinking");

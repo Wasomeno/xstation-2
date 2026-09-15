@@ -647,7 +647,7 @@ function bindVoice() {
           c.latestTranscript = text.trim();
           // New words extend the command; microphone noise and repeated captions do not.
           clearTimeout(c.wordTimer);
-          c.wordTimer = timer(c.commit, 1000);
+          c.wordTimer = timer(c.commit, 2000);
         }
         c.pause.transcript(performance.now());
         setState("listening", COPY.listening, text.trim());
