@@ -580,7 +580,7 @@ function bindVoice() {
       for (const id of c.timers) clearTimeout(id);
       c.timers.length = 0;
       if (c.item) { c.retired.add(c.item); if (c.retired.size > 32) c.retired.delete(c.retired.values().next().value); }
-      c.item = null; c.committed = false; c.transcribed = false; c.pause = createPauseDetector();
+      c.item = null; c.committed = false; c.transcribed = false; c.latestTranscript = ""; c.pause = createPauseDetector();
       setState("listening", COPY.listening, "", true);
       if (shake) {
         ui.root.dataset.fallback = String(++reaction); ui.wave.refresh(); sound("fallback");
@@ -593,6 +593,7 @@ function bindVoice() {
       if (!current() || c.committed || !c.ready) return;
       c.committed = true;
       clearTimeout(c.captureTimer);
+      clearTimeout(c.wordTimer);
       send({ type: "commit" });
       setState("thinking");
       timer(fail, 30000);
@@ -642,6 +643,12 @@ function bindVoice() {
       }
       if (c.committed) return;
       if (payload.type === "delta" && typeof text === "string" && text.trim()) {
+        if (text.trim() !== c.latestTranscript) {
+          c.latestTranscript = text.trim();
+          // New words extend the command; microphone noise and repeated captions do not.
+          clearTimeout(c.wordTimer);
+          c.wordTimer = timer(c.commit, 2000);
+        }
         c.pause.transcript(performance.now());
         setState("listening", COPY.listening, text.trim());
         ui.root.dataset.speaking = "true";
