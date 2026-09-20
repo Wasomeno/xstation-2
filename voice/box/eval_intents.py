@@ -1,4 +1,4 @@
-"""Live DeepSeek regression checks; run explicitly, never in offline unit tests."""
+"""Live selected-provider regression checks; run explicitly, never in offline unit tests."""
 
 import argparse
 import asyncio
@@ -168,7 +168,7 @@ async def evaluate(group):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sends the fixed eval cases and catalog prompt to the configured DeepSeek API.")
+    parser = argparse.ArgumentParser(description="Sends the fixed eval cases and catalog prompt to the configured voice decision API.")
     parser.add_argument("--group", choices=["all", *CASES], default="all")
     args = parser.parse_args()
     raise SystemExit(0 if asyncio.run(evaluate(args.group)) else 1)

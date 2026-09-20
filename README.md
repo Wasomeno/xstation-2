@@ -14,7 +14,7 @@ Then open [http://127.0.0.1:4174](http://127.0.0.1:4174).
 
 The voice agent is hidden by default. Add `?voice=1` to show it on desktop, for example [http://127.0.0.1:4174/?voice=1](http://127.0.0.1:4174/?voice=1).
 
-After a click or local wake-word detection, the floating mic opens a conversation session with the voice box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash`. Keys stay on the box. Live transcript appears in the popover.
+After a click or local wake-word detection, the floating mic opens a conversation session with the voice box: OpenAI Realtime `gpt-live-transcribe`, then DeepSeek `deepseek-v4-flash` (default) or TypeSafe AI Jev `jev-latest`. Keys stay on the box. Live transcript appears in the popover.
 
 ```bash
 cd voice/box
@@ -30,6 +30,18 @@ From the repo root (keys in `voice/box/.env`):
 npm start          # site on :4174
 npm run voice      # box on :4175; reloads when Python files change
 ```
+
+To select Jev, set these in `voice/box/.env` (local) or Dokploy's Environment tab, then restart/redeploy the voice service:
+
+```dotenv
+VOICE_LLM_PROVIDER=jev
+TYPESAFE_API_KEY=your-typesafe-key
+JEV_MODEL=jev-latest
+```
+
+`OPENAI_API_KEY` is still required for transcription. Jev does not require a DeepSeek key. Switch back with `VOICE_LLM_PROVIDER=deepseek` and `DEEPSEEK_API_KEY`. Keys stay on the backend; there is no automatic provider fallback. `/health` reports the selected `provider` and `model` and checks that provider's key plus OpenAI's key (it does not validate credentials with the upstream services).
+
+Jev uses [TypeSafe's typed Choice API](https://docs.typesafe.ai/primitives/choice) to select an allowed page action and target, reusing the catalog, navigation rules, and action validator. It cannot generate clarification prose, so unclear references use the existing Indonesian clarification text. The live intent evaluation below runs against whichever provider is selected; run it with your TypeSafe key before relying on Jev's Indonesian/English accuracy.
 
 Point the live site at a tunneled box with `?voice=1&box=https://your-tunnel`.
 
@@ -52,7 +64,7 @@ Run offline checks separately from the live intent evaluation:
 ```bash
 npm run test:voice
 node --test videos/gateway-hero/voice.test.mjs
-# Sends fixed sample commands and the catalog prompt to the configured DeepSeek API; uses API credits.
+# Sends fixed sample commands and the catalog prompt to the configured voice decision API; uses API credits.
 voice/box/.venv/bin/python voice/box/eval_intents.py
 # Focused regression: the cake example must select BikinKonten three times.
 voice/box/.venv/bin/python voice/box/eval_intents.py --group cake

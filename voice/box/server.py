@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Always-on voice box: OpenAI transcription, DeepSeek behind the box."""
+"""Always-on voice box: OpenAI transcription with selectable DeepSeek or Jev decisions."""
 
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ import websockets
 from decide import SYSTEM_PROMPT, decide_from_model_text
 from whisper_lang import FOREIGN_ASK, ID_PROMPT, parse_openai_transcription
 from streaming import relay_transcripts
+from jev import JEV_MODEL, interpret_jev
 
 ALLOWED_ORIGINS = tuple(origin.strip().rstrip("/") for origin in os.environ.get(
     "VOICE_BOX_ALLOWED_ORIGINS",
@@ -167,6 +168,11 @@ async def transcribe_openai(path: str) -> dict:
 
 
 async def interpret(transcript: str) -> dict:
+    provider = os.environ.get("VOICE_LLM_PROVIDER", "deepseek").strip().lower()
+    if provider == "jev":
+        return await interpret_jev(transcript)
+    if provider != "deepseek":
+        raise HTTPException(status_code=503, detail="llm-provider-invalid")
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="deepseek-key-missing")
@@ -201,12 +207,17 @@ async def interpret(transcript: str) -> dict:
 def health():
     has_deepseek = bool(os.environ.get("DEEPSEEK_API_KEY", "").strip())
     has_openai = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    has_jev = bool(os.environ.get("TYPESAFE_API_KEY", "").strip())
+    provider = os.environ.get("VOICE_LLM_PROVIDER", "deepseek").strip().lower()
+    has_provider = {"deepseek": has_deepseek, "jev": has_jev}.get(provider, False)
     payload = {
-        "ok": has_deepseek and has_openai,
+        "ok": has_provider and has_openai,
         "transcribe": OPENAI_TRANSCRIBE_MODEL,
         "openai": has_openai,
         "deepseek": has_deepseek,
-        "model": DEEPSEEK_MODEL,
+        "jev": has_jev,
+        "provider": provider,
+        "model": {"deepseek": DEEPSEEK_MODEL, "jev": JEV_MODEL}.get(provider),
     }
     if not payload["ok"]:
         return JSONResponse(payload, status_code=503)
