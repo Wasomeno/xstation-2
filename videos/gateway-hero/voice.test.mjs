@@ -37,10 +37,10 @@ const microphone = () => {
   return { track, media: { getTracks: () => [track], getAudioTracks: () => [track] } };
 };
 
-function browser({ resume, unsupported = false, reducedMotion = false, search = "?voice=1" } = {}) {
+function browser({ resume, unsupported = false, reducedMotion = false, search = "?voice=1", agentId = "" } = {}) {
   const workers = [], timers = new Map();
   let clock = 1000, timerId = 0;
-  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [];
+  const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [], agentSessions = [], pageActions = [];
   const button = Object.assign(new EventTarget(), {
     attributes: {},
     setAttribute(name, value) { this.attributes[name] = value; },
@@ -53,7 +53,7 @@ function browser({ resume, unsupported = false, reducedMotion = false, search = 
   const ui = {
     root: { hidden: true, dataset: { state: "idle" } }, button,
     status: { textContent: "" }, transcript: { textContent: "" },
-    wave: { analyser: null, setAnalyser(node) { this.analyser = node; }, refresh() {} },
+    wave: { analyser: null, output: null, setAnalyser(node) { this.analyser = node; }, setOutput(level) { this.output = level; }, refresh() {} },
   };
   class Socket extends EventTarget {
     static OPEN = 1;
@@ -85,6 +85,7 @@ function browser({ resume, unsupported = false, reducedMotion = false, search = 
     crossOriginIsolated: true,
     AudioContext: unsupported ? undefined : Audio,
     xstationShowSection(section) { sections.push(section); return true; },
+    ...(agentId ? { xstationPageAction(decision) { pageActions.push({ ...decision }); return decision.action !== "back"; } } : {}),
     matchMedia: (query) => ({ matches: query.includes("prefers-reduced-motion") ? reducedMotion : true }),
   });
   const document = Object.assign(new EventTarget(), { querySelector: () => null });
@@ -107,13 +108,19 @@ function browser({ resume, unsupported = false, reducedMotion = false, search = 
     } } },
     fetch() { const request = deferred(); health.push(request); return request.promise; },
     WebSocket: Socket, AudioContext: unsupported ? undefined : Audio,
-    VOICE_BOX_URL: "http://voice.test", VOICE_BOX_WS: "ws://voice.test",
+    VOICE_BOX_URL: "http://voice.test", VOICE_BOX_WS: "ws://voice.test", VOICE_AGENT_ID: agentId,
+    console: { warn() {} },
+    agentSdk: { Conversation: { startSession(options) {
+      const session = { options, ended: 0, volume: 0, endSession() { this.ended += 1; return Promise.resolve(); }, getOutputVolume() { return this.volume; } };
+      agentSessions.push(session);
+      return Promise.resolve(session);
+    } } },
     performance: { now: () => clock },
     btoa: (value) => Buffer.from(value, "binary").toString("base64"),
   });
-  vm.runInContext(`${source}\ncreateSurface = () => ui; createStateSound = () => state => stateSounds.push(state); bindVoice();`, sandbox);
+  vm.runInContext(`${source}\ncreateSurface = () => ui; createStateSound = () => state => stateSounds.push(state); loadAgentSdk = () => Promise.resolve(agentSdk); bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox, workers,
+    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox, workers, agentSessions, pageActions,
     tick(ms) { clock += ms; for (const [id, timer] of [...timers]) if (timer.at <= clock && timers.delete(id)) timer.fn(); },
     hide(hidden) { document.hidden = hidden; emit(document, "visibilitychange"); },
     audio(value = 0) { contexts.at(-1).processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(value) } }); },
@@ -1172,4 +1179,110 @@ test("missing isolation fails before requesting the microphone, and slow inferen
   const g = browser(); const { track } = await g.enable(); g.click();
   for (let i = 0; i < 20 && !track.stopped; i++) g.audio(.1);
   assert.equal(track.stopped, true); assert.ok(g.sockets.every(socket => socket.readyState === 3));
+});
+
+test("agent mode talks through ElevenLabs, drives the page with one client tool, and re-arms when the call ends", async () => {
+  const h = browser({ agentId: "agent_test" });
+  await h.enable(); await flush();
+  assert.equal(h.sockets.length, 0, "Agent mode never opens the voice box stream");
+  assert.equal(h.agentSessions.length, 1);
+  const session = h.agentSessions[0], { options } = session;
+  assert.equal(options.agentId, "agent_test");
+  assert.equal(h.ui.root.dataset.state, "listening");
+  h.audio(0.5);
+  assert.equal(h.sockets.length, 0, "Local capture is not uploaded during an agent conversation");
+
+  assert.equal(options.clientTools.page_action({ action: "show", section: "arkiv" }), "done");
+  assert.deepEqual(h.pageActions, [{ action: "show", section: "arkiv" }]);
+  assert.match(options.clientTools.page_action({ action: "back" }), /not possible/);
+  assert.notEqual(h.ui.root.dataset.fallback, "", "A page action that cannot run shakes the face");
+
+  options.onMessage({ source: "user", message: "Show me Arkiv" });
+  assert.equal(h.ui.root.dataset.state, "thinking");
+  options.onMessage({ source: "ai", message: '@@page_action@@{"action": "show", "section": "arkiv"} page_action(action="show", section="arkiv") [warmly] Here is  Arkiv.' });
+  options.onModeChange({ mode: "speaking" });
+  assert.equal(h.ui.root.dataset.state, "speaking");
+  assert.equal(h.ui.transcript.textContent, "Here is Arkiv.");
+  session.volume = 0.4;
+  assert.equal(h.ui.wave.output(), 0.4);
+  options.onModeChange({ mode: "listening" });
+  options.onModeChange({ mode: "speaking" });
+  h.tick(600);
+  assert.equal(h.ui.transcript.textContent, "Here is Arkiv.", "A pause between sentences keeps the caption");
+  options.onModeChange({ mode: "listening" });
+  h.tick(600);
+  assert.equal(h.ui.root.dataset.state, "listening");
+  assert.equal(h.ui.transcript.textContent, "");
+
+  options.onMessage({ source: "user", message: "Hmm" });
+  h.tick(12000);
+  assert.equal(h.ui.root.dataset.state, "listening", "A silent agent does not leave the face thinking");
+
+  h.tick(44000);
+  assert.equal(session.ended, 0, "The idle clock starts when the agent stops talking, not at the last user message");
+  options.onModeChange({ mode: "speaking" });
+  options.onModeChange({ mode: "listening" });
+  h.tick(44000);
+  assert.equal(session.ended, 0);
+  h.tick(1000);
+  assert.equal(session.ended, 1, "A conversation nobody talks to hangs up instead of billing minutes");
+  assert.equal(h.ui.root.dataset.state, "armed");
+  assert.equal(h.ui.wave.output, null);
+  assert.equal(options.clientTools.page_action({ action: "next" }), "ignored");
+
+  h.click(); await flush();
+  assert.equal(h.agentSessions.length, 2, "Tapping the armed mic starts a new conversation");
+  h.click();
+  assert.equal(h.agentSessions[1].ended, 1, "Tapping during a conversation ends it");
+  assert.equal(h.ui.root.dataset.state, "armed");
+});
+
+test("agent mode runs cued page actions when the agent's voice reaches each cue", async () => {
+  const h = browser({ agentId: "agent_test" });
+  await h.enable(); await flush();
+  const { options } = h.agentSessions[0];
+  const say = (text, ms = 100) => options.onAudioAlignment({
+    chars: [...text], char_start_times_ms: [...text].map((_, i) => i * ms), char_durations_ms: [...text].map(() => ms),
+  });
+
+  say("Mari lihat HireAssess. ");
+  assert.equal(options.clientTools.page_action({ action: "show", section: "bikinkonten" }), "done");
+  assert.match(options.clientTools.page_action({ action: "show", section: "hireassess", cue: "Hire Assess" }), /^scheduled/);
+  assert.match(options.clientTools.page_action({ action: "contact", section: "contact", cue: "tim kami" }), /^scheduled/);
+  assert.deepEqual(h.pageActions, [{ action: "show", section: "bikinkonten" }], "Cued actions wait, and words said before the call do not count");
+
+  h.tick(2300);
+  say("BikinKonten untuk konten, ");
+  say("HireAssess untuk rekrutmen, dan tim kami siap membantu.");
+  h.tick(2600 - 250 - 1);
+  assert.equal(h.pageActions.length, 1);
+  h.tick(1);
+  assert.deepEqual(h.pageActions[1], { action: "show", section: "hireassess" }, "The move starts just before its word is spoken");
+  h.tick(3199);
+  assert.equal(h.pageActions.length, 2);
+  h.tick(1);
+  assert.deepEqual(h.pageActions[2], { action: "contact", section: "contact" });
+
+  options.clientTools.page_action({ action: "show", section: "arkiv", cue: "Arkiv" });
+  say("Lalu ada Arkiv.");
+  options.onInterruption({});
+  h.tick(5000);
+  assert.equal(h.pageActions.length, 3, "An interrupted explanation drops the moves it had not reached");
+
+  options.clientTools.page_action({ action: "show", section: "codev", cue: "CoDev" });
+  options.onMessage({ source: "user", message: "Tunggu" });
+  say("CoDev.");
+  h.tick(5000);
+  assert.equal(h.pageActions.length, 3, "A new visitor turn drops waiting moves");
+});
+
+test("agent mode is opt-in through the agent query parameter", async () => {
+  const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
+  const read = search => vm.runInNewContext(`${config}; VOICE_AGENT_ID`, {
+    window: { location: { search, hostname: "nadi.example", port: "", origin: "https://nadi.example" } }, URLSearchParams,
+  });
+  assert.equal(read("?voice=1"), "");
+  assert.match(read("?voice=1&agent=1"), /^agent_[a-z0-9]+$/);
+  assert.equal(read("?voice=1&agent=agent_abc123"), "agent_abc123");
+  assert.equal(read("?voice=1&agent=https://evil.test"), "");
 });

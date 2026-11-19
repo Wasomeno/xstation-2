@@ -1,6 +1,12 @@
-import { VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=same-origin-2";
+import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-1";
 
 const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.url);
+
+// Pinned: the ElevenLabs browser SDK is only fetched when agent mode starts a conversation.
+const AGENT_SDK_URL = "https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.35.0/+esm";
+let loadAgentSdk = () => import(AGENT_SDK_URL);
+const AGENT_IDLE_MS = 45000;
+const AGENT_CUE_LEAD_MS = 250;
 
 const TARGET_RATE = 24000;
 const DESKTOP_VOICE = window.matchMedia(
@@ -21,6 +27,7 @@ const COPY = {
   connecting: "Menghubungkan…",
   listening: "Mendengarkan…",
   thinking: "Memproses…",
+  speaking: "Nadi berbicara…",
   cancel: "Batalkan koneksi",
   start: "Mulai mendengarkan",
   stop: "Berhenti mendengarkan",
@@ -188,6 +195,7 @@ function createWaveform(canvas) {
   let frequency = new Uint8Array(128);
   let waveform = new Uint8Array(256);
   let analyser = null;
+  let output = null;
   let energy = 0;
   let phase = 0;
   let expressionTime = 0;
@@ -233,6 +241,7 @@ function createWaveform(canvas) {
     fallbackEvent = feedback;
     const failed = state === "deaf" || state === "blocked";
     const listening = state === "listening";
+    const talking = state === "speaking";
     const processing = state === "thinking" || state === "connecting";
     const seconds = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 1 / 60;
     lastTime = now;
@@ -241,9 +250,11 @@ function createWaveform(canvas) {
       analyser.getByteTimeDomainData(waveform);
       analyser.getByteFrequencyData(frequency);
       target = Math.pow(voiceEnergy(waveform, frequency), 0.65);
+    } else if (output && talking && !motion.matches) {
+      target = Math.pow(Math.min(1, Math.max(0, Number(output()) || 0)), 0.65);
     }
     energy = motion.matches || failed ? 0 : smoothVoiceEnergy(energy, target, seconds);
-    const targetFace = !failed && (listening || processing) ? 1 : 0;
+    const targetFace = !failed && (listening || talking || processing) ? 1 : 0;
     visualFace = motion.matches || failed ? targetFace
       : visualFace + (targetFace - visualFace) * (1 - Math.exp(-seconds / 0.12));
     const morph = visualFace * visualFace * (3 - 2 * visualFace);
@@ -254,7 +265,7 @@ function createWaveform(canvas) {
     if (!motion.matches && !failed) phase += seconds * speed;
     if (!motion.matches && !failed) expressionTime = targetFace ? expressionTime + seconds : 0;
     const t = motion.matches || failed ? 0 : phase;
-    const targetRadius = listening ? 34 : state === "thinking" ? 32 : processing ? 30 : 24;
+    const targetRadius = listening ? 34 : talking ? 30 + energy * 6 : state === "thinking" ? 32 : processing ? 30 : 24;
     visualRadius = motion.matches || failed ? targetRadius
       : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.12));
     const radius = size * (visualRadius / 88);
@@ -410,6 +421,8 @@ function createWaveform(canvas) {
   fit();
   return {
     refresh,
+    // The agent's playback level (0–1) drives the orb while it speaks.
+    setOutput(level) { output = level; refresh(); },
     setAnalyser(node) {
       analyser = node;
       energy = 0;
@@ -520,7 +533,7 @@ function bindVoice() {
     }
     ui.root.dataset.state = state;
     ui.status.textContent = text;
-    ui.transcript.textContent = state === "listening" ? transcript : "";
+    ui.transcript.textContent = state === "listening" || state === "speaking" ? transcript : "";
     ui.root.dataset.speaking = "false";
     if (state !== "listening" || previous !== "listening") ui.root.dataset.fallback = "";
     ui.button.setAttribute("aria-pressed", String(enabled));
@@ -533,6 +546,7 @@ function bindVoice() {
     if (!old) return;
     for (const timer of old.timers) clearTimeout(timer);
     old.pending.length = 0;
+    if (old.close) { old.close(); return; }
     try { if (old.socket.readyState === 1) old.socket.send(JSON.stringify({ type: "stop" })); } catch { /* Transport already failed. */ }
     if (old.socket.readyState < 2) old.socket.close();
   };
@@ -561,10 +575,121 @@ function bindVoice() {
     ui.wave.setAnalyser(null);
     setState(state, message);
   };
+  // Agent mode: the ElevenLabs agent listens, speaks, and drives the page through one client tool.
+  const beginAgent = (phrase, silent) => {
+    // committed keeps the local capture loop from uploading audio to the voice box.
+    const c = { timers: [], pending: [], committed: true, conversation: null };
+    command = c;
+    const current = () => enabled && command === c;
+    const timer = (fn, ms) => { const id = setTimeout(() => { if (current()) fn(); }, ms); c.timers.push(id); return id; };
+    const fail = () => { if (current()) arm(`Koneksi suara terputus. ${COPY.armed}`); };
+    c.close = () => {
+      ui.wave.setOutput(null);
+      Promise.resolve(c.conversation?.endSession()).catch(() => {});
+    };
+    setState("connecting", COPY.connecting, "", silent);
+    if (phrase) window.dispatchEvent(new CustomEvent("nadi:wake", { detail: { phrase } }));
+    const connectionTimer = timer(fail, 20000);
+    // A connected agent bills by the minute, so a session nobody talks to hangs up by itself.
+    const idle = () => { clearTimeout(c.idleTimer); c.idleTimer = timer(() => arm(), AGENT_IDLE_MS); };
+    // Cued page actions wait for the agent's own voice: said/saidAt hold the letters of the speech
+    // still to be played and when each one sounds, taken from the per-character timings of the audio.
+    const spoken = text => String(text || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    c.said = ""; c.saidAt = []; c.speechEnd = 0; c.cues = [];
+    const dropCues = () => {
+      for (const cue of c.cues) clearTimeout(cue.timer);
+      c.cues.length = 0; c.said = ""; c.saidAt.length = 0; c.speechEnd = 0;
+    };
+    const matchCues = () => {
+      const now = performance.now();
+      for (const cue of c.cues) {
+        if (cue.timer !== undefined) continue;
+        const index = c.said.indexOf(cue.key, cue.from);
+        if (index < 0) continue;
+        // Start moving just before the word so the section arrives while it is being said.
+        cue.timer = timer(() => { c.cues.splice(c.cues.indexOf(cue), 1); pageAction(cue.decision); }, Math.max(0, c.saidAt[index] - now - AGENT_CUE_LEAD_MS));
+      }
+    };
+    const heard = ({ chars, char_start_times_ms: starts, char_durations_ms: durations } = {}) => {
+      if (!current() || !Array.isArray(chars) || !chars.length) return;
+      const now = performance.now();
+      const base = Math.max(now, c.speechEnd);
+      chars.forEach((char, i) => { for (const letter of spoken(char)) { c.said += letter; c.saidAt.push(base + (starts?.[i] || 0)); } });
+      c.speechEnd = base + (starts?.[chars.length - 1] || 0) + (durations?.[chars.length - 1] || 0);
+      if (c.said.length > 4000) {
+        const cut = c.said.length - 2000;
+        c.said = c.said.slice(cut); c.saidAt.splice(0, cut);
+        for (const cue of c.cues) cue.from = Math.max(0, cue.from - cut);
+      }
+      matchCues();
+    };
+    const pageAction = ({ action, section, cue } = {}) => {
+      if (!current()) return "ignored";
+      const decision = { action: String(action || "") };
+      if (section) decision.section = String(section);
+      const key = spoken(cue);
+      if (key) {
+        if (c.cues.length >= 8) return "too many waiting page actions";
+        c.cues.push({ key, decision, from: c.said.length });
+        matchCues();
+        return `scheduled: runs when you say "${cue}"`;
+      }
+      let moved = false;
+      try { moved = window.xstationPageAction?.(decision) === true; } catch { /* The agent hears the failure below. */ }
+      if (!moved) {
+        ui.root.dataset.fallback = String(++reaction); ui.wave.refresh(); sound("fallback");
+        timer(() => { ui.root.dataset.fallback = ""; ui.wave.refresh(); }, 500);
+      }
+      return moved ? "done" : "not possible from the current page position";
+    };
+    loadAgentSdk().then(({ Conversation }) => Conversation.startSession({
+      agentId: VOICE_AGENT_ID,
+      connectionType: "webrtc",
+      clientTools: { page_action: pageAction },
+      onMessage: ({ message, source }) => {
+        if (!current() || typeof message !== "string" || !message.trim()) return;
+        if (source === "user") {
+          c.caption = "";
+          // A new visitor turn cancels page moves still waiting for words the agent will no longer say.
+          dropCues();
+          clearTimeout(c.idleTimer);
+          clearTimeout(c.modeTimer);
+          setState("thinking", COPY.thinking, "", true);
+          // The agent may stay silent; never leave the face thinking forever.
+          clearTimeout(c.replyTimer);
+          c.replyTimer = timer(() => setState("listening", COPY.listening, "", true), 12000);
+        } else {
+          // Expressive audio tags like [warmly] and leaked tool-call text are not caption material.
+          c.caption = message.replace(/@@[\w-]+@@\s*\{[^}]*\}/g, "").replace(/\bpage_action\s*\([^)]*\)/g, "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
+          if (ui.root.dataset.state === "speaking") setState("speaking", COPY.speaking, c.caption, true);
+        }
+      },
+      onModeChange: ({ mode }) => {
+        if (!current() || !c.conversation) return;
+        clearTimeout(c.replyTimer);
+        clearTimeout(c.modeTimer);
+        if (mode === "speaking") { clearTimeout(c.idleTimer); setState("speaking", COPY.speaking, c.caption || "", true); }
+        // Playback pauses briefly between sentences; only a real pause returns the face to listening.
+        else { idle(); c.modeTimer = timer(() => setState("listening", COPY.listening, "", true), 600); }
+      },
+      onDisconnect: () => { if (current()) arm(); },
+      onAudioAlignment: heard,
+      onInterruption: dropCues,
+      onError: (message) => { console.warn("[voice] agent error:", message); },
+    })).then(conversation => {
+      if (!current()) { Promise.resolve(conversation.endSession()).catch(() => {}); return; }
+      clearTimeout(connectionTimer);
+      c.conversation = conversation;
+      ui.wave.setOutput(() => { try { return conversation.getOutputVolume(); } catch { return 0; } });
+      setState("listening", COPY.listening, "", silent);
+      idle();
+    }).catch(error => { console.warn("[voice] agent failed to start:", error); fail(); });
+  };
   const beginCommand = (phrase, silent = false) => {
     if (!enabled || document.hidden || !stream || !modelReady || command) return;
     sessionWanted = true;
     resetWake();
+    if (VOICE_AGENT_ID) { beginAgent(phrase, silent); return; }
     const socket = new WebSocket(VOICE_BOX_WS);
     const c = { socket, pending: [], timers: [], ready: false, committed: false, transcribed: false, pause: createPauseDetector(), item: null, retired: new Set() };
     command = c;

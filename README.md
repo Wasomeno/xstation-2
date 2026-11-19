@@ -45,6 +45,16 @@ Jev uses [TypeSafe's typed Choice API](https://docs.typesafe.ai/primitives/choic
 
 Point the live site at a tunneled box with `?voice=1&box=https://your-tunnel`.
 
+### ElevenLabs agent mode (opt-in)
+
+`?voice=1&agent=1` keeps the same floating mic and "Hei Nadi" wake word, but the conversation runs through the ElevenLabs "Nadi" agent instead of the voice box: it listens, speaks, and moves the page. `?agent=<agent_id>` selects another agent. The voice box is not needed in this mode.
+
+The agent drives the page through one client tool, `page_action({ action, section })`, which `voice.js` passes to `window.xstationPageAction` — the same actions and section ids the voice box produces. The routing rules live in the agent's prompt ("Website control" section) in ElevenLabs, not in `decide.py`. The browser SDK (`@elevenlabs/client`, pinned in `voice.js`) is loaded from jsDelivr only when a conversation starts. The agent is public (no auth), so its id in `voice-config.js` is enough to start a conversation; restrict it with an origin allowlist or signed URLs in ElevenLabs before sending real traffic to it.
+
+`page_action` also takes an optional `cue`: one to three words the agent is about to say. A cued action does not run at once; `voice.js` reads the per-character timings the SDK reports for the agent's audio (`onAudioAlignment`) and runs the action just before the agent's voice reaches those words (`AGENT_CUE_LEAD_MS`). The agent makes all its calls for one explanation in a single turn (first stop without a cue, later stops cued), so the page walks through several sections in step with the voice for the price of one tool round. Waiting cues are dropped when the visitor interrupts or speaks.
+
+A connected conversation is billed by the minute, so `voice.js` hangs up and re-arms the wake word after 45 seconds in which the agent is silent and the visitor says nothing (`AGENT_IDLE_MS`). Keep the agent a single prompt without workflow hand-overs in ElevenLabs: a hand-over mid-turn made the next step speak the `page_action(...)` call aloud and repeat it. Keep the voice's Expressive mode off too: with it on, the realtime model opened small-talk replies with a `[sad]` refusal ("Saya tidak bisa melakukan itu") and then corrected itself; the `[warmly]` / `[enthusiastically]` / `[confidently]` tags come from the prompt's Tone section instead.
+
 The voice prompt includes all 38 commands from **AI Product Showcase - AI Voice Nav (1).csv**, reconciled against the product descriptions in `index.html` as the primary reference; the CSV is secondary. Business needs also select the best matching product without an explicit name or navigation command. General promotion or sales growth starts at BikinKonten; a more specific problem takes priority, such as unanswered customer messages selecting CRM AI Agent. Lubna handles marketing through chat from brief to publication. The catalog in `voice/box/sections.py` describes every product and the System services using the site's capabilities. Recommendations only navigate; they add no spoken or written explanation.
 
 Reconciled CSV targets:
@@ -139,3 +149,11 @@ Runtime provenance, rebuild instructions, and licensing are in [wake assets](vid
 Before relying on it at a booth, test “Hei Nadi” with several speakers and the actual microphone: at least 18/20 detections, plus no false wake in 30 minutes of representative room sound, similar phrases and demo playback. These real-speaker acceptance measurements are still required. Existing cloud transcription/interpretation costs apply only to activated commands.
 
 Browser integration smoke check (with Playwright available in `NODE_PATH`): `node scripts/check-wake-browser.cjs hei.wav similar-phrase.wav`. Set `WAKE_PREVIEW_URL` to the running preview and optionally `CHROME_PATH`. It uses a fake microphone and mock backend, checks the privacy boundary, and reports actual local detector results for the supplied WAVs. It does not send test audio to OpenAI. Test file results must be compared with their expected phrases; a successful process exit alone does not establish recognition accuracy.
+
+### Record wake-word training samples
+
+Use **Rekam sampel suara** in the footer, or open `/videos/gateway-hero/record.html`. The standalone recorder does not load the voice agent or contact the voice backend. It uses the microphone only after clicking Record, offers playback, and exports mono PCM16 WAV at 16 kHz plus a JSON label manifest. Download each desired WAV and the manifest before leaving; recordings are held in memory only, with a 30-sample limit. No automatic upload or model training occurs.
+
+Label each sample with a pseudonymous speaker code, train/test split, microphone condition, and wake/similar/background category. Wake clips stop at 4 seconds, similar phrases at 8 seconds, and background at 30 seconds. Escape cancels; hiding the page finishes the current clip and releases the microphone. Use new recordings for held-out testing. This collection tool does not establish recognition accuracy or replace the longer booth acceptance test.
+
+The existing frontend Docker image copies this page and its script through `COPY videos/`; no backend or deployment configuration changes are required. Browser recorder smoke check: `node scripts/check-record-browser.cjs` with Playwright in `NODE_PATH` and optional `CHROME_PATH` / `WAKE_PREVIEW_URL`. It exercises real browser capture with a fake microphone, WAV and metadata downloads, automatic/manual stop, cancellation, stale permission cleanup, and verifies no audio uploads.

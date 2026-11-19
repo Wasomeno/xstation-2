@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rekam sampel suara — Nadi</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f6f2; color: #203b31; font: 16px/1.55 system-ui, sans-serif; }
+    main { max-width: 760px; margin: auto; padding: 32px 20px 64px; }
+    a { color: #24563f; text-underline-offset: 3px; }
+    h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.025em; margin: 36px 0 12px; }
+    h2 { font-size: 1.15rem; margin: 0 0 16px; }
+    p { max-width: 65ch; }
+    .muted { color: #52665c; }
+    .panel { background: white; border: 1px solid #d4ded5; border-radius: 16px; padding: 24px; margin: 28px 0; }
+    fieldset { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    legend { font-weight: 650; margin-bottom: 16px; }
+    label { display: grid; gap: 6px; font-size: .9rem; }
+    input, select, button { font: inherit; border: 1px solid #abbeb0; border-radius: 8px; padding: 10px 12px; }
+    input, select { width: 100%; background: white; color: inherit; }
+    button { cursor: pointer; background: #234f3b; color: white; font-weight: 600; }
+    button.secondary { background: white; color: #234f3b; }
+    button:disabled { opacity: .45; cursor: default; }
+    :focus-visible { outline: 3px solid #d58c27; outline-offset: 3px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    #status { min-height: 1.6em; font-weight: 600; }
+    #timer { font-variant-numeric: tabular-nums; }
+    meter { width: 100%; height: 18px; margin-bottom: 18px; }
+    #clips { list-style: none; padding: 0; }
+    #clips li { border-top: 1px solid #d4ded5; padding: 18px 0; }
+    #clips p { margin: 0 0 10px; overflow-wrap: anywhere; }
+    audio { width: 100%; margin-bottom: 10px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 520px) { fieldset { grid-template-columns: 1fr; } .panel { padding: 18px; } }
+  </style>
+</head>
+<body>
+<main>
+  <a href="../../">← Kembali ke Nadi</a>
+  <h1>Bantu Nadi mengenali panggilanmu.</h1>
+  <p class="muted">Rekam contoh suara untuk bahan training dan pengujian wake word. Semua audio tetap di perangkat. Halaman ini tidak mengunggah audio atau melatih model secara otomatis.</p>
+  <section class="panel" aria-labelledby="setup-title">
+    <fieldset id="settings">
+      <legend id="setup-title">Siapkan sampel</legend>
+      <label>Kode pembicara <input id="speaker" value="speaker-01" maxlength="32" pattern="[A-Za-z0-9_-]+" required aria-describedby="speaker-help"></label>
+      <label>Kelompok data <select id="split"><option value="train">Latihan</option><option value="test">Pengujian terpisah</option></select></label>
+      <label>Jenis rekaman <select id="kind"><option value="wake">Panggilan “Hei Nadi”</option><option value="similar">Ucapan mirip, bukan panggilan</option><option value="background">Percakapan / suara latar</option></select></label>
+      <label>Kondisi mikrofon <select id="condition"><option value="laptop-near">Laptop · dekat (30–50 cm)</option><option value="laptop-far">Laptop · jauh (±1 meter)</option><option value="other">Mikrofon / jarak lainnya</option></select></label>
+    </fieldset>
+    <p id="speaker-help" class="muted">Gunakan kode yang sama untuk orang yang sama; tidak perlu nama asli.</p>
+    <p id="prompt">Ucapkan “Hei Nadi” satu kali dengan suara biasa. Rekaman berhenti otomatis setelah 4 detik.</p>
+    <p id="status" role="status" aria-live="polite">Siap merekam.</p>
+    <div class="actions"><span id="timer" aria-label="Durasi rekaman">0.0 dtk</span><label for="level">Level mikrofon</label></div>
+    <meter id="level" min="0" max="1" value="0" aria-label="Level mikrofon"></meter>
+    <div class="actions">
+      <button id="start" type="button">Mulai rekam</button>
+      <button id="stop" type="button" class="secondary" disabled>Selesai</button>
+      <button id="cancel" type="button" class="secondary" disabled>Batalkan</button>
+    </div>
+    <p class="muted">Escape membatalkan rekaman. Pindah tab menghentikan dan menyimpan potongan yang sudah terekam.</p>
+  </section>
+  <section aria-labelledby="results-title">
+    <h2 id="results-title">Sampel sesi ini <span id="count">(0/30)</span></h2>
+    <p id="empty" class="muted">Sampel akan muncul di sini untuk didengarkan dan diunduh.</p>
+    <ul id="clips"></ul>
+    <button id="manifest" type="button" class="secondary" disabled>Unduh label sampel (.json)</button>
+    <p class="muted">Unduh WAV yang ingin disimpan beserta labelnya sebelum menutup atau memuat ulang halaman. Maksimal 30 sampel per sesi.</p>
+  </section>
+  <details>
+    <summary>Tips mengumpulkan data yang berguna</summary>
+    <p>Mulai dengan 20 rekaman panggilan yang terpisah, variasikan jarak dan intonasi alami. Untuk pengujian, buat rekaman baru pada sesi atau waktu berbeda; jangan menyalin sampel latihan ke kelompok pengujian.</p>
+    <p>Tambahkan ucapan mirip seperti “hari ini” dan “hai Dani”, serta suara ruangan atau video yang biasa diputar. Jangan mengucapkan “Hei Nadi” dalam sampel pembanding. Matikan pemutaran sampel saat merekam.</p>
+    <p>Set ini bahan awal, bukan bukti akurasi. Pengujian lintas pembicara dan suara latar lebih panjang tetap dibutuhkan.</p>
+  </details>
+</main>
+<script type="module" src="./record.js?v=1"></script>
+</body>
+</html>
