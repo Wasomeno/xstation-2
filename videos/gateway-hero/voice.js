@@ -1,4 +1,7 @@
 import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-1";
+import { createStage } from "./voice-stage.js?v=stage-15";
+import { createAttract } from "./voice-attract.js?v=loop-15";
+import { createChirps, createMascot } from "./voice-mascot.js?v=flat-3";
 
 const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.url);
 
@@ -6,6 +9,8 @@ const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.ur
 const AGENT_SDK_URL = "https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.35.0/+esm";
 let loadAgentSdk = () => import(AGENT_SDK_URL);
 const AGENT_IDLE_MS = 45000;
+// How long a connected agent is given to start its greeting before the mascot stops waiting for it.
+const AGENT_GREETING_MS = 4000;
 const AGENT_CUE_LEAD_MS = 250;
 
 const TARGET_RATE = 24000;
@@ -118,311 +123,37 @@ function createPauseDetector() {
   };
 }
 
-// Time, yaw, pitch, tilt, curiosity: remembering, weighing, and curious.
-const THINKING_GESTURES = [
-  [[0, .12, -.06, 0, 0], [.5, .12, -.06, 0, 0], [1.1, -.35, -.34, -.035, 0], [3, -.35, -.34, -.035, 0], [3.55, .32, -.27, .025, 0], [5.5, .32, -.27, .025, 0], [6.15, .12, -.06, 0, 0], [7.4, .12, -.06, 0, 0]],
-  [[0, .12, -.06, 0, 0], [.4, .12, -.06, 0, 0], [.8, -.5, -.055, -.025, 0], [2, -.5, -.055, -.025, 0], [2.45, .5, -.055, .025, 0], [3.8, .5, -.055, .025, 0], [4.15, -.27, -.08, -.015, 0], [4.95, -.27, -.08, -.015, 0], [5.45, .12, -.06, 0, 0], [6.5, .12, -.06, 0, 0]],
-  [[0, .12, -.06, 0, 0], [.6, .12, -.06, 0, 0], [1.15, .4, -.11, .16, 1], [3, .4, -.11, .16, 1], [3.55, .08, -.05, 0, 0], [4.2, .08, -.05, 0, 0], [4.85, -.4, -.14, -.14, 1], [6.4, -.4, -.14, -.14, 1], [7.1, .12, -.06, 0, 0], [8, .12, -.06, 0, 0]],
-];
-
-function thinkingEyePose(emotion, time) {
-  const frames = THINKING_GESTURES[emotion];
-  const t = time % frames.at(-1)[0];
-  const next = frames.findIndex(frame => frame[0] > t);
-  const a = frames[next - 1], b = frames[next];
-  const p = (t - a[0]) / (b[0] - a[0]);
-  const ease = 1 + 1.8 * (p - 1) ** 3 + 0.8 * (p - 1) ** 2;
-  const [yaw, pitch, tilt, curious] = a.slice(1).map((value, axis) => value + (b[axis + 1] - value) * ease);
-  const blinkTime = (time + emotion * 0.7) % 7.9;
-  const blink = 1 - 0.9 * Math.exp(-(((blinkTime - 6.4) / 0.085) ** 2));
-  return projectFaceEyes(yaw, pitch, tilt).map((pose, eye) => ({
-    ...pose,
-    ry: pose.ry * blink * (1 + curious * (eye === (yaw > 0 ? 0 : 1) ? 0.07 : -0.37)),
-  }));
-}
-
-function projectFaceEyes(yaw, pitch, tilt = 0) {
-  return [-0.44, 0.44].map(offset => {
-    const longitude = offset + yaw;
-    const depth = Math.cos(longitude) * Math.cos(pitch);
-    const perspective = 2.4 / (3.4 - depth);
-    const scale = (depth * perspective) ** 0.65;
-    const x = 0.83 * Math.sin(longitude) * Math.cos(pitch) * perspective;
-    const y = 0.83 * Math.sin(pitch) * perspective;
-    return {
-      x: x * Math.cos(tilt) - y * Math.sin(tilt),
-      y: x * Math.sin(tilt) + y * Math.cos(tilt),
-      rx: 0.26 * scale * Math.cos(longitude),
-      ry: 0.43 * scale,
-      spin: tilt - longitude * 0.08,
-    };
-  });
-}
-
-// One 500 ms shake: time, yaw, pitch, eye-pair roll, eye height.
+// One 500 ms shake of the head when an action could not run: [second, turn]. The mascot's gaze
+// follows the turns and the tone pulses with them.
 const FALLBACK_GESTURE = [
-  [0, 24 * Math.PI / 180, -18 * Math.PI / 180, 0, 1], [.05, .28, -.20, -.025, .80],
-  [.14, -.68, -.09, .10, 1.10], [.18, -.54, -.09, .045, .92],
-  [.28, .68, -.09, -.10, 1.10], [.34, .47, -.15, -.025, .97],
-  [.42, .35, -.27, .012, 1], [.50, 24 * Math.PI / 180, -18 * Math.PI / 180, 0, 1],
+  [0, 24 * Math.PI / 180], [.05, .28], [.14, -.68], [.18, -.54],
+  [.28, .68], [.34, .47], [.42, .35], [.50, 24 * Math.PI / 180],
 ];
 
-function fallbackEyePose(time) {
-  let next = FALLBACK_GESTURE.findIndex(frame => frame[0] > time);
-  if (next < 0) next = FALLBACK_GESTURE.length - 1;
-  const a = FALLBACK_GESTURE[next - 1], b = FALLBACK_GESTURE[next];
-  const p = Math.min(1, (time - a[0]) / (b[0] - a[0]));
-  const ease = p * p * (3 - 2 * p);
-  const [yaw, pitch, roll, height] = a.slice(1).map((value, axis) => value + (b[axis + 1] - value) * ease);
-  const velocity = (b[1] - a[1]) / (b[0] - a[0]) * 6 * p * (1 - p);
-  const sweep = Math.min(1, Math.abs(velocity) / 12);
-  return projectFaceEyes(yaw, pitch, roll).map(pose => ({
-    ...pose,
-    rx: pose.rx * (1 + .42 * sweep),
-    ry: pose.ry * height * (1 - .27 * sweep),
-    spin: pose.spin + Math.sign(velocity) * .12 * sweep,
-  }));
-}
-
-// Variant 3: layered idle circles unfold into an attentive, expressive face.
-function createWaveform(canvas) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { setAnalyser() {}, refresh() {} };
-  const root = canvas.closest("#voice-surface");
-  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const tokens = getComputedStyle(root);
-  const palette = ["--deep-forest", "--signal", "--sage", "--mist"].map((name) => tokens.getPropertyValue(name).trim());
+// The voice the mascot reacts to: the visitor's microphone while it listens, the agent's playback
+// while it speaks. `update` is called once a frame and returns the smoothed loudness, 0 to 1.
+function createVoiceLevel() {
   let frequency = new Uint8Array(128);
   let waveform = new Uint8Array(256);
   let analyser = null;
   let output = null;
   let energy = 0;
-  let phase = 0;
-  let expressionTime = 0;
-  let thinkingTime = 0;
-  let thinkingEmotion = 0;
-  let previousState = "";
-  let fallbackEvent = "";
-  let fallbackStarted = 0;
-  let fallbackTime = FALLBACK_GESTURE.at(-1)[0];
-  let fallbackBlend = 0;
-  let speechTime = 0;
-  let speechWeight = 0;
-  let nodTime = 0.76;
-  let nodCooldown = 0;
-  let scrollY = window.scrollY || 0;
-  let scrollDirection = 0;
-  let scrollUntil = 0;
-  let gazeYaw = 24 * Math.PI / 180;
-  let gazePitch = -18 * Math.PI / 180;
-  let visualRadius = 24;
-  let visualFace = 0;
-  let curiosity = 0;
-  let lastTime = 0;
-  let raf = 0;
-  let size = 88;
-
-  const draw = (now = performance.now()) => {
-    // RAF timestamps can predate a synchronous refresh within the same frame.
-    now = Math.max(now, lastTime);
-    raf = 0;
-    if (document.hidden) return;
-    const state = root.dataset.state;
-    if (state === "thinking" && previousState !== state) {
-      thinkingEmotion = Math.floor(Math.random() * THINKING_GESTURES.length);
-      thinkingTime = 0;
-    }
-    previousState = state;
-    const feedback = root.dataset.fallback || "";
-    if (feedback && feedback !== fallbackEvent) {
-      fallbackTime = 0;
-      fallbackStarted = now;
-    }
-    fallbackEvent = feedback;
-    const failed = state === "deaf" || state === "blocked";
-    const listening = state === "listening";
-    const talking = state === "speaking";
-    const processing = state === "thinking" || state === "connecting";
-    const seconds = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 1 / 60;
-    lastTime = now;
-    let target = 0;
-    if (analyser && listening && !motion.matches) {
-      analyser.getByteTimeDomainData(waveform);
-      analyser.getByteFrequencyData(frequency);
-      target = Math.pow(voiceEnergy(waveform, frequency), 0.65);
-    } else if (output && talking && !motion.matches) {
-      target = Math.pow(Math.min(1, Math.max(0, Number(output()) || 0)), 0.65);
-    }
-    energy = motion.matches || failed ? 0 : smoothVoiceEnergy(energy, target, seconds);
-    const targetFace = !failed && (listening || talking || processing) ? 1 : 0;
-    visualFace = motion.matches || failed ? targetFace
-      : visualFace + (targetFace - visualFace) * (1 - Math.exp(-seconds / 0.12));
-    const morph = visualFace * visualFace * (3 - 2 * visualFace);
-    const targetCuriosity = state === "thinking" ? 1 : 0;
-    curiosity = motion.matches || failed ? targetCuriosity
-      : curiosity + (targetCuriosity - curiosity) * (1 - Math.exp(-seconds / 0.12));
-    const speed = 0.08 + (0.65 + energy * 0.25 - 0.08) * visualFace;
-    if (!motion.matches && !failed) phase += seconds * speed;
-    if (!motion.matches && !failed) expressionTime = targetFace ? expressionTime + seconds : 0;
-    const t = motion.matches || failed ? 0 : phase;
-    const targetRadius = listening ? 34 : talking ? 30 + energy * 6 : state === "thinking" ? 32 : processing ? 30 : 24;
-    visualRadius = motion.matches || failed ? targetRadius
-      : visualRadius + (targetRadius - visualRadius) * (1 - Math.exp(-seconds / 0.12));
-    const radius = size * (visualRadius / 88);
-    root.style.setProperty("--voice-shadow-scale", radius / 24);
-    const alive = !motion.matches && !failed;
-    if (alive && state === "thinking") thinkingTime += seconds;
-    const reacting = Boolean(feedback) && listening
-      && (motion.matches || fallbackTime < FALLBACK_GESTURE.at(-1)[0]);
-    // Use elapsed time so dropped frames cannot prolong the 500 ms reaction.
-    if (alive && reacting) fallbackTime = Math.min(FALLBACK_GESTURE.at(-1)[0], (now - fallbackStarted) / 1000);
-    const entry = Math.min(1, fallbackTime / .05);
-    // Entry is included in the gesture; only interruptions need an outgoing blend.
-    fallbackBlend = motion.matches || failed ? Number(reacting)
-      : fallbackTime >= FALLBACK_GESTURE.at(-1)[0] ? 0
-      : reacting ? entry * entry * (3 - 2 * entry)
-      : fallbackBlend * Math.exp(-seconds / .09);
-    const fallback = fallbackBlend > .001 ? fallbackEyePose(motion.matches ? .18 : fallbackTime) : null;
-    const hearingSpeech = alive && listening && root.dataset.speaking === "true" && energy > 0.12;
-    // Actual page movement covers native scrolling and voice navigation through Lenis.
-    const pageY = Math.max(0, window.scrollY || 0);
-    const scrollDelta = pageY - scrollY;
-    scrollY = pageY;
-    const canFollowScroll = alive && listening && !feedback && !hearingSpeech;
-    if (!canFollowScroll) scrollUntil = 0;
-    else if (Math.abs(scrollDelta) > .5) {
-      scrollDirection = Math.sign(scrollDelta);
-      scrollUntil = now + 100;
-    }
-    const followingScroll = canFollowScroll && now < scrollUntil;
-    const targetYaw = followingScroll ? .12 : 24 * Math.PI / 180;
-    const targetPitch = followingScroll ? scrollDirection * .55 : -18 * Math.PI / 180;
-    const gazeBlend = 1 - Math.exp(-seconds / .07);
-    gazeYaw = alive ? gazeYaw + (targetYaw - gazeYaw) * gazeBlend : targetYaw;
-    gazePitch = alive ? gazePitch + (targetPitch - gazePitch) * gazeBlend : targetPitch;
-    speechWeight = alive ? speechWeight + (Number(hearingSpeech) - speechWeight) * (1 - Math.exp(-seconds / 0.16)) : 0;
-    nodCooldown = Math.max(0, nodCooldown - seconds);
-    if (alive && listening) {
-      speechTime = hearingSpeech ? speechTime + seconds : 0;
-      if (speechTime >= 0.75 && nodCooldown === 0) {
-        nodTime = 0;
-        nodCooldown = 3.4;
-        speechTime = 0;
-      }
-      nodTime = Math.min(0.76, nodTime + seconds);
-    } else {
-      speechTime = 0;
-      nodTime = alive ? Math.min(0.76, nodTime + seconds) : 0.76;
-    }
-    // Two quick cartoon dips, each with a crisp ease-out return.
-    const nodProgress = (nodTime % 0.38) / 0.38;
-    const nod = nodTime < 0.76
-      ? (nodProgress < 0.28 ? (nodProgress / 0.28) ** 2 : ((1 - nodProgress) / 0.72) ** 3) * morph * speechWeight
-      : 0;
-    // B · Memahami: look screen-right and up; nod along the same sphere as thinking.
-    const listeningPose = [
-      ...projectFaceEyes(gazeYaw, gazePitch + nod * 0.11),
-      { x: -0.094579, y: 0.678436, rx: 0.161412, ry: 0.107188, spin: 0 },
-    ];
-    // Freeze the outgoing pose while it blends back into the other states.
-    const thinkingPose = curiosity > 0.001 ? [
-      ...thinkingEyePose(thinkingEmotion, motion.matches ? [1.8, 2.9, 2][thinkingEmotion] : thinkingTime),
-      { x: 0.372745, y: 0.605300, rx: 0.112107, ry: 0.059774, spin: -0.596200 },
-    ] : listeningPose;
-    // Quiet listening stays still apart from a brief natural blink.
-    const blinkPhase = (expressionTime + 0.65) % 8.8;
-    const blink = alive ? 1 - 0.9 * Math.exp(-(((blinkPhase - 7.6) / 0.09) ** 2)) : 1;
-    // Match the original rotate-then-translate orbit, even while a face is visible.
-    const idlePose = [0, 1, 2].map(layer => {
-      const spin = t * (layer === 1 ? -0.7 : 1) + layer * 2.1;
-      const offset = 0.3 - layer * 0.25;
-      return {
-        x: offset * Math.cos(spin) - 0.22 * Math.sin(spin),
-        y: offset * Math.sin(spin) + 0.22 * Math.cos(spin),
-        rx: 1.06 - layer * 0.19,
-        ry: 1.06 - layer * 0.19,
-        spin,
-      };
-    });
-    const amplitude = 0.025 * (1 - morph);
-    ctx.clearRect(0, 0, size, size);
-    ctx.save();
-    ctx.translate(size / 2, size / 2);
-    ctx.beginPath();
-    ctx.roundRect(-radius, -radius, radius * 2, radius * 2, radius);
-    ctx.clip();
-    ctx.fillStyle = failed ? palette[0] : palette[1];
-    ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
-    for (let layer = 0; layer < 3; layer += 1) {
-      // Preserve each idle circle’s color and stacking order; move it to its facial role.
-      const role = 2 - layer;
-      const feature = {};
-      const from = idlePose[layer];
-      const to = {};
-      for (const key of ["x", "y", "rx", "ry", "spin"]) {
-        to[key] = listeningPose[role][key] + (thinkingPose[role][key] - listeningPose[role][key]) * curiosity;
-      }
-      if (role < 2) {
-        // Each thinking emotion keeps its own blink.
-        to.ry *= 1 + (blink - 1) * (1 - curiosity);
-      } else to.ry *= 1 + energy * 0.16;
-      if (role < 2 && fallback) {
-        for (const key of ["x", "y", "rx", "ry", "spin"]) {
-          to[key] += (fallback[role][key] - to[key]) * fallbackBlend;
-        }
-      }
-      const turn = Math.PI * 2;
-      let delta = ((to.spin - from.spin) % turn + turn) % turn;
-      if (layer === 1 && delta !== 0) delta -= turn;
-      feature.x = from.x + (to.x - from.x) * morph;
-      feature.y = from.y + (to.y - from.y) * morph + (role === 2 ? nod * 0.03 : 0);
-      feature.rx = from.rx + (to.rx - from.rx) * morph;
-      feature.ry = from.ry + (to.ry - from.ry) * morph;
-      feature.spin = from.spin + delta * morph;
-      ctx.save();
-      ctx.globalAlpha = role === 2 ? 1 - morph : 1;
-      ctx.translate(feature.x * radius, feature.y * radius);
-      ctx.rotate(feature.spin);
-      ctx.beginPath();
-      for (let i = 0; i <= 80; i += 1) {
-        const angle = i / 80 * Math.PI * 2;
-        const wave = Math.sin(angle * 2 + t + layer) + Math.sin(angle * 3 - t * 0.8) * 0.35
-          + Math.sin(angle * 5 + t * 1.35 + layer * 2) * 0.28 * visualFace;
-        const x = Math.cos(angle) * radius * feature.rx * (1 + wave * amplitude);
-        const y = Math.sin(angle) * radius * feature.ry * (1 + wave * amplitude);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = failed ? palette[0] : [palette[0], palette[2], palette[3]][layer];
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore();
-    if (!motion.matches && !failed) raf = requestAnimationFrame(draw);
-  };
-
-  const refresh = () => {
-    cancelAnimationFrame(raf);
-    raf = 0;
-    lastTime = 0;
-    draw();
-  };
-  const fit = () => {
-    size = canvas.clientWidth || 88;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = canvas.height = Math.round(size * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    refresh();
-  };
-  window.addEventListener("resize", fit);
-  document.addEventListener("visibilitychange", refresh);
-  motion.addEventListener("change", refresh);
-  fit();
   return {
-    refresh,
-    // The agent's playback level (0–1) drives the orb while it speaks.
-    setOutput(level) { output = level; refresh(); },
+    update(seconds, state) {
+      let target = 0;
+      if (analyser && state === "listening") {
+        analyser.getByteTimeDomainData(waveform);
+        analyser.getByteFrequencyData(frequency);
+        target = Math.pow(voiceEnergy(waveform, frequency), 0.65);
+      } else if (output && state === "speaking") {
+        target = Math.pow(Math.min(1, Math.max(0, Number(output()) || 0)), 0.65);
+      }
+      energy = state === "deaf" || state === "blocked" ? 0 : smoothVoiceEnergy(energy, target, seconds);
+      return energy;
+    },
+    level: () => energy,
+    // The agent's playback level (0–1) while it speaks.
+    setOutput(level) { output = level; },
     setAnalyser(node) {
       analyser = node;
       energy = 0;
@@ -430,11 +161,9 @@ function createWaveform(canvas) {
         frequency = new Uint8Array(node.frequencyBinCount);
         waveform = new Uint8Array(node.fftSize);
       }
-      refresh();
     },
   };
 }
-
 
 function createSurface() {
   const root = document.createElement("div");
@@ -451,14 +180,63 @@ function createSurface() {
       <canvas class="voice-wave" width="88" height="88" aria-hidden="true"></canvas>
     </button>
   `;
-  document.body.append(root);
+  // The attract screen that covers the page until the agent needs to show it. Its live layer is
+  // what a conversation is held on; the loop that plays between conversations is added below.
+  const overlay = document.createElement("div");
+  overlay.id = "voice-attract";
+  overlay.hidden = true;
+  overlay.innerHTML = `
+    <div class="attract-live" aria-hidden="true">
+      <svg class="voice-attract-pulse" viewBox="0 0 1200 120" preserveAspectRatio="none">
+        <path d="M0 60 H170 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H870 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H1200" />
+        <path pathLength="100" d="M0 60 H170 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H870 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H1200" />
+      </svg>
+      <p class="voice-attract-hint"></p>
+    </div>
+  `;
+  document.body.append(overlay, root);
   const canvas = root.querySelector(".voice-wave");
+  const button = root.querySelector(".voice-orb");
+  const voice = createVoiceLevel();
+  const mascot = createMascot({ canvas, root, level: voice.update, shake: FALLBACK_GESTURE, say: createChirps() });
+  // A pointer arriving over the mascot makes it wobble; a press pushes it down.
+  button.addEventListener("pointerenter", () => mascot.poke(1.6));
+  button.addEventListener("pointerdown", () => mascot.poke(-2.4));
+  const status = root.querySelector(".voice-status");
+  // For looking at the attract screen: ?attractAt=<seconds> holds its questions on one moment and
+  // the mascot at rest, ?attractMood=<feeling> holds the mascot in one feeling.
+  const query = new URLSearchParams(window.location.search);
+  const freezeAt = query.get("attractAt");
+  const attract = createAttract({
+    overlay, gsap: window.gsap,
+    still: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    freezeAt: freezeAt === null || freezeAt === "" ? null : Number(freezeAt),
+    mood: query.get("attractMood") || "",
+    onTakeMic: () => button.click(),
+  });
+  // Until the microphone is on, a click anywhere on the attract screen turns it on: such a click
+  // only asks for the microphone. Once it is listening, a conversation takes a click on the mascot
+  // or on the microphone.
+  overlay.addEventListener("click", (event) => {
+    if (!event.target.closest("button") && ["idle", "deaf", "blocked", "resume"].includes(root.dataset.state)) button.click();
+  });
+  const stage = createStage({
+    root, orb: button, overlay, status, attract, mascot,
+    copy: root.querySelector(".voice-copy"),
+  });
+  mascot.setDirection(stage.direction);
+  // Every change of state or of voice source lets the mascot and its stage react at once.
+  const refresh = () => { mascot.refresh(); stage.wake(); };
   return {
     root,
-    button: root.querySelector(".voice-orb"),
-    status: root.querySelector(".voice-status"),
+    button,
+    status,
     transcript: root.querySelector(".voice-transcript"),
-    wave: createWaveform(canvas),
+    wave: {
+      refresh,
+      setAnalyser(node) { voice.setAnalyser(node); refresh(); },
+      setOutput(level) { voice.setOutput(level); refresh(); },
+    },
   };
 }
 
@@ -584,8 +362,17 @@ function bindVoice() {
     const timer = (fn, ms) => { const id = setTimeout(() => { if (current()) fn(); }, ms); c.timers.push(id); return id; };
     const fail = () => { if (current()) arm(`Koneksi suara terputus. ${COPY.armed}`); };
     c.close = () => {
+      ui.root.dataset.greeting = "";
       ui.wave.setOutput(null);
       Promise.resolve(c.conversation?.endSession()).catch(() => {});
+    };
+    // The agent opens with a greeting. From the moment it connects until that has been said, the
+    // stage keeps the mascot large in the middle of the page; then it steps aside.
+    const endGreeting = () => {
+      clearTimeout(c.greetTimer);
+      if (!ui.root.dataset.greeting) return;
+      ui.root.dataset.greeting = "";
+      ui.wave.refresh();
     };
     setState("connecting", COPY.connecting, "", silent);
     if (phrase) window.dispatchEvent(new CustomEvent("nadi:wake", { detail: { phrase } }));
@@ -647,30 +434,26 @@ function bindVoice() {
       connectionType: "webrtc",
       clientTools: { page_action: pageAction },
       onMessage: ({ message, source }) => {
-        if (!current() || typeof message !== "string" || !message.trim()) return;
-        if (source === "user") {
-          c.caption = "";
-          // A new visitor turn cancels page moves still waiting for words the agent will no longer say.
-          dropCues();
-          clearTimeout(c.idleTimer);
-          clearTimeout(c.modeTimer);
-          setState("thinking", COPY.thinking, "", true);
-          // The agent may stay silent; never leave the face thinking forever.
-          clearTimeout(c.replyTimer);
-          c.replyTimer = timer(() => setState("listening", COPY.listening, "", true), 12000);
-        } else {
-          // Expressive audio tags like [warmly] and leaked tool-call text are not caption material.
-          c.caption = message.replace(/@@[\w-]+@@\s*\{[^}]*\}/g, "").replace(/\bpage_action\s*\([^)]*\)/g, "").replace(/\[[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
-          if (ui.root.dataset.state === "speaking") setState("speaking", COPY.speaking, c.caption, true);
-        }
+        // Only the visitor's turns matter here: what the agent says is heard, not shown as text.
+        if (!current() || source !== "user" || typeof message !== "string" || !message.trim()) return;
+        // A new visitor turn cancels page moves still waiting for words the agent will no longer say.
+        dropCues();
+        endGreeting();
+        clearTimeout(c.idleTimer);
+        clearTimeout(c.modeTimer);
+        setState("thinking", COPY.thinking, "", true);
+        // The agent may stay silent; never leave the face thinking forever.
+        clearTimeout(c.replyTimer);
+        c.replyTimer = timer(() => setState("listening", COPY.listening, "", true), 12000);
       },
       onModeChange: ({ mode }) => {
         if (!current() || !c.conversation) return;
         clearTimeout(c.replyTimer);
         clearTimeout(c.modeTimer);
-        if (mode === "speaking") { clearTimeout(c.idleTimer); setState("speaking", COPY.speaking, c.caption || "", true); }
-        // Playback pauses briefly between sentences; only a real pause returns the face to listening.
-        else { idle(); c.modeTimer = timer(() => setState("listening", COPY.listening, "", true), 600); }
+        if (mode === "speaking") { clearTimeout(c.idleTimer); clearTimeout(c.greetTimer); setState("speaking", COPY.speaking, "", true); }
+        // Playback pauses briefly between sentences; only a real pause returns the face to listening,
+        // and ends the greeting if that is what was being said.
+        else { idle(); c.modeTimer = timer(() => { endGreeting(); setState("listening", COPY.listening, "", true); }, 600); }
       },
       onDisconnect: () => { if (current()) arm(); },
       onAudioAlignment: heard,
@@ -681,6 +464,9 @@ function bindVoice() {
       clearTimeout(connectionTimer);
       c.conversation = conversation;
       ui.wave.setOutput(() => { try { return conversation.getOutputVolume(); } catch { return 0; } });
+      // An agent that stays silent is not waited for.
+      ui.root.dataset.greeting = "true";
+      c.greetTimer = timer(endGreeting, AGENT_GREETING_MS);
       setState("listening", COPY.listening, "", silent);
       idle();
     }).catch(error => { console.warn("[voice] agent failed to start:", error); fail(); });
