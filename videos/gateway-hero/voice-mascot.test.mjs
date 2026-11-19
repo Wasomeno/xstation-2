@@ -310,12 +310,19 @@ test("it follows the attract screen's cue: each event once, on time, and nothing
 });
 
 test("each conversation state has its feeling, and a mascot that cannot hear is dimmed", () => {
-  for (const [state, mood] of [["listening", "attentive"], ["thinking", "thinking"], ["connecting", "thinking"], ["speaking", "talking"], ["deaf", "off"], ["blocked", "off"], ["armed", "attentive"], ["idle", "attentive"]]) {
+  for (const [state, mood] of [["listening", "attentive"], ["thinking", "thinking"], ["speaking", "talking"], ["deaf", "off"], ["blocked", "off"], ["armed", "attentive"], ["idle", "attentive"], ["connecting", "attentive"]]) {
     const model = createMascotModel({ random: chance() });
     const pose = run(model, 1.5, { state }).at(-1);
     assert.equal(model.mood, mood);
     assert.equal(pose.dim, mood === "off");
   }
+  // While a call connects it has no feeling of its own: it does what the stage tells it.
+  const called = createMascotModel({ random: chance() });
+  let elapsed = 0;
+  const waiting = run(called, 1.2, () => ({ state: "connecting", scene: scene("attentive", { index: -1, elapsed: (elapsed += FRAME), gaze: [0, -0.04], events: [[0, "hop", 0.6]] }) }));
+  assert.equal(called.mood, "attentive");
+  assert.equal(waiting.map((pose) => pose.lift < 0).filter((value, i, all) => value && !all[i - 1]).length, 1, "On being called it gives one small hop");
+  assert.ok(Math.abs(gaze(waiting.at(-1))[0]) < 0.01, "and then waits, looking at the visitor");
   const thinking = createMascotModel({ random: chance() });
   const frames = run(thinking, 4, { state: "thinking" });
   assert.ok(frames.every((pose, i) => i < 30 || pose.eyes[0].y < 0), "Thinking, it looks up");

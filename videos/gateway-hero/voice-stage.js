@@ -1,10 +1,11 @@
 // The mascot's stage. Between conversations it is large in the middle of the attract screen, going
-// through its feelings. When a conversation starts it steps down to a smaller size while the call
-// connects; as soon as the agent is there, the attract screen collapses into the mascot and the
-// page shows. While the agent says its greeting the mascot stays large in the middle of the page;
-// then it shrinks and moves to the emptiest spot beside the content. When the session ends, the
-// screen opens again from wherever the mascot stands. The stage only carries the mascot from place
-// to place and size to size; how its body takes the ride is voice-mascot.js.
+// through its feelings. When a conversation starts nothing changes while the call connects, except
+// that the mascot turns to the visitor and a pulse runs behind it; as soon as the agent is there,
+// the attract screen collapses into the mascot and the page shows. While the agent says its
+// greeting the mascot stays large in the middle of the page; then it shrinks and moves to the
+// emptiest spot beside the content. When the session ends, the screen opens again from wherever
+// the mascot stands. The stage only carries the mascot from place to place and size to size; how
+// its body takes the ride is voice-mascot.js.
 
 const CELL = 24;
 // The mascot in its own 88 px box: a ball of radius 34 px that stands on y = 78.
@@ -20,13 +21,15 @@ const FACE_GROWS = 1.12;
 const REST = { spot: [0, 0], zoom: 1 };
 // Where it looks while it greets: at the visitor.
 const FACING = [0, -0.04];
+// What it does on being called, while the call connects: a small hop, then it waits, attentive.
+const CALLED = { mood: "attentive", gaze: FACING, events: [[0, "hop", 0.6]] };
 // How much of the screen's height it takes while the agent greets the visitor.
 const GREET_FILL = 0.5;
 const SIDE_SCALE = 1.4;
 const CENTER_SCALE_MAX = 3.2;
 // Stiffness and damping of the spring that carries the mascot into each pose. Growing into the
 // large face keeps some bounce.
-const SPRING = { stage: [300, 26], greet: [170, 18], side: [220, 28], face: [150, 16] };
+const SPRING = { greet: [170, 18], side: [220, 28], face: [150, 16] };
 const SCAN_MS = 250;
 const SCROLL_SETTLE_MS = 120;
 // How long the attract screen takes to collapse into the mascot, or to open from it.
@@ -131,7 +134,6 @@ function collectInfo(root, overlay, width, height) {
 
 export function createStage({ root, orb, copy, status, overlay, attract, mascot }) {
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const hint = overlay.querySelector(".voice-attract-hint");
   const pos = { x: 0, y: 0, vx: 0, vy: 0 };
   const caption = { left: 0, top: 0, shown: false };
   // What the mascot is told each frame: the attract screen's cue, how fast it is being carried
@@ -142,7 +144,7 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
   let mode = "";
   let spot = null, nextScan = 0, scrollY = window.scrollY || 0, scrollAt = 0;
   let layout = "", openness = 1;
-  let looping = false;
+  let looping = false, called = null, calls = 0;
 
   const measure = (now) => {
     nextMeasure = now + 500;
@@ -167,44 +169,45 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
     const state = root.dataset.state;
     const reduced = motion.matches;
     const listening = state === "listening", speaking = state === "speaking", thinking = state === "thinking";
+    const calling = state === "connecting";
     const session = SESSION.has(state);
 
-    // The attract screen gives way to the page as soon as the agent is listening, and stays away
-    // until the session ends; while the call is still connecting the mascot holds the screen.
+    // The attract screen has the floor until the agent is there: it gives way to the page as soon
+    // as the agent is listening and stays away until the session ends.
     const demo = document.body.classList.contains("demo-modal-open");
     const open = !demo && !(listening || speaking || thinking);
-    // The mascot and its loop have the floor whenever the screen is up and nobody is talking.
-    const loops = open && !session;
-    if (loops !== looping) {
-      looping = loops;
+    if (open !== looping) {
+      looping = open;
       attract.setActive(looping);
     }
-    // A mascot that cannot hear stays where it is; otherwise the attract screen directs it.
-    told.scene = looping && state !== "deaf" && state !== "blocked" ? attract.cue(seconds, reduced) : null;
+    if (!calling) called = null;
+    if (!open || state === "deaf" || state === "blocked") {
+      // In a conversation its state decides what it does, and a mascot that cannot hear stays put.
+      told.scene = null;
+    } else if (calling) {
+      // It has been called: it turns to the visitor where it stands and waits for the call to connect.
+      if (called) called.elapsed += seconds;
+      else called = { ...CALLED, index: -(calls += 1), elapsed: 0, spot: told.scene?.spot || REST.spot, zoom: told.scene?.zoom || REST.zoom };
+      told.scene = called;
+    } else told.scene = attract.cue(seconds, reduced);
     // voice.js marks the agent's greeting: from the moment it connects until it has said hello.
     const greeting = root.dataset.greeting === "true" && (listening || speaking);
-    const next = !open ? (greeting ? "greet" : "side") : looping ? "face" : "stage";
+    const next = open ? "face" : greeting ? "greet" : "side";
     if (next !== mode) { nextScan = 0; spot = null; }
     mode = next;
 
-    const centerScale = clamp(Math.min(width, height) * 0.26 / DISC, 1.8, CENTER_SCALE_MAX);
-    const centerY = height * 0.4;
     // Large enough to own the screen, with the corners left for the microphone and the questions.
     const room = attract.room();
     const roomWidth = room.width || width, roomHeight = room.height || height;
     const faceScale = Math.min(roomHeight * FACE_FILL, roomWidth * 0.44) / DISC;
-    // The attract screen shares the mascot's geometry: its pulse line and where its wording starts.
-    const nextLayout = [open, session, centerY, centerScale].join("|");
+    const nextLayout = `${open}|${calling}`;
     if (nextLayout !== layout) {
       layout = nextLayout;
       overlay.dataset.open = String(open);
-      overlay.dataset.live = String(session);
-      overlay.style.setProperty("--voice-attract-center", `${centerY.toFixed(1)}px`);
-      overlay.style.setProperty("--voice-attract-copy", `${(centerY + RADIUS * centerScale + 28).toFixed(1)}px`);
+      // While a call connects, the one thing that changes on the screen is a pulse behind the mascot.
+      overlay.dataset.calling = String(calling);
     }
-    const statusText = (status.textContent || "").replace(/\s*·\s*Eksperimental/u, "");
-    if (hint.textContent !== statusText) hint.textContent = statusText;
-    attract.setHint(state, statusText);
+    attract.setHint(state, (status.textContent || "").replace(/\s*·\s*Eksperimental/u, ""));
 
     const pageY = window.scrollY || 0;
     if (Math.abs(pageY - scrollY) > 0.5) scrollAt = now;
@@ -223,11 +226,7 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
 
     // Until a spot is known the mascot waits at the bottom centre.
     let targetX = dock.x, targetY = dock.y, targetScale = SIDE_SCALE;
-    if (mode === "stage") {
-      targetScale = centerScale * (thinking ? 0.9 : 1);
-      targetX = width / 2;
-      targetY = centerY + RADIUS * targetScale;
-    } else if (mode === "greet") {
+    if (mode === "greet") {
       // It introduces itself where the visitor is looking: large, in the middle of the page.
       targetScale = Math.min(height * GREET_FILL, width * 0.4) / DISC;
       targetX = width / 2;

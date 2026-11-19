@@ -1,7 +1,7 @@
 import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-1";
-import { createStage } from "./voice-stage.js?v=stage-15";
-import { createAttract } from "./voice-attract.js?v=loop-15";
-import { createChirps, createMascot } from "./voice-mascot.js?v=flat-3";
+import { createStage } from "./voice-stage.js?v=stage-18";
+import { createAttract } from "./voice-attract.js?v=loop-16";
+import { createChirps, createMascot } from "./voice-mascot.js?v=flat-5";
 
 const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.url);
 
@@ -180,18 +180,18 @@ function createSurface() {
       <canvas class="voice-wave" width="88" height="88" aria-hidden="true"></canvas>
     </button>
   `;
-  // The attract screen that covers the page until the agent needs to show it. Its live layer is
-  // what a conversation is held on; the loop that plays between conversations is added below.
+  // The attract screen that covers the page until the agent needs to show it. It holds a heartbeat
+  // trace, shown behind the mascot while a call connects; what is on the screen between
+  // conversations is added below.
   const overlay = document.createElement("div");
   overlay.id = "voice-attract";
   overlay.hidden = true;
   overlay.innerHTML = `
-    <div class="attract-live" aria-hidden="true">
+    <div class="attract-pulse" aria-hidden="true">
       <svg class="voice-attract-pulse" viewBox="0 0 1200 120" preserveAspectRatio="none">
         <path d="M0 60 H170 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H870 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H1200" />
         <path pathLength="100" d="M0 60 H170 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H870 l14 0 l8 -9 l8 9 l10 0 l9 -44 l13 82 l9 -38 l12 0 l9 -12 l10 12 H1200" />
       </svg>
-      <p class="voice-attract-hint"></p>
     </div>
   `;
   document.body.append(overlay, root);

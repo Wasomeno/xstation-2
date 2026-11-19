@@ -116,8 +116,9 @@ export const MOODS = {
   off: { eyes: both({ open: 0.07 }), squash: 0.97, gaze: () => [0, 0.3], still: true, dim: true },
 };
 
-// Which feeling a conversation state wears. Between conversations the attract screen's cue decides.
-const STATE_MOOD = { listening: "attentive", thinking: "thinking", connecting: "thinking", speaking: "talking", deaf: "off", blocked: "off" };
+// Which feeling a conversation state wears. Between conversations, and while a call connects, the
+// cue it is given decides.
+const STATE_MOOD = { listening: "attentive", thinking: "thinking", speaking: "talking", deaf: "off", blocked: "off" };
 
 // ---------------------------------------------------------------------------------------------
 // The model: everything about the mascot that is not drawing. `step` advances it by one frame and
@@ -128,7 +129,8 @@ export function createMascotModel({ random = Math.random } = {}) {
   const gazeX = unit(), gazeY = unit(), tilt = unit(), squash = unit(1);
   const hop = { y: 0, vy: 0 };
   const eyes = MOODS.attentive.eyes.map((eye) => Object.fromEntries(EYE_KEYS.map((key) => [key, unit(eye[key])])));
-  let mood = "attentive", moodAt = 0, cue = -1, cueElapsed = 0;
+  // The cue it follows is known by its index, which may be any number; null is no cue.
+  let mood = "attentive", moodAt = 0, cue = null, cueElapsed = 0;
   let pending = [];                                 // what waits for its moment: { at, run }
   const blink = { at: -1, double: false, next: 1.8 };
   const wander = { x: 0, y: 0, home: true, next: 0 };
@@ -189,7 +191,7 @@ export function createMascotModel({ random = Math.random } = {}) {
             if (before < at && at <= scene.elapsed) actions[action]?.(strength, sound);
           }
         }
-      } else cue = -1;
+      } else cue = null;
       const now = MOODS[mood], age = clock - moodAt;
 
       // Listening: a hop of recognition when a voice starts, a pair of nods now and then while

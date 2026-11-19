@@ -15,11 +15,13 @@ const ASKS = [
 ];
 
 // What the microphone says beside itself in each state. Before the microphone is on it says
-// nothing: "Take the mic" is the invitation.
+// nothing: "Take the mic" is the invitation. While a call connects it says what it said before:
+// nothing on the screen changes then but the pulse behind the mascot.
 const HINTS = {
   idle: "",
   loading: "Menyiapkan pendengar…",
   armed: "Ucapkan “Hei Nadi”",
+  connecting: "Ucapkan “Hei Nadi”",
   paused: "Mikrofon dijeda",
   resume: "Klik untuk melanjutkan",
 };
