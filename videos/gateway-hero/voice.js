@@ -1,4 +1,4 @@
-import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-1";
+import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-2";
 import { createStage } from "./voice-stage.js?v=stage-18";
 import { createAttract } from "./voice-attract.js?v=loop-16";
 import { createChirps, createMascot } from "./voice-mascot.js?v=flat-5";
