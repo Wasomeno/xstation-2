@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { createWakeLog } from "./voice-wake-log.js";
 
 const source = (await readFile(new URL("./voice.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/gm, "")
@@ -37,7 +38,8 @@ const microphone = () => {
   return { track, media: { getTracks: () => [track], getAudioTracks: () => [track] } };
 };
 
-function browser({ resume, unsupported = false, reducedMotion = false, search = "?voice=1", agentId = "" } = {}) {
+function browser({ resume, unsupported = false, reducedMotion = false, search = "?voice=1", agentId = "", wakeLog = false } = {}) {
+  const wakeLines = [];
   const workers = [], timers = new Map();
   let clock = 1000, timerId = 0;
   const microphones = [], health = [], sockets = [], contexts = [], sections = [], animations = [], stateSounds = [], agentSessions = [], pageActions = [];
@@ -109,6 +111,9 @@ function browser({ resume, unsupported = false, reducedMotion = false, search = 
     fetch() { const request = deferred(); health.push(request); return request.promise; },
     WebSocket: Socket, AudioContext: unsupported ? undefined : Audio,
     VOICE_BOX_URL: "http://voice.test", VOICE_BOX_WS: "ws://voice.test", VOICE_AGENT_ID: agentId,
+    // The monitor of the wake word writes to a list here instead of the console and the screen.
+    VOICE_WAKE_LOG: wakeLog, VOICE_WAKE_PANEL: false, VOICE_MASCOT_SOUND: true,
+    createWakeLog: (options) => createWakeLog({ ...options, doc: null, out: { info: (line) => wakeLines.push(line) }, clock: () => clock, time: () => "12:00:00", every: () => 0 }),
     console: { warn() {} },
     agentSdk: { Conversation: { startSession(options) {
       const session = { options, ended: 0, volume: 0, endSession() { this.ended += 1; return Promise.resolve(); }, getOutputVolume() { return this.volume; } };
@@ -120,7 +125,7 @@ function browser({ resume, unsupported = false, reducedMotion = false, search = 
   });
   vm.runInContext(`${source}\ncreateSurface = () => ui; createStateSound = () => state => stateSounds.push(state); loadAgentSdk = () => Promise.resolve(agentSdk); bindVoice();`, sandbox);
   return {
-    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox, workers, agentSessions, pageActions,
+    ui, microphones, health, sockets, contexts, sections, animations, stateSounds, sandbox, workers, agentSessions, pageActions, wakeLines,
     tick(ms) { clock += ms; for (const [id, timer] of [...timers]) if (timer.at <= clock && timers.delete(id)) timer.fn(); },
     hide(hidden) { document.hidden = hidden; emit(document, "visibilitychange"); },
     audio(value = 0) { contexts.at(-1).processor.onaudioprocess({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(value) } }); },
@@ -260,6 +265,30 @@ test("voice scroll commands use page bounds, smooth scrolling and Back history",
     action({ action: 'scroll_down' });
     assert.equal(window.scrollY, 640);
     assert.equal(vm.runInContext('voiceActionLog.entries.at(-1).top', sandbox), 640, 'New movement replaces forward history');
+  }
+});
+
+test("the page starts over for the next visitor: the demo closed, its history forgotten, back at the top", async () => {
+  const work = await readFile(new URL('./work.js', import.meta.url), 'utf8');
+  const navigation = work.slice(work.indexOf('const VOICE_SECTIONS ='), work.indexOf('window.xstationShowSection ='));
+  for (const smooth of [false, true]) {
+    const dialog = { open: false, close() { this.open = false; } };
+    let options; const cleared = [];
+    const window = { innerHeight: 800, scrollY: 1000, scrollTo(value) { options = value; this.scrollY = value.top; }, clearTimeout() {} };
+    const sandbox = vm.createContext({ window, reduce: !smooth,
+      document: { documentElement: { scrollHeight: 4000 }, getElementById: () => dialog, querySelectorAll: () => [{ classList: { remove: name => cleared.push(name) } }] },
+      smoothInstance: smooth ? { scrollTo(top, value) { options = value; window.scrollY = top; } } : null,
+    });
+    vm.runInContext(navigation, sandbox);
+    const action = vm.runInContext('runPageAction', sandbox);
+    action({ action: 'scroll_down' }); dialog.open = true;
+    assert.equal(action({ action: 'reset' }), true);
+    assert.equal(dialog.open, false, 'The demo is closed');
+    assert.equal(window.scrollY, 0, 'The page is back at the top');
+    assert.deepEqual(smooth ? [options.immediate, options.force] : [options.behavior], smooth ? [true, true] : ['auto'], 'at once, not in a glide');
+    assert.deepEqual([vm.runInContext('voiceActionLog.entries.length', sandbox), vm.runInContext('voiceActionLog.index', sandbox)], [0, -1]);
+    assert.deepEqual(cleared, ['is-voice-shown']);
+    assert.equal(action({ action: 'back' }), false, 'Nothing of the last conversation is left to go back to');
   }
 });
 
@@ -838,6 +867,29 @@ test("missing isolation fails before requesting the microphone, and slow inferen
   assert.equal(track.stopped, true); assert.ok(g.sockets.every(socket => socket.readyState === 3));
 });
 
+test("with wakeLog the listener reports its steps: the microphone, the detector, what it hears and what goes wrong", async () => {
+  const h = browser({ wakeLog: true }); await h.enable(); h.click();
+  const said = () => h.wakeLines.join("\n");
+  assert.match(said(), /state idle -> loading/);
+  assert.match(said(), /starting: audio graph at/);
+  assert.match(said(), /microphone: /);
+  assert.match(said(), /detector: ready, loaded in/);
+  assert.match(said(), /state connecting -> armed/, "The click that ends the first conversation leaves it listening for the wake word");
+  const worker = h.workers[0], stale = worker.messages.at(-1).epoch;
+  h.hide(true); h.hide(false); await flush();
+  worker.message({ type: "wake", phrase: "Hei Nadi", epoch: stale });
+  assert.match(said(), /heard "Hei Nadi" but did not start: it came from an earlier round of listening/);
+  h.wake();
+  assert.match(said(), /HEARD "Hei Nadi": starting a conversation/);
+  h.wake();
+  assert.match(said(), /heard "Hei Nadi" but did not start: the listener is listening/, "A wake during a conversation is named as such");
+  worker.message({ type: "error", message: "Keyword model initialization failed" });
+  assert.match(said(), /PROBLEM detector: Keyword model initialization failed/, "The detector's own words are kept");
+  assert.match(said(), /state listening -> deaf/);
+  const quiet = browser(); await quiet.enable(); quiet.click(); quiet.wake();
+  assert.deepEqual(quiet.wakeLines, [], "Without the parameter nothing is written");
+});
+
 test("agent mode talks through ElevenLabs, drives the page with one client tool, and re-arms when the call ends", async () => {
   const h = browser({ agentId: "agent_test" });
   await h.enable(); await flush();
@@ -892,6 +944,31 @@ test("agent mode talks through ElevenLabs, drives the page with one client tool,
   h.click();
   assert.equal(h.agentSessions[1].ended, 1, "Tapping during a conversation ends it");
   assert.equal(h.ui.root.dataset.state, "armed");
+});
+
+test("agent mode lets a demo video play out before it hangs up for silence", async () => {
+  const h = browser({ agentId: "agent_test" });
+  await h.enable(); await flush();
+  const session = h.agentSessions[0], { options } = session;
+  const video = { paused: false, ended: false };
+  h.sandbox.document.getElementById = (id) => (id === "project-demo-video" ? video : null);
+  h.sandbox.document.body = { classList: { contains: (name) => name === "demo-modal-open" } };
+  options.onModeChange({ mode: "speaking" }); options.onModeChange({ mode: "listening" });
+  h.tick(45000);
+  assert.equal(session.ended, 0, "The video is still playing: the call stays");
+  for (let second = 0; second < 9; second += 1) h.tick(1000);
+  assert.equal(session.ended, 0);
+  video.ended = true;
+  h.tick(1000);
+  assert.equal(session.ended, 1, "It hangs up as soon as the video is over");
+  assert.equal(h.ui.root.dataset.state, "armed");
+  const paused = browser({ agentId: "agent_test" });
+  await paused.enable(); await flush();
+  paused.sandbox.document.getElementById = () => ({ paused: true, ended: false });
+  paused.sandbox.document.body = { classList: { contains: () => true } };
+  paused.agentSessions[0].options.onModeChange({ mode: "speaking" }); paused.agentSessions[0].options.onModeChange({ mode: "listening" });
+  paused.tick(45000);
+  assert.equal(paused.agentSessions[0].ended, 1, "A paused video keeps nobody waiting");
 });
 
 test("agent mode keeps the mascot in the middle of the page until the agent has said its greeting", async () => {
@@ -990,4 +1067,16 @@ test("agent mode is opt-in through the agent query parameter", async () => {
   assert.match(read("?voice=1&agent=1"), /^agent_[a-z0-9]+$/);
   assert.equal(read("?voice=1&agent=agent_abc123"), "agent_abc123");
   assert.equal(read("?voice=1&agent=https://evil.test"), "");
+});
+
+test("the wake log's readout can show on a preview on this machine, never on a deployed site", async () => {
+  const config = (await readFile(new URL("./voice-config.js", import.meta.url), "utf8")).replace(/export /g, "");
+  const read = (hostname, search) => [...vm.runInNewContext(`${config}; [VOICE_WAKE_LOG, VOICE_WAKE_PANEL]`, {
+    window: { location: { search, hostname, port: hostname === "nadi.dot.co.id" ? "" : "4174", origin: `https://${hostname}` } }, URLSearchParams,
+  })];
+  assert.deepEqual(read("127.0.0.1", "?voice=1&wakeLog=1"), [true, true]);
+  assert.deepEqual(read("localhost", "?voice=1&wakeLog=1"), [true, true]);
+  assert.deepEqual(read("nadi.dot.co.id", "?voice=1&wakeLog=1"), [true, false], "Deployed, the parameter writes to the console and shows nothing");
+  assert.deepEqual(read("nadi.dot.co.id", "?voice=1"), [false, false]);
+  assert.deepEqual(read("127.0.0.1", "?voice=1"), [false, false], "Without the parameter there is no log at all");
 });

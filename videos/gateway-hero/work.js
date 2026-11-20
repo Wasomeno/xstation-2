@@ -227,6 +227,19 @@ function showSection(id, focusContact = false, record = true) {
 
 function runPageAction(decision) {
   const dialog = document.getElementById("project-demo-dialog");
+  // The page starts over for the next visitor: no demo, no history, the top of the page. The
+  // voice stage asks for this once the attract screen covers the page; the agent never does.
+  if (decision.action === "reset") {
+    if (dialog?.open) dialog.close();
+    showSection._focus = null;
+    window.clearTimeout(showSection._timer);
+    document.querySelectorAll(".is-voice-shown").forEach((el) => el.classList.remove("is-voice-shown"));
+    voiceActionLog.entries.length = 0;
+    voiceActionLog.index = -1;
+    if (smoothInstance) smoothInstance.scrollTo(0, { immediate: true, force: true });
+    else window.scrollTo({ top: 0, behavior: "auto" });
+    return true;
+  }
   if (["video_pause", "video_resume", "video_restart", "video_close"].includes(decision.action)) {
     const video = document.getElementById("project-demo-video");
     if (!dialog?.open || !video) return false;

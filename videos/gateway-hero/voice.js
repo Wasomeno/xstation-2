@@ -1,5 +1,6 @@
-import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-2";
-import { createStage } from "./voice-stage.js?v=stage-19";
+import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS, VOICE_MASCOT_SOUND, VOICE_WAKE_LOG, VOICE_WAKE_PANEL } from "./voice-config.js?v=agent-3";
+import { createWakeLog } from "./voice-wake-log.js?v=log-1";
+import { createStage } from "./voice-stage.js?v=stage-21";
 import { createAttract } from "./voice-attract.js?v=loop-17";
 import { createChirps, createMascot } from "./voice-mascot.js?v=flat-6";
 
@@ -198,7 +199,10 @@ function createSurface() {
   const canvas = root.querySelector(".voice-wave");
   const button = root.querySelector(".voice-orb");
   const voice = createVoiceLevel();
-  const mascot = createMascot({ canvas, root, level: voice.update, shake: FALLBACK_GESTURE, say: createChirps() });
+  // The wake word's monitor is told of every sound the mascot makes: the microphone hears them too.
+  const chirp = VOICE_MASCOT_SOUND ? createChirps() : () => {};
+  const sounds = { heard: () => {} };
+  const mascot = createMascot({ canvas, root, level: voice.update, shake: FALLBACK_GESTURE, say: (name) => { sounds.heard(name); chirp(name); } });
   // A pointer arriving over the mascot makes it wobble; a press pushes it down.
   button.addEventListener("pointerenter", () => mascot.poke(1.6));
   button.addEventListener("pointerdown", () => mascot.poke(-2.4));
@@ -231,6 +235,7 @@ function createSurface() {
     root,
     button,
     status,
+    sounds,
     transcript: root.querySelector(".voice-transcript"),
     wave: {
       refresh,
@@ -303,11 +308,16 @@ function bindVoice() {
   let enabled = false, sessionWanted = false, generation = 0, epoch = 0, reaction = 0;
   let stream, context, processor, worker, command;
   let modelReady = false, queuedSeconds = 0, loadingTimer;
+  // With ?wakeLog=1 the listener reports what it hears and does; otherwise this is silent.
+  const log = createWakeLog({ enabled: VOICE_WAKE_LOG, panel: VOICE_WAKE_PANEL });
+  if (log.on && ui.sounds) ui.sounds.heard = (name) => log.sound(name, VOICE_MASCOT_SOUND);
+  log.watch(() => ({ state: ui.root.dataset.state, status: ui.status.textContent, hidden: document.hidden, audio: context?.state, isolated: window.crossOriginIsolated, backlog: queuedSeconds }));
   const setState = (state, text = COPY[state] || "", transcript = "", silent = false) => {
     const previous = ui.root.dataset.state;
     if (previous !== state) {
       // Resuming local listening after an app switch is silent.
       sound(silent || (state === "armed" && (previous === "paused" || previous === "resume")) ? "paused" : state);
+      log.state(previous, state, text);
     }
     ui.root.dataset.state = state;
     ui.status.textContent = text;
@@ -377,8 +387,14 @@ function bindVoice() {
     setState("connecting", COPY.connecting, "", silent);
     if (phrase) window.dispatchEvent(new CustomEvent("nadi:wake", { detail: { phrase } }));
     const connectionTimer = timer(fail, 20000);
-    // A connected agent bills by the minute, so a session nobody talks to hangs up by itself.
-    const idle = () => { clearTimeout(c.idleTimer); c.idleTimer = timer(() => arm(), AGENT_IDLE_MS); };
+    // A connected agent bills by the minute, so a session nobody talks to hangs up by itself. A demo
+    // video ends with the session, so the hang-up waits for one that is still playing.
+    const demoPlaying = () => {
+      const video = document.getElementById?.("project-demo-video");
+      return Boolean(video && !video.paused && !video.ended && document.body?.classList.contains("demo-modal-open"));
+    };
+    const hangUp = () => { if (demoPlaying()) c.idleTimer = timer(hangUp, 1000); else arm(); };
+    const idle = () => { clearTimeout(c.idleTimer); c.idleTimer = timer(hangUp, AGENT_IDLE_MS); };
     // Cued page actions wait for the agent's own voice: said/saidAt hold the letters of the speech
     // still to be played and when each one sounds, taken from the per-character timings of the audio.
     const spoken = text => String(text || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -585,10 +601,11 @@ function bindVoice() {
     processor.onaudioprocess = event => {
       if (!enabled || document.hidden || context.state !== "running") return;
       const input = event.inputBuffer.getChannelData(0);
+      if (log.on) log.audio(input, context.sampleRate, ui.root.dataset.state === "armed");
       if (ui.root.dataset.state === "armed") {
         // Fail visibly instead of dropping speech or retaining unbounded room audio.
         queuedSeconds += input.length / context.sampleRate;
-        if (queuedSeconds > 2) { stop("deaf", "Perangkat terlalu lambat untuk pendengar lokal. Ketuk untuk mencoba lagi."); return; }
+        if (queuedSeconds > 2) { log.problem("detector", `it is ${queuedSeconds.toFixed(1)} s behind the microphone`); stop("deaf", "Perangkat terlalu lambat untuk pendengar lokal. Ketuk untuk mencoba lagi."); return; }
         const samples = input.slice();
         worker.postMessage({ type: "audio", samples, sampleRate: context.sampleRate, epoch }, [samples.buffer]);
       }
@@ -608,35 +625,41 @@ function bindVoice() {
     setState("loading");
     try {
       const audio = new Audio(); context = audio;
+      const loadingSince = performance.now();
+      log.note(`starting: audio graph at ${audio.sampleRate} Hz (${audio.state})`);
       audio.addEventListener("statechange", () => {
         if (!current() || document.hidden || audio.state === "running" || audio.state === "closed") return;
         closeCommand(); setState("resume"); resume();
       });
       const ready = audio.resume();
       worker = new Worker(WAKE_WORKER_URL);
-      worker.addEventListener("error", () => { if (current()) stop("deaf", COPY.modelError); });
+      log.detector("loading");
+      worker.addEventListener("error", (event) => { log.problem("detector worker", event); if (current()) stop("deaf", COPY.modelError); });
       worker.addEventListener("message", ({ data }) => {
         if (!current()) return;
-        if (data.type === "error") { stop("deaf", COPY.modelError); return; }
-        if (data.type === "ready") { modelReady = true; clearTimeout(loadingTimer); readyToListen(); }
-        if (data.epoch !== epoch) return;
-        if (data.type === "processed") queuedSeconds = Math.max(0, queuedSeconds - data.seconds);
+        if (data.type === "error") { log.problem("detector", data.message); stop("deaf", COPY.modelError); return; }
+        if (data.type === "ready") { log.detector(`ready, loaded in ${((performance.now() - loadingSince) / 1000).toFixed(1)} s`); modelReady = true; clearTimeout(loadingTimer); readyToListen(); }
+        if (data.epoch !== epoch) { if (data.type === "wake") log.wake(data.phrase, false, "it came from an earlier round of listening"); return; }
+        if (data.type === "processed") { queuedSeconds = Math.max(0, queuedSeconds - data.seconds); log.processed(data.seconds); }
+        if (data.type === "wake") log.wake(data.phrase, data.phrase === "Hei Nadi" && ui.root.dataset.state === "armed", `the listener is ${ui.root.dataset.state}`);
         if (data.type === "wake" && data.phrase === "Hei Nadi" && ui.root.dataset.state === "armed") {
           try { beginCommand(data.phrase); } catch { arm(`Koneksi suara terputus. ${COPY.armed}`); }
         }
       });
-      loadingTimer = setTimeout(() => { if (current()) stop("deaf", COPY.modelError); }, 60000);
+      loadingTimer = setTimeout(() => { if (current()) { log.problem("detector", "not ready after 60 seconds"); stop("deaf", COPY.modelError); } }, 60000);
       const mic = navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(media => {
         if (!current()) { media.getTracks().forEach(track => track.stop()); return; }
         stream = media;
-        media.getAudioTracks().forEach(track => track.addEventListener("ended", () => { if (current()) stop("blocked"); }));
+        log.microphone(media.getAudioTracks()[0], audio);
+        media.getAudioTracks().forEach(track => track.addEventListener("ended", () => { log.problem("microphone", "its track ended"); if (current()) stop("blocked"); }));
+        if (log.on) for (const track of media.getAudioTracks()) for (const change of ["mute", "unmute"]) track.addEventListener(change, () => log.note(`microphone ${change}d by the system`));
       });
       await Promise.all([ready, mic]);
       if (!current()) return;
       capture();
       if (document.hidden) stream.getTracks().forEach(track => { track.enabled = false; });
       if (current() && modelReady) readyToListen();
-    } catch { if (current()) stop("blocked"); }
+    } catch (error) { log.problem("could not start listening", error); if (current()) stop("blocked"); }
   };
   const resume = async () => {
     const attempt = generation;

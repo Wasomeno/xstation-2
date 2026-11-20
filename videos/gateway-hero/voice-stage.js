@@ -34,6 +34,10 @@ const SCAN_MS = 250;
 const SCROLL_SETTLE_MS = 120;
 // How long the attract screen takes to collapse into the mascot, or to open from it.
 const COVER_SECONDS = 0.36;
+// What it costs the mascot to cross the whole screen for a spot, against 3 for standing in the
+// middle of it rather than at an edge. Half the screen costs a little less than that, so a free
+// corner beats staying in the middle on a screen of any size.
+const CROSSING = 5.76;
 const SESSION = new Set(["connecting", "listening", "thinking", "speaking"]);
 
 const INFO = "h1,h2,h3,h4,h5,h6,p,li,dt,dd,blockquote,figcaption,label,a,button,input,img,video,svg,canvas";
@@ -67,7 +71,9 @@ function covered({ cols, rows, cells }, left, top, right, bottom) {
 
 // Chooses where the mascot stands (x, y is the point it stands on) and where its caption goes.
 // Costs are in covered cells: hiding information dominates; among free spots it prefers the
-// bottom corners and a short move. `current` keeps its place unless another spot is clearly better.
+// bottom corners and a short move. Both are measured against the size of the screen, so that a
+// large screen is laid out like a small one. `current` keeps its place unless another spot is
+// clearly better.
 export function pickSpot({ rects, width, height, body, bubble = null, current = null, from = null, margin = 16 }) {
   const grid = occupancy(rects, width, height);
   const minX = margin + body.w / 2, maxX = width - margin - body.w / 2;
@@ -77,7 +83,7 @@ export function pickSpot({ rects, width, height, body, bubble = null, current = 
     let cost = blocked * 4
       + (maxY - y) / 100 * 1.5
       + (1 - Math.abs(x - width / 2) / (width / 2)) * 3
-      + (from ? Math.hypot(x - from.x, y - from.y) / 100 * 0.4 : 0);
+      + (from ? Math.hypot(x - from.x, y - from.y) / width * CROSSING : 0);
     let best = { placement: "above", cost: 0, left: 0, top: 0 };
     if (bubble) {
       best = null;
@@ -144,7 +150,7 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
   let mode = "";
   let spot = null, nextScan = 0, scrollY = window.scrollY || 0, scrollAt = 0;
   let layout = "", openness = 1;
-  let looping = false, called = null, calls = 0;
+  let looping = false, called = null, calls = 0, pageUsed = false;
 
   const measure = (now) => {
     nextMeasure = now + 500;
@@ -175,6 +181,9 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
     // The attract screen has the floor until the agent is there: it gives way to the page as soon
     // as the agent is listening and stays away until the session ends.
     const demo = document.body.classList.contains("demo-modal-open");
+    // A conversation that has ended takes its demo video with it: the player sits above everything,
+    // and the attract screen cannot come back while it is open.
+    if (demo && !session) window.xstationPageAction?.({ action: "video_close" });
     const open = !demo && !(listening || speaking || thinking);
     if (open !== looping) {
       looping = open;
@@ -266,6 +275,10 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
     // The attract screen is a circle around the mascot: it closes into it and opens out of it,
     // following the mascot while it moves.
     openness = reduced ? Number(open) : clamp(openness + (open ? 1 : -1) * seconds / COVER_SECONDS, 0, 1);
+    // Once the attract screen covers the page again, the page starts over for the next visitor:
+    // back at the top, with nothing left open or remembered from the last conversation.
+    if (!open) pageUsed = true;
+    else if (pageUsed && openness >= 1) { pageUsed = false; window.xstationPageAction?.({ action: "reset" }); }
     const eyeX = pos.x, eyeY = pos.y - RADIUS * scale;
     const cover = Math.hypot(Math.max(eyeX, width - eyeX), Math.max(eyeY, height - eyeY)) + 24;
     const eased = openness * openness * (3 - 2 * openness);

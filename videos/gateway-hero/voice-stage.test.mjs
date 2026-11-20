@@ -51,3 +51,13 @@ test("a crowded screen still returns the least covered spot", () => {
   const spot = pickSpot({ rects: [rect(0, 0, width, height, 0.7), rect(0, 0, width, 700)], width, height, body, bubble });
   assert.ok(spot && spot.y > 800, "Media is covered before text");
 });
+
+test("a large screen is laid out like a small one: it leaves the middle for a free bottom corner", () => {
+  for (const [wide, tall] of [[1280, 720], [1440, 810], [1680, 945], [1920, 1080], [2272, 1227], [2560, 1440], [3440, 1440]]) {
+    // After its greeting it stands large in the middle of the screen; a session resumed finds it at the bottom centre.
+    for (const from of [{ x: wide / 2, y: tall * 0.75 }, { x: wide / 2, y: tall - 16 }]) {
+      const spot = pickSpot({ rects: [], width: wide, height: tall, body, bubble: null, from });
+      assert.ok(Math.abs(spot.x - wide / 2) > wide * 0.4 && spot.y > tall - 40, `On ${wide}x${tall} it stands at ${Math.round(spot.x)}, ${Math.round(spot.y)}`);
+    }
+  }
+});
