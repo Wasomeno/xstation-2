@@ -1,6 +1,6 @@
 // What the attract screen shows while nobody is talking to Nadi: the mascot, large in the middle of
-// the screen and doing as it pleases, example questions beside it, and the head of a microphone held
-// out from the corner with "Take the mic" along its curve. voice-stage.js moves the mascot and voice-mascot.js gives it
+// the screen and doing as it pleases, example questions to its right, and the head of a microphone held
+// out from the bottom left corner with "Take the mic" along its curve. voice-stage.js moves the mascot and voice-mascot.js gives it
 // its body; this module owns what is around it and directs the mascot: what it feels, where it
 // looks and where on the screen it wanders, turn by turn and never twice the same.
 
@@ -209,34 +209,34 @@ function meshPath(r, pitch = 0.1) {
   return wires.join("");
 }
 
-// The microphone is the head of a hand-held one, held out from the bottom right corner (400, 400
+// The microphone is the head of a hand-held one, held out from the bottom left corner (0, 400
 // in these units) toward the middle of the screen: a ball of woven mesh with the ring around its
 // middle, sitting in the collar that narrows toward the handle, which is out of sight beyond the
 // corner. Its label runs along the curve of the ball, just outside it, and the hint sits beside
-// it. The head is drawn with its tip upward and then turned to point up and to the left.
+// it. The head is drawn with its tip upward and then turned to point up and to the right.
 const MIC_MARKUP = `
-    <span class="attract-mic-hint"></span>
     <svg class="attract-mic-shape" viewBox="0 0 400 400" aria-hidden="true">
       <defs>
         <clipPath id="attract-mic-ball"><circle r="170" /></clipPath>
-        <path id="attract-mic-arc" d="M64.5 299.7A192 192 0 0 1 299.7 64.5" />
+        <path id="attract-mic-arc" d="M100.3 64.5A192 192 0 0 1 335.5 299.7" />
       </defs>
       <g class="attract-mic-head">
-        <g transform="translate(250 250) rotate(-45)">
+        <g transform="translate(150 250) rotate(45)">
           <path class="attract-mic-collar" d="M-106 132H106L84 250H-84Z" />
           <path class="attract-mic-seam" d="M-97 186H97" />
           <circle class="attract-mic-ball" r="170" />
           <g clip-path="url(#attract-mic-ball)">
-            <path class="attract-mic-mesh" transform="rotate(45)" d="${meshPath(170)}" />
+            <path class="attract-mic-mesh" transform="rotate(-45)" d="${meshPath(170)}" />
             <path class="attract-mic-band" d="M-170 10A170 40 0 0 0 170 10" />
             <path class="attract-mic-sheen" d="M-170 -2A170 40 0 0 0 170 -2" />
           </g>
         </g>
       </g>
       <text class="attract-mic-label"><textPath href="#attract-mic-arc" startOffset="50%" text-anchor="middle">Take the mic</textPath></text>
-    </svg>`;
+    </svg>
+    <span class="attract-mic-hint"></span>`;
 // The corner the microphone comes out of.
-const MIC_CORNER = "400 400";
+const MIC_CORNER = "0 400";
 
 // The loop around the mascot: the example questions take turns. Every tween states its start, so
 // the loop reads the same on each pass and at any moment shown.
@@ -258,7 +258,7 @@ function entrance(gsap, mic) {
   return gsap.timeline({ paused: true, defaults: { ease: "expo.out" } })
     .fromTo(mic.querySelector(".attract-mic-head"), { scale: 0, svgOrigin: MIC_CORNER }, { scale: 1, svgOrigin: MIC_CORNER, duration: 0.7 }, 0.25)
     .fromTo(mic.querySelector(".attract-mic-label"), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.35, ease: "none" }, 0.55)
-    .fromTo(mic.querySelector(".attract-mic-label textPath"), { attr: { startOffset: "34%" } }, { attr: { startOffset: "50%" }, duration: 0.8 }, 0.55)
+    .fromTo(mic.querySelector(".attract-mic-label textPath"), { attr: { startOffset: "66%" } }, { attr: { startOffset: "50%" }, duration: 0.8 }, 0.55)
     .fromTo(mic.querySelector(".attract-mic-hint"), { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4 }, 0.9);
 }
 

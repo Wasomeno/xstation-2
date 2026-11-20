@@ -1,7 +1,7 @@
 import { VOICE_AGENT_ID, VOICE_BOX_URL, VOICE_BOX_WS } from "./voice-config.js?v=agent-2";
-import { createStage } from "./voice-stage.js?v=stage-18";
-import { createAttract } from "./voice-attract.js?v=loop-16";
-import { createChirps, createMascot } from "./voice-mascot.js?v=flat-5";
+import { createStage } from "./voice-stage.js?v=stage-19";
+import { createAttract } from "./voice-attract.js?v=loop-17";
+import { createChirps, createMascot } from "./voice-mascot.js?v=flat-6";
 
 const WAKE_WORKER_URL = new URL("./wake-worker.js?v=hei-paths-3", import.meta.url);
 

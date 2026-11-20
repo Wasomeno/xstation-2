@@ -225,11 +225,11 @@
   background: currentColor;
 }
 
-/* Example questions beside the large face. */
+/* Example questions to the right of the large face. */
 .attract-asks {
   position: absolute;
   top: 50%;
-  left: var(--attract-pad);
+  right: var(--attract-pad);
   width: calc(var(--u) * 19);
   transform: translateY(-50%);
 }
@@ -254,13 +254,13 @@
   letter-spacing: -0.035em;
 }
 
-/* The call to action: the head of a microphone held out from the bottom right corner, a ball of
+/* The call to action: the head of a microphone held out from the bottom left corner, a ball of
    mesh with "Take the mic" running along its curve and the current hint beside it. It follows the
    attract screen, which comes before it in the page: gone when that screen is hidden, collapsed,
    or given over to a conversation. */
 #voice-mic {
   position: fixed;
-  right: 0;
+  left: 0;
   bottom: 0;
   z-index: 41;
   display: flex;
@@ -297,10 +297,10 @@
 .attract-mic-hint {
   display: block;
   max-width: calc(var(--u) * 20);
-  margin: 0 calc(var(--u) * -2.8) calc(var(--u) * 2.2) 0;
+  margin: 0 0 calc(var(--u) * 2.2) calc(var(--u) * -2.8);
   font: 500 calc(var(--u) * 0.8) / 1.4 var(--mono);
   letter-spacing: 0.18em;
-  text-align: right;
+  text-align: left;
   text-transform: uppercase;
   color: var(--attract-mint);
 }

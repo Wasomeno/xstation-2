@@ -139,7 +139,7 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
   // What the mascot is told each frame: the attract screen's cue, how fast it is being carried
   // (in its own radii a second), and where to look when nothing else has its eye.
   const told = { scene: null, travel: [0, 0], look: null };
-  let raf = 0, last = 0, dock = null, nextMeasure = 0, asksRight = 0;
+  let raf = 0, last = 0, dock = null, nextMeasure = 0, asks = null;
   let scale = 1, scaleVelocity = 0;
   let mode = "";
   let spot = null, nextScan = 0, scrollY = window.scrollY || 0, scrollAt = 0;
@@ -152,8 +152,8 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
     if (!rect.width) { dock = null; return; }
     const first = !dock;
     dock = { x: rect.left + rect.width / 2, y: rect.bottom - GROUND_INSET, left: rect.left, top: rect.top };
-    const asks = attract.asks();
-    asksRight = asks.width ? asks.right : 0;
+    const box = attract.asks();
+    asks = box.width ? { left: box.left, right: box.right } : null;
     if (first) { pos.x = dock.x; pos.y = dock.y; }
   };
 
@@ -238,9 +238,12 @@ export function createStage({ root, orb, copy, status, overlay, attract, mascot 
       // the example questions or leaving the screen.
       const { spot, zoom } = told.scene || REST;
       const radius = RADIUS * faceScale, middle = room.left + roomWidth / 2;
-      const reach = spot[0] < 0
-        ? clamp(middle - radius * FACE_GROWS - asksRight - 16, 0, radius * WANDER.side)
-        : clamp(room.left + roomWidth - middle - radius * FACE_GROWS - 16, 0, radius * WANDER.side);
+      // The questions stand to one side of the middle: that way it stops short of them, the other
+      // way at the edge of the screen.
+      const edge = spot[0] < 0
+        ? (asks && asks.right <= middle ? asks.right : room.left)
+        : (asks && asks.left >= middle ? asks.left : room.left + roomWidth);
+      const reach = clamp(Math.abs(edge - middle) - radius * FACE_GROWS - 16, 0, radius * WANDER.side);
       targetScale = faceScale * zoom;
       targetX = middle + spot[0] * reach;
       targetY = room.top + roomHeight / 2 + RADIUS * targetScale + spot[1] * radius * (spot[1] < 0 ? WANDER.up : WANDER.down);

@@ -82,6 +82,13 @@ test("every feeling keeps both eyes on the face, wherever it looks", () => {
   }
 });
 
+test("pointing, it looks to the bottom left, where the microphone is held out, and leans that way", () => {
+  const pose = run(createMascotModel({ random: chance() }), 1.5, { state: "armed", scene: scene("pointing") }).at(-1);
+  const [x, y] = gaze(pose);
+  assert.ok(x < -0.15 && y > 0.15, `Its eyes have gone to the lower left of its face (${x.toFixed(2)}, ${y.toFixed(2)})`);
+  assert.ok(pose.tilt < -2, "and its head leans to the left");
+});
+
 test("a hop crouches, leaves the ground stretched, lands with a squash and settles", () => {
   const model = createMascotModel({ random: chance() });
   run(model, 1, { state: "armed", scene: scene("attentive", { index: 1, elapsed: 5 }) });

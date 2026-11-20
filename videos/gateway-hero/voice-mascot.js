@@ -101,8 +101,8 @@ export const MOODS = {
     eyes: both({ size: 0.98 }), lean: 5,
     gaze: (seconds) => [Math.floor(seconds / 1.6) % 2 ? 0.62 : -0.62, -0.6],
   },
-  // The microphone is held out from the lower right.
-  pointing: { eyes: both(), tilt: 4, gaze: () => [0.72, 0.7] },
+  // The microphone is held out from the lower left.
+  pointing: { eyes: both(), tilt: -4, gaze: () => [-0.72, 0.7] },
   sway: { eyes: both({ open: 0.9 }), sway: 5, squash: 1.01 },
   // A quick, pleased shimmy.
   wiggle: { eyes: both({ arc: 1 }), sway: 13, beat: 0.2, still: true },
